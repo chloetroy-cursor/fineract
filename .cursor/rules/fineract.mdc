@@ -1,0 +1,34 @@
+---
+description: How to build, test, and change Apache Fineract in this fork
+alwaysApply: true
+---
+
+# Working in Fineract
+
+This is a fork of Apache Fineract used for demos. The working branch is `addepar-demo`. Open pull requests against `addepar-demo` in `chloetroy-cursor/fineract`, never against `apache/fineract`.
+
+## Toolchain
+
+- Java 25 (Gradle toolchain in `build.gradle`). Locally, `JAVA_HOME` may need to point at `/opt/homebrew/opt/openjdk@25`.
+- Gradle wrapper only: `./gradlew`.
+
+## Layout
+
+- Domain modules: `fineract-loan`, `fineract-savings`, `fineract-accounting`, `fineract-charge`, `fineract-investor`, and others. Entities and domain logic live under `src/main/java/org/apache/fineract/portfolio/...`.
+- `fineract-provider` holds REST resources (`*ApiResource`), read and write platform services, and the Spring Boot app.
+- `fineract-db` holds Liquibase changelogs.
+- `integration-tests` drives a live server over HTTP. New tests extend the Feign bases in `integrationtests/client/feign/` (for loans, `FeignLoanTestBase`).
+
+## Testing
+
+Pick the cheapest test that proves the behavior.
+
+- Unit test in the module that owns the code, with no server: `./gradlew :fineract-loan:test --tests 'org.apache.fineract.portfolio.loanaccount.domain.SomeTest'`.
+- Integration test, which needs Fineract on `https://localhost:8443/fineract-provider`. Use the `verify-fineract` skill to start it, then `./gradlew :integration-tests:test --tests SomeIntegrationTest`.
+- Never run the full integration suite. It takes hours.
+
+## Before committing
+
+- Run `./gradlew spotlessApply` on touched modules. It adds the Apache license header to new files and fixes formatting. Checkstyle and Spotless fail the build otherwise.
+- Every new `.java` file needs the Apache license header.
+- Keep money math in `Money` and `BigDecimal`. Never use `double` for amounts.

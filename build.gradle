@@ -302,6 +302,7 @@ allprojects  {
             '**/.classpath',
             '**/.project',
             '**/.idea/**',
+            '**/.cursor/**',
             '**/*.ipr',
             '**/*.iws',
             '**/.settings/**',

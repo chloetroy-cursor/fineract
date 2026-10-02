@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
+cd "$ROOT"
+
+PROJECT="fineract-verify"
+COMPOSE=(docker compose -p "$PROJECT" -f docker-compose-postgresql.yml)
+BASE_URL="${FINERACT_URL:-https://localhost:8443/fineract-provider}"
+EVIDENCE_DIR="${EVIDENCE_DIR:-/tmp/fineract-verify/$(date +%Y%m%d-%H%M%S)}"
+if [[ -z "${JAVA_HOME:-}" && -d /opt/homebrew/opt/openjdk@25 ]]; then
+    export JAVA_HOME=/opt/homebrew/opt/openjdk@25
+fi
+
+usage() {
+    cat <<'EOF'
+usage: fineract <command>
+
+  build              build the fineract:latest image from the current checkout
+  up                 start Postgres and Fineract, wait until healthy
+  doctor             check health and which git commit the server runs
+  api METHOD PATH [JSON]
+                     call the REST API as mifos/password on tenant "default"
+  seed-loan          create a client, product and disbursed loan; print the loan id
+  down               stop and delete the containers and database
+EOF
+}
+
+api() {
+    local method="$1" path="$2" body="${3:-}"
+    local args=(-sk -X "$method" "$BASE_URL/api/v1/$path"
+        -H 'Content-Type: application/json'
+        -H 'Fineract-Platform-TenantId: default'
+        -u mifos:password)
+    [[ -n "$body" ]] && args+=(-d "$body")
+    curl "${args[@]}"
+}
+
+field() {
+    python3 -c "import json,sys; print(json.load(sys.stdin)$1)"
+}
+
+case "${1:-}" in
+    build)
+        ./gradlew :fineract-provider:jibDockerBuild -Djib.to.image=fineract -x test -x cucumber --console=plain
+        ;;
+    up)
+        "${COMPOSE[@]}" up -d
+        for _ in $(seq 1 90); do
+            if curl -sk "$BASE_URL/actuator/health" | grep -q '"UP"'; then
+                echo "fineract is up at $BASE_URL"
+                exit 0
+            fi
+            sleep 5
+        done
+        echo "fineract did not become healthy; see: ${COMPOSE[*]} logs fineract" >&2
+        exit 1
+        ;;
+    doctor)
+        echo "health:  $(curl -sk "$BASE_URL/actuator/health" || echo unreachable)"
+        echo "server:  $(curl -sk "$BASE_URL/actuator/info" | python3 -c "import json,sys; c=json.load(sys.stdin).get('git',{}).get('commit',{}).get('id',{}); print(c.get('describe') or c.get('abbrev','unknown'))" 2>/dev/null || echo unknown)"
+        echo "head:    $(git rev-parse --short HEAD)$(git diff --quiet HEAD -- . ':!.cursor' || echo ' (uncommitted changes, rebuild to include them)')"
+        "${COMPOSE[@]}" ps --format '{{.Service}} {{.State}}'
+        ;;
+    api)
+        shift
+        api "$@"
+        ;;
+    seed-loan)
+        mkdir -p "$EVIDENCE_DIR"
+        client=$(api POST clients '{"officeId":1,"legalFormId":1,"firstname":"Demo","lastname":"Client","active":true,"activationDate":"01 January 2026","dateFormat":"dd MMMM yyyy","locale":"en"}' | field "['clientId']")
+        product=$(api POST loanproducts "{\"name\":\"Demo Flat $RANDOM\",\"shortName\":\"D$((RANDOM % 900 + 100))\",\"currencyCode\":\"USD\",\"digitsAfterDecimal\":2,\"inMultiplesOf\":0,\"principal\":12000,\"numberOfRepayments\":12,\"repaymentEvery\":1,\"repaymentFrequencyType\":2,\"interestRatePerPeriod\":1,\"interestRateFrequencyType\":2,\"amortizationType\":1,\"interestType\":1,\"interestCalculationPeriodType\":1,\"transactionProcessingStrategyCode\":\"mifos-standard-strategy\",\"accountingRule\":1,\"daysInYearType\":1,\"daysInMonthType\":1,\"isInterestRecalculationEnabled\":false,\"locale\":\"en\"}" | field "['resourceId']")
+        loan=$(api POST loans "{\"clientId\":$client,\"productId\":$product,\"principal\":12000,\"loanTermFrequency\":12,\"loanTermFrequencyType\":2,\"numberOfRepayments\":12,\"repaymentEvery\":1,\"repaymentFrequencyType\":2,\"interestRatePerPeriod\":1,\"amortizationType\":1,\"interestType\":1,\"interestCalculationPeriodType\":1,\"transactionProcessingStrategyCode\":\"mifos-standard-strategy\",\"expectedDisbursementDate\":\"01 January 2026\",\"submittedOnDate\":\"01 January 2026\",\"loanType\":\"individual\",\"dateFormat\":\"dd MMMM yyyy\",\"locale\":\"en\"}" | field "['loanId']")
+        api POST "loans/$loan?command=approve" '{"approvedOnDate":"01 January 2026","dateFormat":"dd MMMM yyyy","locale":"en"}' >/dev/null
+        api POST "loans/$loan?command=disburse" '{"actualDisbursementDate":"01 January 2026","transactionAmount":12000,"dateFormat":"dd MMMM yyyy","locale":"en"}' >/dev/null
+        api GET "loans/$loan?associations=repaymentSchedule" > "$EVIDENCE_DIR/loan-$loan-seeded.json"
+        echo "{\"clientId\":$client,\"productId\":$product,\"loanId\":$loan,\"evidence\":\"$EVIDENCE_DIR/loan-$loan-seeded.json\"}"
+        ;;
+    down)
+        "${COMPOSE[@]}" down -v
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac

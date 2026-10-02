@@ -1,0 +1,7 @@
+{
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "install": "./gradlew :fineract-provider:bootJar :fineract-loan:testClasses --console=plain",
+    "start": "sudo service docker start"
+}
