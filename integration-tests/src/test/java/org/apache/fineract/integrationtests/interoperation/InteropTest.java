@@ -210,7 +210,7 @@ public class InteropTest {
         CallFailedRuntimeException deleted = interopHelper
                 .getAccountByIdentifierExpectingError(InteropIdentifierRequestData.IdTypeEnum.MSISDN, idValue);
         Assertions.assertEquals(404, deleted.getStatus());
-        Assertions.assertEquals("error.msg.interop.account.not.found", FeignErrors.errorGlobalisationCode(deleted));
+        Assertions.assertEquals("error.msg.resource.not.found", deleted.getUserMessageGlobalisationCode());
     }
 
     private void testRequests() {
@@ -224,7 +224,7 @@ public class InteropTest {
         CallFailedRuntimeException payeeRequest = interopHelper.createTransactionRequestExpectingError(
                 transactionRequest(requestCode, InteropTransactionRequestData.TransactionRoleEnum.PAYEE));
         Assertions.assertEquals(400, payeeRequest.getStatus());
-        Assertions.assertEquals("validation.msg.interoperation.request.transactionRole.is.not.one.of.expected.values",
+        Assertions.assertEquals("validation.msg.interoperation.request.transactionRole.is.not.one.of.expected.enumerations",
                 FeignErrors.errorGlobalisationCode(payeeRequest));
     }
 
