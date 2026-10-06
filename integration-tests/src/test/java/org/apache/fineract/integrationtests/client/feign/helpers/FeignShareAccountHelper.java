@@ -23,6 +23,7 @@ import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 import org.apache.fineract.client.feign.FineractFeignClient;
 import org.apache.fineract.client.models.AccountRequest;
 import org.apache.fineract.client.models.GetAccountsTypeAccountIdResponse;
+import org.apache.fineract.client.models.GetProductsTypeProductIdResponse;
 import org.apache.fineract.client.models.PostAccountsTypeAccountIdRequest;
 import org.apache.fineract.client.models.PostProductsTypeRequest;
 
@@ -39,6 +40,10 @@ public class FeignShareAccountHelper {
 
     public Long createShareProduct(PostProductsTypeRequest request) {
         return ok(() -> fineractClient.products().createShareProduct(SHARE, request)).getResourceId();
+    }
+
+    public GetProductsTypeProductIdResponse getShareProduct(Long shareProductId) {
+        return ok(() -> fineractClient.products().retrieveOneShareProduct(shareProductId, SHARE));
     }
 
     public Long applyShareAccount(AccountRequest request) {

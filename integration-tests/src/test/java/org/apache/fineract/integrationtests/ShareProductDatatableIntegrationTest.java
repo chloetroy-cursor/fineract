@@ -35,9 +35,10 @@ import org.apache.fineract.client.models.PostColumnHeaderData;
 import org.apache.fineract.client.models.PostDataTablesRequest;
 import org.apache.fineract.client.models.PostDataTablesResponse;
 import org.apache.fineract.client.models.ResultsetColumnHeaderData;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareAccountHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.ShareProductRequestBuilders;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.shares.ShareProductHelper;
-import org.apache.fineract.integrationtests.common.shares.ShareProductTransactionHelper;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,7 @@ public class ShareProductDatatableIntegrationTest {
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private DatatableHelper datatableHelper;
-    private ShareProductHelper shareProductHelper;
+    private FeignShareAccountHelper shareAccountHelper;
 
     @BeforeEach
     public void setup() {
@@ -57,6 +58,7 @@ public class ShareProductDatatableIntegrationTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.datatableHelper = new DatatableHelper(this.requestSpec, this.responseSpec);
+        this.shareAccountHelper = new FeignShareAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -111,7 +113,6 @@ public class ShareProductDatatableIntegrationTest {
     @Test
     public void testDatatableEntryForShareProduct() {
         // create Shares Product
-        shareProductHelper = new ShareProductHelper();
         final Integer shareProductId = createShareProduct();
 
         assertNotNull(shareProductId);
@@ -167,7 +168,6 @@ public class ShareProductDatatableIntegrationTest {
     }
 
     private Integer createShareProduct() {
-        String shareProductJson = shareProductHelper.build();
-        return ShareProductTransactionHelper.createShareProduct(shareProductJson, requestSpec, responseSpec);
+        return shareAccountHelper.createShareProduct(ShareProductRequestBuilders.defaultShareProduct()).intValue();
     }
 }

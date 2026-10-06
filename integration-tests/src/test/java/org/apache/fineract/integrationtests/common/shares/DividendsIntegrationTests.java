@@ -32,7 +32,10 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareAccountHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.ShareProductRequestBuilders;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.junit.jupiter.api.Assertions;
@@ -46,6 +49,7 @@ public class DividendsIntegrationTests {
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
+    private FeignShareAccountHelper shareAccountHelper;
 
     @BeforeEach
     public void setup() {
@@ -53,6 +57,7 @@ public class DividendsIntegrationTests {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        this.shareAccountHelper = new FeignShareAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @SuppressWarnings("unchecked")
@@ -182,8 +187,7 @@ public class DividendsIntegrationTests {
     }
 
     private Integer createShareProduct() {
-        String shareProductJson = new ShareProductHelper().build();
-        return ShareProductTransactionHelper.createShareProduct(shareProductJson, requestSpec, responseSpec);
+        return shareAccountHelper.createShareProduct(ShareProductRequestBuilders.defaultShareProduct()).intValue();
     }
 
     private Integer createShareAccount(final Integer clientId, final Integer productId, final Integer savingsAccountId,

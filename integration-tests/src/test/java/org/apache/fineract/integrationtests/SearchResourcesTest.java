@@ -38,6 +38,8 @@ import org.apache.fineract.client.models.PostLoansLoanIdTransactionsResponse;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsResponse;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignSearchHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareAccountHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.ShareProductRequestBuilders;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
@@ -48,8 +50,6 @@ import org.apache.fineract.integrationtests.common.savings.AccountTransferHelper
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.shares.ShareAccountHelper;
 import org.apache.fineract.integrationtests.common.shares.ShareAccountTransactionHelper;
-import org.apache.fineract.integrationtests.common.shares.ShareProductHelper;
-import org.apache.fineract.integrationtests.common.shares.ShareProductTransactionHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import retrofit2.Response;
@@ -63,6 +63,7 @@ public class SearchResourcesTest {
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
     private FeignSearchHelper searchHelper;
+    private FeignShareAccountHelper shareAccountHelper;
 
     @BeforeEach
     public void setup() {
@@ -71,6 +72,7 @@ public class SearchResourcesTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.searchHelper = new FeignSearchHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.shareAccountHelper = new FeignShareAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -153,8 +155,7 @@ public class SearchResourcesTest {
                 ClientHelper.LEGALFORM_ID_PERSON, null);
         final Long clientId = clientsResponse.getClientId();
 
-        final ShareProductHelper shareProductHelper = new ShareProductHelper();
-        final Integer productId = ShareProductTransactionHelper.createShareProduct(shareProductHelper.build(), requestSpec, responseSpec);
+        final Long productId = shareAccountHelper.createShareProduct(ShareProductRequestBuilders.defaultShareProduct());
 
         final Integer savingsId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId.intValue(), "1000");
 

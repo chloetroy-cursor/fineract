@@ -513,7 +513,10 @@ public class ShareAccountChargeRoundingTest extends FeignSavingsTestBase {
         return shareAccountHelper.createShareProduct(request);
     }
 
-    /** Mirrors the RestAssured {@code ShareProductHelper} defaults, which differ from the plain share product above. */
+    /**
+     * {@code ShareProductRequestBuilders.defaultShareProduct()} with cash-based accounting, which differs from the
+     * plain share product above.
+     */
     private Long createShareProductWithAccountingRule2(int digitsAfterDecimal, int inMultiplesOf) {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
 
