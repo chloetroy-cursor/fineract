@@ -24,12 +24,13 @@ import feign.RequestLine;
 import java.util.Map;
 
 /**
- * Field-filtered loan lookup for attributes the server emits on a loan but the OpenAPI schema leaves off
- * {@code GetLoansLoanIdResponse} (for example {@code isNPA}).
+ * Raw loan lookup for attributes the server emits on a loan but the OpenAPI schema leaves off
+ * {@code GetLoansLoanIdResponse} (for example {@code isNPA}). The server rejects such attributes in {@code ?fields=},
+ * so the whole loan is read as a map.
  */
 @Headers({ "Accept: application/json", "Content-Type: application/json" })
 public interface LoanFieldsApi {
 
-    @RequestLine("GET /v1/loans/{loanId}?fields={fields}")
-    Map<String, Object> retrieveLoanFields(@Param("loanId") Long loanId, @Param("fields") String fields);
+    @RequestLine("GET /v1/loans/{loanId}")
+    Map<String, Object> retrieveLoanAsMap(@Param("loanId") Long loanId);
 }

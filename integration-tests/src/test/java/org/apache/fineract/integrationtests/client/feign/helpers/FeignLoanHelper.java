@@ -216,8 +216,8 @@ public class FeignLoanHelper {
 
     /** Whether the loan is flagged as a non-performing asset; the generated loan response has no field for it. */
     public boolean isNpa(Long loanId) {
-        Map<String, Object> fields = ok(() -> fineractClient.create(LoanFieldsApi.class).retrieveLoanFields(loanId, "isNPA"));
-        return Boolean.TRUE.equals(fields.get("isNPA"));
+        Map<String, Object> loan = ok(() -> fineractClient.create(LoanFieldsApi.class).retrieveLoanAsMap(loanId));
+        return Boolean.TRUE.equals(loan.get("isNPA"));
     }
 
     public <T> T applyForLoanError(PostLoansRequest request, String jsonAttributeToGetBack) {
