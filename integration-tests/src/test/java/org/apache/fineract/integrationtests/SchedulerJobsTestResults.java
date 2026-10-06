@@ -50,6 +50,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 import org.apache.fineract.client.models.BusinessDateUpdateRequest;
+import org.apache.fineract.client.models.ChargeRequest;
 import org.apache.fineract.client.models.GetHolidaysResponse;
 import org.apache.fineract.client.models.GetJobsResponse;
 import org.apache.fineract.client.models.GetJournalEntriesTransactionIdResponse;
@@ -64,10 +65,14 @@ import org.apache.fineract.client.models.PutJobsJobIDRequest;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignChargesHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.ChargeRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.BusinessStepHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.HolidayHelper;
 import org.apache.fineract.integrationtests.common.SchedulerJobHelper;
@@ -77,7 +82,6 @@ import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.accounting.JournalEntry;
 import org.apache.fineract.integrationtests.common.accounting.JournalEntryHelper;
-import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositAccountHelper;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositAccountStatusChecker;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositProductHelper;
@@ -91,6 +95,7 @@ import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
 import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.apache.fineract.portfolio.account.domain.AccountTransferType;
+import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -130,6 +135,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     private BusinessDateHelper businessDateHelper;
     private static BusinessStepHelper businessStepHelper;
     private GlobalConfigurationHelper globalConfigurationHelper;
+    private FeignChargesHelper chargesHelper;
 
     @BeforeAll
     public static void beforeAll() {
@@ -153,6 +159,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         this.businessDateHelper = new BusinessDateHelper();
         this.systemTimeZone = TimeZone.getTimeZone(Utils.TENANT_TIME_ZONE);
         globalConfigurationHelper = new GlobalConfigurationHelper();
+        this.chargesHelper = new FeignChargesHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @AfterEach
@@ -186,8 +193,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             HashMap savingsStatusHashMap = SavingsStatusChecker.getStatusOfSavings(requestSpec, responseSpec, savingsId);
             SavingsStatusChecker.verifySavingsIsPending(savingsStatusHashMap);
 
-            final Integer annualFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                    ChargesHelper.getSavingsAnnualFeeJSON());
+            final Integer annualFeeChargeId = createCharge(SavingsRequestBuilders.savingsAnnualFeeCharge());
             Assertions.assertNotNull(annualFeeChargeId);
 
             this.savingsAccountHelper.addChargesForSavingsWithDueDateAndFeeOnMonthDay(savingsId, annualFeeChargeId, "10 January 2023", 100,
@@ -289,8 +295,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         loanStatusHashMap = this.loanTransactionHelper.approveLoan(LOAN_APPROVAL_DATE, loanID);
         LoanStatusChecker.verifyLoanIsApproved(loanStatusHashMap);
 
-        Integer specifiedDueDateChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                ChargesHelper.getLoanSpecifiedDueDateWithAccountTransferJSON());
+        Integer specifiedDueDateChargeId = createCharge(ChargeRequestBuilders.loanSpecifiedDueDateAccountTransferFee(100.0, true));
         Assertions.assertNotNull(specifiedDueDateChargeId);
 
         this.loanTransactionHelper.addChargesForLoan(loanID,
@@ -308,9 +313,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         SchedulerJobHelper.executeAndAwaitJob(JobName);
         final HashMap summaryAfter = this.savingsAccountHelper.getSavingsSummary(savingsId);
 
-        final HashMap chargeData = ChargesHelper.getChargeById(requestSpec, responseSpec, specifiedDueDateChargeId);
-
-        Float chargeAmount = (Float) chargeData.get("amount");
+        Float chargeAmount = getChargeAmount(specifiedDueDateChargeId);
 
         final Float balance = (Float) summaryBefore.get("accountBalance") - chargeAmount;
 
@@ -556,8 +559,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         HashMap savingsStatusHashMap = SavingsStatusChecker.getStatusOfSavings(requestSpec, responseSpec, savingsId);
         SavingsStatusChecker.verifySavingsIsPending(savingsStatusHashMap);
 
-        final Integer specifiedDueDateChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                ChargesHelper.getSavingsSpecifiedDueDateJSON());
+        final Integer specifiedDueDateChargeId = createCharge(SavingsRequestBuilders.savingsSpecifiedDueDateCharge());
         Assertions.assertNotNull(specifiedDueDateChargeId);
 
         this.savingsAccountHelper.addChargesForSavings(savingsId, specifiedDueDateChargeId, true);
@@ -577,9 +579,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         SchedulerJobHelper.executeAndAwaitJob(JobName);
         HashMap summaryAfter = this.savingsAccountHelper.getSavingsSummary(savingsId);
 
-        final HashMap chargeData = ChargesHelper.getChargeById(requestSpec, responseSpec, specifiedDueDateChargeId);
-
-        Float chargeAmount = (Float) chargeData.get("amount");
+        Float chargeAmount = getChargeAmount(specifiedDueDateChargeId);
 
         final Float balance = (Float) summaryBefore.get("accountBalance") - chargeAmount;
 
@@ -764,7 +764,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
         Assertions.assertNotNull(clientID);
 
-        Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper.getLoanOverdueFeeJSON());
+        Integer overdueFeeChargeId = createCharge(ChargeRequestBuilders.loanOverdueFee(100.0, PeriodFrequencyType.MONTHS, 2));
         Assertions.assertNotNull(overdueFeeChargeId);
 
         final Integer loanProductID = createLoanProduct(overdueFeeChargeId.toString());
@@ -787,9 +787,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         String JobName = "Apply penalty to overdue loans";
         SchedulerJobHelper.executeAndAwaitJob(JobName);
 
-        final HashMap chargeData = ChargesHelper.getChargeById(requestSpec, responseSpec, overdueFeeChargeId);
-
-        Float chargeAmount = (Float) chargeData.get("amount");
+        Float chargeAmount = getChargeAmount(overdueFeeChargeId);
 
         ArrayList<HashMap> repaymentScheduleDataAfter = this.loanTransactionHelper.getLoanRepaymentSchedule(requestSpec, responseSpec,
                 loanID);
@@ -810,7 +808,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
         Assertions.assertNotNull(clientID);
 
-        Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper.getLoanOverdueFeeJSON());
+        Integer overdueFeeChargeId = createCharge(ChargeRequestBuilders.loanOverdueFee(100.0, PeriodFrequencyType.MONTHS, 2));
         Assertions.assertNotNull(overdueFeeChargeId);
 
         final Integer loanProductID = createLoanProductNoInterest(overdueFeeChargeId.toString());
@@ -855,12 +853,10 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
             Assertions.assertNotNull(clientID);
 
-            Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                    ChargesHelper.getLoanOverdueFeeJSONWithCalculationTypePercentage("1"));
+            Integer overdueFeeChargeId = createCharge(ChargeRequestBuilders.loanOverdueFeePercentageOfAmountAndInterest(1.0));
             Assertions.assertNotNull(overdueFeeChargeId);
 
-            Integer fee = ChargesHelper.createCharges(requestSpec, responseSpec,
-                    ChargesHelper.getLoanSpecifiedDueDateJSON(ChargesHelper.CHARGE_CALCULATION_TYPE_FLAT, "10", false));
+            Integer fee = createCharge(ChargeRequestBuilders.loanSpecifiedDueDateFee(10.0));
             Assertions.assertNotNull(fee);
 
             final Integer loanProductID = createLoanProduct(overdueFeeChargeId.toString());
@@ -926,8 +922,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
             Assertions.assertNotNull(clientID);
 
-            Integer fee = ChargesHelper.createCharges(requestSpec, responseSpec,
-                    ChargesHelper.getLoanSpecifiedDueDateJSON(ChargesHelper.CHARGE_CALCULATION_TYPE_FLAT, "10", false));
+            Integer fee = createCharge(ChargeRequestBuilders.loanSpecifiedDueDateFee(10.0));
             Assertions.assertNotNull(fee);
 
             final Integer loanProductID = createLoanProductWithPeriodicAccrual(null);
@@ -992,8 +987,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
             Assertions.assertNotNull(clientID);
 
-            Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                    ChargesHelper.getLoanOverdueFeeJSONWithCalculationTypePercentage("1"));
+            Integer overdueFeeChargeId = createCharge(ChargeRequestBuilders.loanOverdueFeePercentageOfAmountAndInterest(1.0));
             Assertions.assertNotNull(overdueFeeChargeId);
 
             final Integer loanProductID = createLoanProduct(overdueFeeChargeId.toString());
@@ -1052,8 +1046,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
             Assertions.assertNotNull(clientID);
 
-            Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                    ChargesHelper.getLoanOverdueFeeJSONWithCalculationTypePercentage("1"));
+            Integer overdueFeeChargeId = createCharge(ChargeRequestBuilders.loanOverdueFeePercentageOfAmountAndInterest(1.0));
             Assertions.assertNotNull(overdueFeeChargeId);
 
             final Integer loanProductID = createLoanProduct(overdueFeeChargeId.toString());
@@ -1112,8 +1105,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
             Assertions.assertNotNull(clientID);
 
-            Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                    ChargesHelper.getLoanOverdueFeeJSONWithCalculationTypePercentage("1"));
+            Integer overdueFeeChargeId = createCharge(ChargeRequestBuilders.loanOverdueFeePercentageOfAmountAndInterest(1.0));
             Assertions.assertNotNull(overdueFeeChargeId);
 
             final Integer loanProductID = createLoanProduct(overdueFeeChargeId.toString());
@@ -1168,8 +1160,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
         Assertions.assertNotNull(clientID);
 
-        Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
-                ChargesHelper.getLoanOverdueFeeJSONWithCalculationTypePercentage("0.000001"));
+        Integer overdueFeeChargeId = createCharge(ChargeRequestBuilders.loanOverdueFeePercentageOfAmountAndInterest(0.000001));
         Assertions.assertNotNull(overdueFeeChargeId);
 
         final Integer loanProductID = createLoanProduct(overdueFeeChargeId.toString());
@@ -1341,8 +1332,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             final Account expenseAccount = this.accountHelper.createExpenseAccount();
             final Account overpaymentAccount = this.accountHelper.createLiabilityAccount();
 
-            Integer penalty = ChargesHelper.createCharges(requestSpec, responseSpec,
-                    ChargesHelper.getLoanSpecifiedDueDateJSON(ChargesHelper.CHARGE_CALCULATION_TYPE_FLAT, "10", true));
+            Integer penalty = createCharge(ChargeRequestBuilders.loanSpecifiedDueDatePenalty(10.0));
 
             final String loanProductJSON = new LoanProductTestBuilder().withPrincipal("1000").withRepaymentTypeAsMonth()
                     .withRepaymentAfterEvery("1").withNumberOfRepayments("1").withRepaymentTypeAsMonth().withinterestRatePerPeriod("0")
@@ -1379,6 +1369,15 @@ public class SchedulerJobsTestResults extends IntegrationTest {
                     new PutGlobalConfigurationsRequest().enabled(false));
             SchedulerJobHelper.updateSchedulerJob(16L, new PutJobsJobIDRequest().cronExpression("0 2 0 1/1 * ? *"));
         }
+    }
+
+    /** The rest of this test still works with RestAssured helpers that take Integer ids. */
+    private Integer createCharge(final ChargeRequest request) {
+        return chargesHelper.createCharge(request).getResourceId().intValue();
+    }
+
+    private Float getChargeAmount(final Integer chargeId) {
+        return chargesHelper.getCharge(chargeId.longValue()).getAmount().floatValue();
     }
 
     private Integer createSavingsProduct(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
