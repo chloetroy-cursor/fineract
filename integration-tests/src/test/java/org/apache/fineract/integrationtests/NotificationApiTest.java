@@ -34,11 +34,11 @@ import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostUsersRequest;
 import org.apache.fineract.client.models.PostUsersResponse;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignNotificationHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignUserHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,7 +71,7 @@ public class NotificationApiTest {
                 .lastname(Utils.randomLastNameGenerator()).email("whatever@mifos.org").password(password).repeatPassword(password)
                 .sendPasswordToEmail(false).roles(List.of(SUPER_USER_ROLE_ID)).officeId(headOffice.getId());
 
-        PostUsersResponse userCreationResponse = UserHelper.createUser(requestSpec, responseSpec, createUserRequest);
+        PostUsersResponse userCreationResponse = FeignUserHelper.createUser(createUserRequest);
         Assertions.assertNotNull(userCreationResponse.getResourceId());
 
         FineractFeignClient newUserClient = FineractFeignClientHelper.createNewFineractFeignClient(username, password);
