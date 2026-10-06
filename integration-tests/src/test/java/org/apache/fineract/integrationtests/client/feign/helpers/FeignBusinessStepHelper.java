@@ -18,14 +18,18 @@
  */
 package org.apache.fineract.integrationtests.client.feign.helpers;
 
+import static org.apache.fineract.client.feign.util.FeignCalls.executeVoid;
+import static org.apache.fineract.client.feign.util.FeignCalls.failVoid;
 import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.fineract.client.feign.FineractFeignClient;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.BusinessStep;
 import org.apache.fineract.client.models.BusinessStepRequest;
 import org.apache.fineract.client.models.JobBusinessStepConfigData;
+import org.apache.fineract.client.models.JobBusinessStepDetail;
 
 public class FeignBusinessStepHelper {
 
@@ -39,6 +43,10 @@ public class FeignBusinessStepHelper {
         return ok(() -> fineractClient.businessStepConfiguration().retrieveAllConfiguredBusinessStep(jobName));
     }
 
+    public JobBusinessStepDetail getAvailableBusinessStepsByJobName(String jobName) {
+        return ok(() -> fineractClient.businessStepConfiguration().retrieveAllAvailableBusinessStep(jobName));
+    }
+
     public void updateSteps(String jobName, String... steps) {
         long order = 0;
         List<BusinessStep> stepList = new ArrayList<>();
@@ -46,10 +54,16 @@ public class FeignBusinessStepHelper {
             order++;
             stepList.add(new BusinessStep().stepName(step).order(order));
         }
-        ok(() -> {
-            fineractClient.businessStepConfiguration().updateJobBusinessStepConfig(jobName,
-                    new BusinessStepRequest().businessSteps(stepList));
-            return null;
-        });
+        updateBusinessStepOrder(jobName, stepList);
+    }
+
+    public void updateBusinessStepOrder(String jobName, List<BusinessStep> steps) {
+        executeVoid(() -> fineractClient.businessStepConfiguration().updateJobBusinessStepConfig(jobName,
+                new BusinessStepRequest().businessSteps(steps)));
+    }
+
+    public CallFailedRuntimeException updateBusinessStepOrderExpectingError(String jobName, List<BusinessStep> steps) {
+        return failVoid(() -> fineractClient.businessStepConfiguration().updateJobBusinessStepConfig(jobName,
+                new BusinessStepRequest().businessSteps(steps)));
     }
 }
