@@ -29,6 +29,7 @@ import io.restassured.specification.ResponseSpecification;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.system.CodeHelper;
@@ -50,9 +51,8 @@ public class SystemCodeTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
 
         this.generalResponseSpec = new ResponseSpecBuilder().build();

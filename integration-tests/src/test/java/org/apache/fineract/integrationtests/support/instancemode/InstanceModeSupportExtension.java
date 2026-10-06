@@ -23,7 +23,7 @@ import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
-import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
@@ -40,13 +40,11 @@ public class InstanceModeSupportExtension
 
     @Override
     public void beforeAll(ExtensionContext context) throws Exception {
-        Utils.initializeRESTAssured();
         resetInstanceMode(context);
     }
 
     @Override
     public void afterAll(ExtensionContext context) throws Exception {
-        Utils.initializeRESTAssured();
         resetInstanceMode(context);
     }
 
@@ -55,7 +53,6 @@ public class InstanceModeSupportExtension
         context.getTestMethod().ifPresent(m -> {
             ConfigureInstanceMode annotation = m.getAnnotation(ConfigureInstanceMode.class);
             if (annotation != null) {
-                Utils.initializeRESTAssured();
                 boolean readEnabled = annotation.readEnabled();
                 boolean writeEnabled = annotation.writeEnabled();
                 boolean batchWorkerEnabled = annotation.batchWorkerEnabled();
@@ -70,7 +67,6 @@ public class InstanceModeSupportExtension
         context.getTestMethod().ifPresent(m -> {
             ConfigureInstanceMode annotation = m.getAnnotation(ConfigureInstanceMode.class);
             if (annotation != null) {
-                Utils.initializeRESTAssured();
                 resetInstanceMode(context);
             }
         });
@@ -83,7 +79,7 @@ public class InstanceModeSupportExtension
     private void changeInstanceMode(ExtensionContext extensionContext, boolean readEnabled, boolean writeEnabled,
             boolean batchWorkerEnabled, boolean batchManagerEnabled) {
         Store store = extensionContext.getStore(INSTANCE_MODE_NAMESPACE);
-        String authKey = store.getOrComputeIfAbsent(AUTH_KEY, k -> Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(),
+        String authKey = store.getOrComputeIfAbsent(AUTH_KEY, k -> FeignAuthenticationHelper.base64EncodedAuthenticationKey(),
                 String.class);
         RequestSpecification requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         ResponseSpecification responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();

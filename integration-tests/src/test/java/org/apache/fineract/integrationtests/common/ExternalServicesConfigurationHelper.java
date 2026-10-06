@@ -49,7 +49,7 @@ public class ExternalServicesConfigurationHelper {
         // system.out.println("------------------------ RETRIEVING GLOBAL
         // CONFIGURATION
         // BY ID -------------------------");
-        return Utils.performServerGet(requestSpec, responseSpec, GET_EXTERNAL_SERVICES_CONFIG_BY_SERVICE_NAME_URL, "");
+        return Utils.feign(requestSpec, responseSpec).get(GET_EXTERNAL_SERVICES_CONFIG_BY_SERVICE_NAME_URL, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -63,7 +63,7 @@ public class ExternalServicesConfigurationHelper {
         // system.out.println("---------------------------------UPDATE VALUE FOR
         // GLOBAL
         // CONFIG---------------------------------------------");
-        HashMap map = Utils.performServerPut(requestSpec, responseSpec, EXTERNAL_SERVICES_CONFIG_UPDATE_URL,
+        HashMap map = Utils.feign(requestSpec, responseSpec).put(EXTERNAL_SERVICES_CONFIG_UPDATE_URL,
                 updateExternalServicesConfigUpdateValueAsJSON(name, value), "");
 
         return (HashMap) map.get("changes");

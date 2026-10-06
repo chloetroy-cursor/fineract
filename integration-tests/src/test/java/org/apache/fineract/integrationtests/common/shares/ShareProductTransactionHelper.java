@@ -38,7 +38,7 @@ public final class ShareProductTransactionHelper {
     @Deprecated(forRemoval = true)
     public static Integer createShareProduct(final String savingsProductJSON, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_SHARE_PRODUCT_URL, savingsProductJSON, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_SHARE_PRODUCT_URL, savingsProductJSON, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -48,7 +48,7 @@ public final class ShareProductTransactionHelper {
     public static Map<String, Object> retrieveShareProduct(final Integer shareProductId, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
         String url = SHARE_PRODUCT_URL + "/" + shareProductId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+        return Utils.feign(requestSpec, responseSpec).get(url, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -58,6 +58,6 @@ public final class ShareProductTransactionHelper {
     public static Integer updateShareProduct(final Integer shareProductId, final String provsioningCriteriaJson,
             final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         String url = SHARE_PRODUCT_URL + "/" + shareProductId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, url, provsioningCriteriaJson, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).put(url, provsioningCriteriaJson, "resourceId");
     }
 }

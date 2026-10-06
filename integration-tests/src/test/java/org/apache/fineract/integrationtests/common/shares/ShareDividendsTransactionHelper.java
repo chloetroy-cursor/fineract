@@ -39,7 +39,7 @@ public final class ShareDividendsTransactionHelper {
     public static Integer createShareProductDividends(final Integer productId, final String dividendJson,
             final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         String url = SHARE_PRODUCT_URL + "/" + productId + "/" + DIVIDEND + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, url, dividendJson, "subResourceId");
+        return Utils.feign(requestSpec, responseSpec).post(url, dividendJson, "subResourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -50,7 +50,7 @@ public final class ShareDividendsTransactionHelper {
             final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         String url = SHARE_PRODUCT_URL + "/" + productId + "/" + DIVIDEND + "/" + dividendId + "?command=" + command + "&"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, url, jsonBody, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).put(url, jsonBody, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -60,7 +60,7 @@ public final class ShareDividendsTransactionHelper {
     public static Map<String, Object> retrieveDividendDetails(final Integer productId, final Integer dividendId,
             final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         String url = SHARE_PRODUCT_URL + "/" + productId + "/" + DIVIDEND + "/" + dividendId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+        return Utils.feign(requestSpec, responseSpec).get(url, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -70,6 +70,6 @@ public final class ShareDividendsTransactionHelper {
     public static Map<String, Object> retrieveAllDividends(final Integer productId, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
         String url = SHARE_PRODUCT_URL + "/" + productId + "/" + DIVIDEND + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+        return Utils.feign(requestSpec, responseSpec).get(url, "");
     }
 }

@@ -75,7 +75,7 @@ public class AccountHelper {
     @Deprecated(forRemoval = true)
     public Account createAssetAccount(String accountName) {
         final String assetAccountJSON = new GLAccountBuilder().withName(accountName).withAccountTypeAsAsset().build();
-        final Integer accountID = Utils.performServerPost(this.requestSpec, this.responseSpec, CREATE_GL_ACCOUNT_URL, assetAccountJSON,
+        final Integer accountID = Utils.feign(this.requestSpec, this.responseSpec).post(CREATE_GL_ACCOUNT_URL, assetAccountJSON,
                 GL_ACCOUNT_ID_RESPONSE);
         return new Account(accountID, Account.AccountType.ASSET);
     }
@@ -86,7 +86,7 @@ public class AccountHelper {
     @Deprecated(forRemoval = true)
     public Account createIncomeAccount(String accountName) {
         final String assetAccountJSON = new GLAccountBuilder().withName(accountName).withAccountTypeAsIncome().build();
-        final Integer accountID = Utils.performServerPost(this.requestSpec, this.responseSpec, CREATE_GL_ACCOUNT_URL, assetAccountJSON,
+        final Integer accountID = Utils.feign(this.requestSpec, this.responseSpec).post(CREATE_GL_ACCOUNT_URL, assetAccountJSON,
                 GL_ACCOUNT_ID_RESPONSE);
         return new Account(accountID, Account.AccountType.INCOME);
     }
@@ -97,7 +97,7 @@ public class AccountHelper {
     @Deprecated(forRemoval = true)
     public Account createExpenseAccount(String accountName) {
         final String assetAccountJSON = new GLAccountBuilder().withName(accountName).withAccountTypeAsExpense().build();
-        final Integer accountID = Utils.performServerPost(this.requestSpec, this.responseSpec, CREATE_GL_ACCOUNT_URL, assetAccountJSON,
+        final Integer accountID = Utils.feign(this.requestSpec, this.responseSpec).post(CREATE_GL_ACCOUNT_URL, assetAccountJSON,
                 GL_ACCOUNT_ID_RESPONSE);
         return new Account(accountID, Account.AccountType.EXPENSE);
     }
@@ -108,7 +108,7 @@ public class AccountHelper {
     @Deprecated(forRemoval = true)
     public Account createLiabilityAccount(String accountName) {
         final String liabilityAccountJSON = new GLAccountBuilder().withName(accountName).withAccountTypeAsLiability().build();
-        final Integer accountID = Utils.performServerPost(this.requestSpec, this.responseSpec, CREATE_GL_ACCOUNT_URL, liabilityAccountJSON,
+        final Integer accountID = Utils.feign(this.requestSpec, this.responseSpec).post(CREATE_GL_ACCOUNT_URL, liabilityAccountJSON,
                 GL_ACCOUNT_ID_RESPONSE);
         return new Account(accountID, Account.AccountType.LIABILITY);
     }
@@ -119,8 +119,7 @@ public class AccountHelper {
     @Deprecated(forRemoval = true)
     public ArrayList getAccountingWithRunningBalances() {
         final String GET_RUNNING_BALANCE_URL = "/fineract-provider/api/v1/glaccounts?fetchRunningBalance=true";
-        final ArrayList<HashMap> accountRunningBalance = Utils.performServerGet(this.requestSpec, this.responseSpec,
-                GET_RUNNING_BALANCE_URL, "");
+        final ArrayList<HashMap> accountRunningBalance = Utils.feign(this.requestSpec, this.responseSpec).get(GET_RUNNING_BALANCE_URL, "");
         return accountRunningBalance;
     }
 
@@ -130,7 +129,7 @@ public class AccountHelper {
     @Deprecated(forRemoval = true)
     public HashMap getAccountingWithRunningBalanceById(final String accountId) {
         final String GET_RUNNING_BALANCE_URL = "/fineract-provider/api/v1/glaccounts/" + accountId + "?fetchRunningBalance=true";
-        final HashMap accountRunningBalance = Utils.performServerGet(this.requestSpec, this.responseSpec, GET_RUNNING_BALANCE_URL, "");
+        final HashMap accountRunningBalance = Utils.feign(this.requestSpec, this.responseSpec).get(GET_RUNNING_BALANCE_URL, "");
         return accountRunningBalance;
     }
 

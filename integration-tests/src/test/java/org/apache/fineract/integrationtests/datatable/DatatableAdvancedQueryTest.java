@@ -69,6 +69,7 @@ import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.dataqueries.data.EntityTables;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
@@ -112,9 +113,8 @@ public class DatatableAdvancedQueryTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         datatableHelper = new DatatableHelper(requestSpec, responseSpec);
         savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);

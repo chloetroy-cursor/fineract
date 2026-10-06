@@ -528,7 +528,7 @@ public final class ChargesHelper {
     @Deprecated(forRemoval = true)
     public static Integer createCharges(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final String request) {
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_CHARGES_URL, request, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_CHARGES_URL, request, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -537,7 +537,7 @@ public final class ChargesHelper {
     @Deprecated(forRemoval = true)
     public static PostChargesResponse createLoanCharge(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final String payload) {
-        final String response = Utils.performServerPost(requestSpec, responseSpec, CREATE_CHARGES_URL, payload, null);
+        final String response = Utils.feign(requestSpec, responseSpec).post(CREATE_CHARGES_URL, payload, null);
         return GSON.fromJson(response, PostChargesResponse.class);
     }
 
@@ -547,7 +547,7 @@ public final class ChargesHelper {
     @Deprecated(forRemoval = true)
     public static HashMap getChargeById(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer chargeId) {
-        return Utils.performServerGet(requestSpec, responseSpec, CHARGES_URL + "/" + chargeId + "?" + Utils.TENANT_IDENTIFIER, "");
+        return Utils.feign(requestSpec, responseSpec).get(CHARGES_URL + "/" + chargeId + "?" + Utils.TENANT_IDENTIFIER, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -556,7 +556,7 @@ public final class ChargesHelper {
     @Deprecated(forRemoval = true)
     public static HashMap getChargeChanges(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer chargeId) {
-        return Utils.performServerGet(requestSpec, responseSpec, CHARGES_URL + "/" + chargeId + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(requestSpec, responseSpec).get(CHARGES_URL + "/" + chargeId + "?" + Utils.TENANT_IDENTIFIER,
                 CommonConstants.RESPONSE_CHANGES);
     }
 
@@ -607,8 +607,7 @@ public final class ChargesHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public static String applyCharge(RequestSpecification requestSpec, ResponseSpecification responseSpec, String chargeId, String json) {
-        return Utils.performServerPost(requestSpec, responseSpec, CHARGES_URL + "/" + chargeId + "?" + Utils.TENANT_IDENTIFIER, json,
-                "status");
+        return Utils.feign(requestSpec, responseSpec).post(CHARGES_URL + "/" + chargeId + "?" + Utils.TENANT_IDENTIFIER, json, "status");
 
     }
 

@@ -33,6 +33,7 @@ import io.restassured.specification.ResponseSpecification;
 import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.funds.FundsHelper;
 import org.apache.fineract.integrationtests.common.funds.FundsResourceHandler;
@@ -50,9 +51,8 @@ public class FundsIntegrationTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.statusOkResponseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
     }
 

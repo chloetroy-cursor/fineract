@@ -27,7 +27,7 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.HashMap;
-import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
 import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
@@ -45,9 +45,8 @@ public class RolesTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
     }
 

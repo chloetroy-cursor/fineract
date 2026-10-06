@@ -61,7 +61,7 @@ public class MakercheckersHelper {
                 url.append("&").append(entry.getKey()).append("=").append(entry.getValue());
             }
         }
-        final String response = Utils.performServerGet(this.requestSpec, this.responseSpec, url.toString());
+        final String response = Utils.feign(this.requestSpec, this.responseSpec).get(url.toString());
         Type makerCheckerList = new TypeToken<List<Map<String, Object>>>() {}.getType();
         return GSON.fromJson(response, makerCheckerList);
     }
@@ -81,7 +81,7 @@ public class MakercheckersHelper {
     public static HashMap<?, ?> approveMakerCheckerEntry(RequestSpecification requestSpec, ResponseSpecification responseSpec,
             Long auditId) {
         String url = MAKERCHECKER_URL + "/" + auditId + "?command=approve&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, url, "", "");
+        return Utils.feign(requestSpec, responseSpec).post(url, "", "");
     }
 
     public static PostMakerCheckersResponse rejectMakerCheckerEntry(FineractClient client, Long auditId) {

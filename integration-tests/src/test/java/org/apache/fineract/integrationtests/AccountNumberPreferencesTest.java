@@ -29,11 +29,15 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCenterHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper;
 import org.apache.fineract.integrationtests.common.CenterDomain;
 import org.apache.fineract.integrationtests.common.CenterHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -97,9 +101,8 @@ public class AccountNumberPreferencesTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.responseValidationError = new ResponseSpecBuilder().expectStatusCode(400).build();
         this.responseNotFoundError = new ResponseSpecBuilder().expectStatusCode(404).build();
@@ -293,7 +296,7 @@ public class AccountNumberPreferencesTest {
         GroupHelper.verifyGroupActivatedOnServer(this.requestSpec, this.responseSpec, groupID, true);
 
         final String GROUP_URL = "/fineract-provider/api/v1/groups/" + this.groupID + "?" + Utils.TENANT_IDENTIFIER;
-        this.groupAccountNo = Utils.performServerGet(requestSpec, responseSpec, GROUP_URL, "accountNo");
+        this.groupAccountNo = FeignRawHttpHelper.get(GROUP_URL, "accountNo");
 
         if (isAccountPreferenceSetUp) {
             String groupsPrefixName = (String) this.accountNumberPreferencesHelper
@@ -301,7 +304,7 @@ public class AccountNumberPreferencesTest {
 
             if (groupsPrefixName.equals(this.officeName)) {
 
-                final String groupOfficeName = Utils.performServerGet(requestSpec, responseSpec, GROUP_URL, "officeName");
+                final String groupOfficeName = FeignRawHttpHelper.get(GROUP_URL, "officeName");
 
                 this.validateAccountNumberLengthAndStartsWithPrefix(this.groupAccountNo, groupOfficeName);
             }
@@ -323,10 +326,10 @@ public class AccountNumberPreferencesTest {
         if (isAccountPreferenceSetUp) {
             String centerPrefixName = (String) this.accountNumberPreferencesHelper
                     .getAccountNumberPreference(this.centerAccountNumberPreferenceId, "prefixType.value");
-            final String CENTER_URL = "/fineract-provider/api/v1/centers/" + this.centerId + "?" + Utils.TENANT_IDENTIFIER;
 
             if (centerPrefixName.equals(this.officeName)) {
-                final String centerOfficeName = Utils.performServerGet(requestSpec, responseSpec, CENTER_URL, "officeName");
+                final String centerOfficeName = new FeignCenterHelper(FineractFeignClientHelper.getFineractFeignClient())
+                        .retrieveCenter(this.centerId.longValue()).getOfficeName();
                 this.validateAccountNumberLengthAndStartsWithPrefix(center.getAccountNo(), centerOfficeName);
             }
         } else {
