@@ -29,11 +29,14 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.client.models.GetCodeValuesDataResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCodeHelper;
 import org.apache.fineract.integrationtests.common.CenterDomain;
 import org.apache.fineract.integrationtests.common.CenterHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -44,7 +47,6 @@ import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.AccountNumberPreferencesHelper;
-import org.apache.fineract.integrationtests.common.system.CodeHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -349,15 +351,14 @@ public class AccountNumberPreferencesTest {
         if (clientPrefixName.equals(this.clientTypeName)) {
 
             /* Retrieve Code id for the Code "ClientType" */
-            HashMap<String, Object> code = CodeHelper.getCodeByName(this.requestSpec, this.responseSpec, codeName);
-            this.clientTypeCodeId = (Integer) code.get("id");
+            FeignCodeHelper codeHelper = new FeignCodeHelper(FineractFeignClientHelper.getFineractFeignClient());
+            this.clientTypeCodeId = codeHelper.retrieveCodeByName(codeName).getId().intValue();
 
             /* Retrieve/Create Code Values for the Code "ClientType" */
-            HashMap<String, Object> codeValue = CodeHelper.retrieveOrCreateCodeValue(this.clientTypeCodeId, this.requestSpec,
-                    this.responseSpec);
+            GetCodeValuesDataResponse codeValue = codeHelper.retrieveOrCreateCodeValue(this.clientTypeCodeId.longValue());
 
-            this.clientCodeValueName = (String) codeValue.get("name");
-            this.clientCodeValueId = (Integer) codeValue.get("id");
+            this.clientCodeValueName = codeValue.getName();
+            this.clientCodeValueId = codeValue.getId().intValue();
 
             /* Create Client with Client Type */
             this.clientId = ClientHelper.createClientForAccountPreference(this.requestSpec, this.responseSpec, this.clientCodeValueId,

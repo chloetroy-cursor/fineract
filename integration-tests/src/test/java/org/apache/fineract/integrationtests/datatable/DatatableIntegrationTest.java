@@ -44,6 +44,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import org.apache.fineract.client.models.GetCodesResponse;
 import org.apache.fineract.client.models.GetDataTablesResponse;
 import org.apache.fineract.client.models.PostDataTablesAppTableIdResponse;
 import org.apache.fineract.client.models.PostDataTablesResponse;
@@ -52,13 +54,14 @@ import org.apache.fineract.client.models.PutDataTablesResponse;
 import org.apache.fineract.client.models.ResultsetColumnHeaderData;
 import org.apache.fineract.client.util.Calls;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCodeHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
-import org.apache.fineract.integrationtests.common.system.CodeHelper;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -89,6 +92,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private DatatableHelper datatableHelper;
+    private FeignCodeHelper codeHelper;
 
     private LoanTransactionHelper loanTransactionHelper;
 
@@ -100,30 +104,26 @@ public class DatatableIntegrationTest extends IntegrationTest {
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.datatableHelper = new DatatableHelper(this.requestSpec, this.responseSpec);
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
+        this.codeHelper = new FeignCodeHelper(FineractFeignClientHelper.getFineractFeignClient());
+    }
+
+    /** Ids of the code values backing the dropdown column; the code is created with two values when it is missing. */
+    private List<Integer> retrieveOrCreateTstCodeValueIds(String codeName) {
+        Optional<GetCodesResponse> existingCode = codeHelper.findCodeByName(codeName);
+        if (existingCode.isPresent()) {
+            return codeHelper.retrieveAllCodeValues(existingCode.get().getId()).stream().map(codeValue -> codeValue.getId().intValue())
+                    .toList();
+        }
+        Long codeId = codeHelper.createCode(codeName);
+        return List.of(codeHelper.createCodeValue(codeId, Utils.randomStringGenerator("cv_", 8), 1).intValue(),
+                codeHelper.createCodeValue(codeId, Utils.randomStringGenerator("cv_", 8), 2).intValue());
     }
 
     @Test
     public void validateCreateReadDeleteDatatable() throws ParseException {
         // Fetch / Create tst code
         String tst_tst_tst = "TST_TST_TST".toLowerCase();
-        HashMap<String, Object> codeResponse = CodeHelper.getCodeByName(this.requestSpec, this.responseSpec, tst_tst_tst);
-
-        Integer createdCodeId = (Integer) codeResponse.get("id");
-        Integer createdCodeValueId;
-        Integer createdCodeValueIdSecond;
-        if (createdCodeId == null) {
-            createdCodeId = (Integer) CodeHelper.createCode(this.requestSpec, this.responseSpec, tst_tst_tst, "resourceId");
-
-            createdCodeValueId = CodeHelper.createCodeValue(this.requestSpec, this.responseSpec, createdCodeId,
-                    Utils.randomStringGenerator("cv_", 8), 1);
-            createdCodeValueIdSecond = CodeHelper.createCodeValue(this.requestSpec, this.responseSpec, createdCodeId,
-                    Utils.randomStringGenerator("cv_", 8), 2);
-        } else {
-            List<HashMap<String, Object>> codeValuesForCode = CodeHelper.getCodeValuesForCode(this.requestSpec, this.responseSpec,
-                    createdCodeId, "");
-            createdCodeValueId = (Integer) codeValuesForCode.get(0).get("id");
-            createdCodeValueIdSecond = (Integer) codeValuesForCode.get(1).get("id");
-        }
+        Integer createdCodeValueId = retrieveOrCreateTstCodeValueIds(tst_tst_tst).get(0);
 
         // creating datatable for client entity
         final HashMap<String, Object> columnMap = new HashMap<>();
@@ -466,9 +466,6 @@ public class DatatableIntegrationTest extends IntegrationTest {
 
     @Test
     public void validateInsertNullValues() {
-        // Fetch / Create TST code
-        HashMap<String, Object> codeResponse = CodeHelper.getCodeByName(this.requestSpec, this.responseSpec, "TST_TST_TST");
-
         // creating datatable for client entity
         final HashMap<String, Object> columnMap = new HashMap<>();
         final List<HashMap<String, Object>> datatableColumnsList = new ArrayList<>();
@@ -714,24 +711,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
     public void validateReadDatatableMultirow() {
         // Fetch / Create TST code
         String tst_tst_tst = "tst_tst_tst";
-        HashMap<String, Object> codeResponse = CodeHelper.getCodeByName(this.requestSpec, this.responseSpec, tst_tst_tst);
-
-        Integer createdCodeId = (Integer) codeResponse.get("id");
-        Integer createdCodeValueId;
-        Integer createdCodeValueIdSecond;
-        if (createdCodeId == null) {
-            createdCodeId = (Integer) CodeHelper.createCode(this.requestSpec, this.responseSpec, tst_tst_tst, "resourceId");
-
-            createdCodeValueId = CodeHelper.createCodeValue(this.requestSpec, this.responseSpec, createdCodeId,
-                    Utils.randomStringGenerator("cv_", 8), 1);
-            createdCodeValueIdSecond = CodeHelper.createCodeValue(this.requestSpec, this.responseSpec, createdCodeId,
-                    Utils.randomStringGenerator("cv_", 8), 2);
-        } else {
-            List<HashMap<String, Object>> codeValuesForCode = CodeHelper.getCodeValuesForCode(this.requestSpec, this.responseSpec,
-                    createdCodeId, "");
-            createdCodeValueId = (Integer) codeValuesForCode.get(0).get("id");
-            createdCodeValueIdSecond = (Integer) codeValuesForCode.get(1).get("id");
-        }
+        Integer createdCodeValueId = retrieveOrCreateTstCodeValueIds(tst_tst_tst).get(0);
 
         // creating datatable for client entity
         final HashMap<String, Object> columnMap = new HashMap<>();

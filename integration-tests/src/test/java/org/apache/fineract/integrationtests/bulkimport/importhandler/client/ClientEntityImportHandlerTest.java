@@ -38,11 +38,12 @@ import org.apache.fineract.infrastructure.bulkimport.constants.ClientEntityConst
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
 import org.apache.fineract.infrastructure.bulkimport.data.GlobalEntityType;
 import org.apache.fineract.integrationtests.bulkimport.importhandler.BulkImportOutputTemplateHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCodeHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
-import org.apache.fineract.integrationtests.common.system.CodeHelper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -81,20 +82,21 @@ public class ClientEntityImportHandlerTest {
         Assertions.assertNotNull(outcome_office_creation, "Could not create office");
 
         // in order to populate helper columns in client entity sheet
+        FeignCodeHelper codeHelper = new FeignCodeHelper(FineractFeignClientHelper.getFineractFeignClient());
         // create constitution
-        CodeHelper.retrieveOrCreateCodeValue(24, requestSpec, responseSpec);
+        codeHelper.retrieveOrCreateCodeValue(24L);
         // create client classification
-        CodeHelper.retrieveOrCreateCodeValue(17, requestSpec, responseSpec);
+        codeHelper.retrieveOrCreateCodeValue(17L);
         // create client types
-        CodeHelper.retrieveOrCreateCodeValue(16, requestSpec, responseSpec);
+        codeHelper.retrieveOrCreateCodeValue(16L);
         // create Address types
-        CodeHelper.retrieveOrCreateCodeValue(29, requestSpec, responseSpec);
+        codeHelper.retrieveOrCreateCodeValue(29L);
         // create State
-        CodeHelper.retrieveOrCreateCodeValue(27, requestSpec, responseSpec);
+        codeHelper.retrieveOrCreateCodeValue(27L);
         // create Country
-        CodeHelper.retrieveOrCreateCodeValue(28, requestSpec, responseSpec);
+        codeHelper.retrieveOrCreateCodeValue(28L);
         // create Main business line
-        CodeHelper.retrieveOrCreateCodeValue(25, requestSpec, responseSpec);
+        codeHelper.retrieveOrCreateCodeValue(25L);
 
         ClientHelper clientHelper = new ClientHelper(requestSpec, responseSpec);
         Workbook workbook = clientHelper.getClientEntityWorkbook(GlobalEntityType.CLIENTS_ENTITY, "dd MMMM yyyy");
