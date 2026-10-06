@@ -69,14 +69,15 @@ import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.dataqueries.data.EntityTables;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsTransactionHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +90,6 @@ public class DatatableAdvancedQueryTest {
     private static final Logger LOG = LoggerFactory.getLogger(DatatableAdvancedQueryTest.class);
 
     private static final String SAVINGS_TRANSACTION_APP_TABLE_NAME = EntityTables.SAVINGS_TRANSACTION.getName();
-    public static final String ACCOUNT_TYPE_INDIVIDUAL = "INDIVIDUAL";
     public static final String SAVINGS_DATE_FORMAT = Utils.DATE_FORMAT;
 
     private static final String COLUMN_STRING = "aString";
@@ -108,6 +108,8 @@ public class DatatableAdvancedQueryTest {
     private DatatableHelper datatableHelper;
     private SavingsProductHelper savingsProductHelper;
     private SavingsAccountHelper savingsAccountHelper;
+    private FeignSavingsHelper savingsHelper;
+    private FeignSavingsTransactionHelper savingsTransactionHelper;
     private GlobalConfigurationHelper globalConfigurationHelper;
 
     @BeforeEach
@@ -117,7 +119,9 @@ public class DatatableAdvancedQueryTest {
         requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         datatableHelper = new DatatableHelper(requestSpec, responseSpec);
-        savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
+        savingsAccountHelper = new SavingsAccountHelper();
+        savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
+        savingsTransactionHelper = new FeignSavingsTransactionHelper(FineractFeignClientHelper.getFineractFeignClient());
         savingsProductHelper = new SavingsProductHelper();
         globalConfigurationHelper = new GlobalConfigurationHelper();
     }
@@ -139,17 +143,17 @@ public class DatatableAdvancedQueryTest {
             final Integer savingsId = createSavingsAccountDailyPosting(clientId, yesterdayS);
             assertNotNull(savingsId);
 
-            final Integer transactionIdD1 = (Integer) savingsAccountHelper.depositToSavingsAccount(savingsId, "100", yesterdayS,
-                    CommonConstants.RESPONSE_RESOURCE_ID);
+            final Integer transactionIdD1 = savingsTransactionHelper.deposit(savingsId.longValue(), "100", yesterdayS).getResourceId()
+                    .intValue();
             assertNotNull(transactionIdD1);
             BigDecimal decValue1 = new BigDecimal("1.111");
             createDatatableEntry(datatable, transactionIdD1, yesterday, true, 1, decValue1);
-            final Integer transactionIdD2 = (Integer) savingsAccountHelper.depositToSavingsAccount(savingsId, "300", yesterdayS,
-                    CommonConstants.RESPONSE_RESOURCE_ID);
+            final Integer transactionIdD2 = savingsTransactionHelper.deposit(savingsId.longValue(), "300", yesterdayS).getResourceId()
+                    .intValue();
             assertNotNull(transactionIdD2);
             createDatatableEntry(datatable, transactionIdD2, yesterday, false, 2, new BigDecimal("2.2"));
-            final Integer transactionIdW1 = (Integer) savingsAccountHelper.withdrawalFromSavingsAccount(savingsId, "100", todayS,
-                    CommonConstants.RESPONSE_RESOURCE_ID);
+            final Integer transactionIdW1 = savingsTransactionHelper.withdraw(savingsId.longValue(), "100", todayS).getResourceId()
+                    .intValue();
             assertNotNull(transactionIdW1);
             createDatatableEntry(datatable, transactionIdW1, today, true, 3, new BigDecimal("3"));
 
@@ -225,18 +229,18 @@ public class DatatableAdvancedQueryTest {
             final Integer savingsId = createSavingsAccountDailyPosting(clientId, yesterdayS);
             assertNotNull(savingsId);
 
-            final Integer transactionIdD1 = (Integer) savingsAccountHelper.depositToSavingsAccount(savingsId, "100", yesterdayS,
-                    CommonConstants.RESPONSE_RESOURCE_ID);
+            final Integer transactionIdD1 = savingsTransactionHelper.deposit(savingsId.longValue(), "100", yesterdayS).getResourceId()
+                    .intValue();
             assertNotNull(transactionIdD1);
             BigDecimal decValue1 = new BigDecimal("1.111");
             createDatatableEntry(datatable, transactionIdD1, yesterday, true, 1, decValue1);
-            final Integer transactionIdD2 = (Integer) savingsAccountHelper.depositToSavingsAccount(savingsId, "300", yesterdayS,
-                    CommonConstants.RESPONSE_RESOURCE_ID);
+            final Integer transactionIdD2 = savingsTransactionHelper.deposit(savingsId.longValue(), "300", yesterdayS).getResourceId()
+                    .intValue();
             assertNotNull(transactionIdD2);
             BigDecimal decValue2 = new BigDecimal("2.2");
             createDatatableEntry(datatable, transactionIdD2, yesterday, false, 2, decValue2);
-            final Integer transactionIdW1 = (Integer) savingsAccountHelper.withdrawalFromSavingsAccount(savingsId, "100", todayS,
-                    CommonConstants.RESPONSE_RESOURCE_ID);
+            final Integer transactionIdW1 = savingsTransactionHelper.withdraw(savingsId.longValue(), "100", todayS).getResourceId()
+                    .intValue();
             assertNotNull(transactionIdW1);
             createDatatableEntry(datatable, transactionIdW1, today, true, 3, new BigDecimal("3"));
 
@@ -381,13 +385,6 @@ public class DatatableAdvancedQueryTest {
     private Integer createSavingsAccountDailyPosting(final Integer clientID, final String startDate) {
         final Integer savingsProductID = createSavingsProductDailyPosting();
         assertNotNull(savingsProductID);
-        final Integer savingsId = savingsAccountHelper.applyForSavingsApplicationOnDate(clientID, savingsProductID, ACCOUNT_TYPE_INDIVIDUAL,
-                startDate);
-        assertNotNull(savingsId);
-        HashMap savingsStatusHashMap = savingsAccountHelper.approveSavingsOnDate(savingsId, startDate);
-        SavingsStatusChecker.verifySavingsIsApproved(savingsStatusHashMap);
-        savingsStatusHashMap = savingsAccountHelper.activateSavingsAccount(savingsId, startDate);
-        SavingsStatusChecker.verifySavingsIsActive(savingsStatusHashMap);
-        return savingsId;
+        return savingsHelper.createApproveActivateSavings(clientID.longValue(), savingsProductID.longValue(), startDate).intValue();
     }
 }

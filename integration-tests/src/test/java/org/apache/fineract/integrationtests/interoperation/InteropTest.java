@@ -18,7 +18,6 @@
  */
 package org.apache.fineract.integrationtests.interoperation;
 
-import static org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper.ACCOUNT_TYPE_INDIVIDUAL;
 import static org.apache.fineract.integrationtests.interoperation.InteropHelper.PARAM_ACCOUNT_BALANCE;
 
 import io.restassured.builder.RequestSpecBuilder;
@@ -31,18 +30,23 @@ import io.restassured.specification.ResponseSpecification;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.client.feign.FineractFeignClient;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsChargeHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestValidators;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
 import org.apache.fineract.interoperation.domain.InteropActionState;
 import org.apache.fineract.interoperation.domain.InteropIdentifierType;
 import org.apache.fineract.interoperation.domain.InteropTransactionRole;
@@ -72,12 +76,13 @@ public class InteropTest {
     private ResponseSpecification responseForbiddenErrorSpec;
 
     private AccountHelper accountHelper;
-    private SavingsAccountHelper savingsAccountHelper;
+    private FeignSavingsHelper savingsHelper;
+    private FeignSavingsChargeHelper savingsChargeHelper;
     private InteropHelper interopHelper;
 
     private Integer clientId;
     private Integer savingsProductId;
-    private Integer savingsId;
+    private Long savingsId;
     private Integer chargeId;
     private String requestCode;
     private String quoteCode;
@@ -98,7 +103,9 @@ public class InteropTest {
         String transactionCode = UUID.randomUUID().toString();
 
         accountHelper = new AccountHelper(this.requestSpec, this.responseSpec);
-        savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
+        FineractFeignClient fineractClient = FineractFeignClientHelper.getFineractFeignClient();
+        savingsHelper = new FeignSavingsHelper(fineractClient);
+        savingsChargeHelper = new FeignSavingsChargeHelper(fineractClient);
         interopHelper = new InteropHelper(requestSpec, responseSpec, savingsExternalId, transactionCode);
     }
 
@@ -155,21 +162,21 @@ public class InteropTest {
 
     private void openSavingsAccount() {
         LOG.debug("------------------------------ Create Interoperable Saving Account ---------------------------------------");
-        savingsId = savingsAccountHelper.applyForSavingsApplicationWithExternalId(clientId, savingsProductId, ACCOUNT_TYPE_INDIVIDUAL,
-                interopHelper.getAccountExternalId(), true);
+        savingsId = savingsHelper.submitApplication(SavingsRequestBuilders
+                .submitSavingsApplication(clientId.longValue(), savingsProductId.longValue(), SavingsTestData.CREATED_DATE)
+                .externalId(interopHelper.getAccountExternalId()).withdrawalFeeForTransfers(true)).getSavingsId();
         Assertions.assertNotNull(savingsId);
 
-        HashMap savingsStatusHashMap = SavingsStatusChecker.getStatusOfSavings(requestSpec, responseSpec, savingsId);
-        SavingsStatusChecker.verifySavingsIsPending(savingsStatusHashMap);
+        SavingsTestValidators.verifySavingsIsPending(savingsHelper.getSavingsStatus(savingsId));
 
-        savingsStatusHashMap = savingsAccountHelper.approveSavings(savingsId);
-        SavingsStatusChecker.verifySavingsIsApproved(savingsStatusHashMap);
+        savingsHelper.approveSavings(savingsId, SavingsTestData.CREATED_DATE_PLUS_ONE);
+        SavingsTestValidators.verifySavingsIsApproved(savingsHelper.getSavingsStatus(savingsId));
 
-        savingsStatusHashMap = savingsAccountHelper.activateSavings(savingsId);
-        SavingsStatusChecker.verifySavingsIsActive(savingsStatusHashMap);
+        savingsHelper.activateSavings(savingsId, SavingsTestData.TRANSACTION_DATE);
+        SavingsTestValidators.verifySavingsIsActive(savingsHelper.getSavingsStatus(savingsId));
 
         if (chargeId != null) {
-            savingsAccountHelper.addChargesForSavings(savingsId, chargeId, false, interopHelper.getFee());
+            savingsChargeHelper.addChargeToSavings(savingsId, chargeId.longValue(), interopHelper.getFee().floatValue());
         }
 
         LOG.debug("Sucessfully created Interoperable Saving Account (id: {})", savingsId);
@@ -238,7 +245,7 @@ public class InteropTest {
     }
 
     private void testTransfers() {
-        String savings = (String) savingsAccountHelper.getSavingsAccountDetail(savingsId, null);
+        String savings = savingsDetailJson();
         JsonPath savingsJson = JsonPath.from(savings);
         BigDecimal onHold = ObjectConverter.convertObjectTo(savingsJson.get(SavingsApiConstants.savingsAmountOnHold), BigDecimal.class);
         BigDecimal balance = ObjectConverter.convertObjectTo(savingsJson.get(PARAM_ACCOUNT_BALANCE), BigDecimal.class);
@@ -250,7 +257,7 @@ public class InteropTest {
         Assertions.assertEquals(InteropActionState.ACCEPTED.toString(), json.getString(InteropHelper.PARAM_ACTION_STATE));
 
         // prepare
-        savings = (String) savingsAccountHelper.getSavingsAccountDetail(savingsId, null);
+        savings = savingsDetailJson();
         LOG.debug("Response Interoperable GET Saving: {}", savings);
         savingsJson = JsonPath.from(savings);
         BigDecimal onHold2 = ObjectConverter.convertObjectTo(savingsJson.get(SavingsApiConstants.savingsAmountOnHold), BigDecimal.class);
@@ -270,7 +277,7 @@ public class InteropTest {
         Assertions.assertEquals(transferCode, json.getString(InteropUtil.PARAM_TRANSFER_CODE));
         Assertions.assertEquals(InteropActionState.ACCEPTED.toString(), json.getString(InteropHelper.PARAM_ACTION_STATE));
 
-        savings = (String) savingsAccountHelper.getSavingsAccountDetail(savingsId, null);
+        savings = savingsDetailJson();
         LOG.debug("Response Interoperable GET Saving: {}", savings);
         savingsJson = JsonPath.from(savings);
         BigDecimal onHold3 = ObjectConverter.convertObjectTo(savingsJson.get(SavingsApiConstants.savingsAmountOnHold), BigDecimal.class);
@@ -285,7 +292,7 @@ public class InteropTest {
         Assertions.assertEquals(transferCode, json.getString(InteropUtil.PARAM_TRANSFER_CODE));
         Assertions.assertEquals(InteropActionState.ACCEPTED.toString(), json.getString(InteropHelper.PARAM_ACTION_STATE));
 
-        savings = (String) savingsAccountHelper.getSavingsAccountDetail(savingsId, null);
+        savings = savingsDetailJson();
         LOG.debug("Response Interoperable GET Saving: {}", savings);
         savingsJson = JsonPath.from(savings);
         BigDecimal onHold4 = ObjectConverter.convertObjectTo(savingsJson.get(SavingsApiConstants.savingsAmountOnHold), BigDecimal.class);
@@ -294,5 +301,10 @@ public class InteropTest {
         Assertions.assertTrue(MathUtil.isEqualTo(onHold, onHold4), "On hold amount expected: " + onHold + ", actual: " + onHold4);
         Assertions.assertTrue(MathUtil.isEqualTo(balance, balance4),
                 "Balance amount expected: " + expectedBalance + ", actual: " + balance4);
+    }
+
+    /** Raw JSON so the JsonPath lookups keep reading the same root-level fields the legacy helper exposed. */
+    private String savingsDetailJson() {
+        return FeignRawHttpHelper.get("/savingsaccounts/" + savingsId + "?associations=all");
     }
 }
