@@ -33,6 +33,7 @@ import org.apache.fineract.client.models.GetOfficesResponse;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostUsersRequest;
 import org.apache.fineract.client.models.PostUsersResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignNotificationHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
@@ -51,6 +52,7 @@ public class NotificationApiTest {
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
+    private FeignClientHelper clientHelper;
     private FeignNotificationHelper notificationHelper;
     private FeignNotificationHelper newUserNotificationHelper;
 
@@ -61,6 +63,7 @@ public class NotificationApiTest {
         requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
 
+        clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
         notificationHelper = new FeignNotificationHelper(FineractFeignClientHelper.getFineractFeignClient());
 
         GetOfficesResponse headOffice = OfficeHelper.getHeadOffice();
@@ -89,9 +92,9 @@ public class NotificationApiTest {
 
     @Test
     public void testNotificationRetrievalWorksWhenOneNotificationIsAvailable() {
-        // given (still using RestAssured-based ClientHelper - to be migrated separately)
+        // given
         PostClientsRequest clientRequest = ClientHelper.defaultClientCreationRequest();
-        Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, clientRequest);
+        Long clientId = clientHelper.createClient(clientRequest).getClientId();
         Assertions.assertNotNull(clientId);
 
         // when
@@ -105,7 +108,7 @@ public class NotificationApiTest {
         Assertions.assertEquals(SUPER_USER_ID, firstNotification.getActorId());
         Assertions.assertEquals(false, firstNotification.getIsRead());
         Assertions.assertEquals(CREATED_ACTION_TYPE, firstNotification.getAction());
-        Assertions.assertEquals(clientId.longValue(), firstNotification.getObjectId());
+        Assertions.assertEquals(clientId, firstNotification.getObjectId());
         Assertions.assertEquals(CLIENT_OBJECT_TYPE, firstNotification.getObjectType());
     }
 
@@ -113,7 +116,7 @@ public class NotificationApiTest {
     public void testNotificationReadStatusFiltering() {
         // given
         PostClientsRequest clientRequest = ClientHelper.defaultClientCreationRequest();
-        Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, clientRequest);
+        Long clientId = clientHelper.createClient(clientRequest).getClientId();
         Assertions.assertNotNull(clientId);
 
         newUserNotificationHelper.waitUntilNotificationsAreAvailable();
@@ -138,6 +141,6 @@ public class NotificationApiTest {
 
         GetNotification notification = allNotifications.getPageItems().get(0);
         Assertions.assertTrue(notification.getIsRead());
-        Assertions.assertEquals(clientId.longValue(), notification.getObjectId());
+        Assertions.assertEquals(clientId, notification.getObjectId());
     }
 }

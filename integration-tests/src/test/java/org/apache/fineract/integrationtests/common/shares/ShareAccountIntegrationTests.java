@@ -33,7 +33,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
@@ -44,6 +45,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ShareAccountIntegrationTests {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final Logger LOG = LoggerFactory.getLogger(ShareAccountIntegrationTests.class);
     private RequestSpecification requestSpec;
@@ -104,7 +107,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
@@ -143,7 +146,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
@@ -212,7 +215,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
@@ -280,7 +283,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
@@ -361,7 +364,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
@@ -990,7 +993,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
@@ -1037,7 +1040,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
@@ -1096,7 +1099,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
@@ -1146,7 +1149,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
@@ -1211,7 +1214,7 @@ public class ShareAccountIntegrationTests {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
         Assertions.assertNotNull(productId);
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);

@@ -28,7 +28,8 @@ import jakarta.ws.rs.core.MediaType;
 import java.io.IOException;
 import org.apache.fineract.client.models.PaymentTypeCreateRequest;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.PaymentTypeHelper;
@@ -45,6 +46,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class LoanWorkbookPopulatorTest {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
@@ -68,7 +71,7 @@ public class LoanWorkbookPopulatorTest {
         Assertions.assertNotNull(outcome_office_creation, "Could not create office");
 
         // in order to populate helper sheets
-        Integer outcome_client_creation = ClientHelper.createClient(requestSpec, responseSpec);
+        Integer outcome_client_creation = clientHelper.createClient().intValue();
         Assertions.assertNotNull(outcome_client_creation, "Could not create client");
 
         // in order to populate helper sheets

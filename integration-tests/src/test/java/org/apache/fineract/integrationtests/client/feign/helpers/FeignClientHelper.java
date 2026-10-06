@@ -21,10 +21,21 @@ package org.apache.fineract.integrationtests.client.feign.helpers;
 import static org.apache.fineract.client.feign.util.FeignCalls.fail;
 import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import feign.Response;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.apache.fineract.client.feign.FineractFeignClient;
+import org.apache.fineract.client.feign.FineractMultipartEncoder.MultipartData;
+import org.apache.fineract.client.feign.ObjectMapperFactory;
 import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.AddressData;
 import org.apache.fineract.client.models.ClientAddressRequest;
@@ -60,6 +71,8 @@ import org.apache.fineract.integrationtests.client.feign.modules.ClientRequestBu
 import org.apache.fineract.integrationtests.client.feign.modules.ClientTestData;
 import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
 import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.Workbook;
 
 public class FeignClientHelper {
 
@@ -76,11 +89,15 @@ public class FeignClientHelper {
     private final FineractFeignClient fineractClient;
     private final FeignCodeHelper codeHelper;
     private final ClientIdentifierCommandsApi clientIdentifierCommandsApi;
+    private final ClientTypeApi clientTypeApi;
+    private final ClientBulkImportApi clientBulkImportApi;
 
     public FeignClientHelper(FineractFeignClient fineractClient) {
         this.fineractClient = fineractClient;
         this.codeHelper = new FeignCodeHelper(fineractClient);
         this.clientIdentifierCommandsApi = fineractClient.create(ClientIdentifierCommandsApi.class);
+        this.clientTypeApi = fineractClient.create(ClientTypeApi.class);
+        this.clientBulkImportApi = fineractClient.create(ClientBulkImportApi.class);
     }
 
     public Long createClient() {
@@ -106,6 +123,61 @@ public class FeignClientHelper {
 
     public PostClientsResponse createClient(PostClientsRequest request) {
         return ok(() -> fineractClient.clients().createClient(request));
+    }
+
+    /**
+     * Creates the default active client tagged with the given {@code ClientType} code value; see {@link ClientTypeApi}
+     * for why this does not go through {@link PostClientsRequest}.
+     */
+    public PostClientsResponse createClientWithClientType(Long clientTypeId) {
+        Map<String, Object> request = ObjectMapperFactory.getShared().convertValue(ClientRequestBuilders.defaultClient(),
+                new TypeReference<Map<String, Object>>() {});
+        request.put("clientTypeId", clientTypeId);
+        return ok(() -> clientTypeApi.createClient(request));
+    }
+
+    /** The populated bulk-import workbook for the given legal form, e.g. {@code CLIENTS_ENTITY}. */
+    public Workbook getClientTemplateWorkbook(String legalFormType, String dateFormat) {
+        return readWorkbook(clientBulkImportApi.downloadClientTemplate(legalFormType, dateFormat));
+    }
+
+    /** Uploads a filled-in bulk-import workbook; returns the import document id to poll the output template with. */
+    public Long importClientTemplate(String legalFormType, File file, String locale, String dateFormat) {
+        byte[] content;
+        try {
+            content = Files.readAllBytes(file.toPath());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        MultipartData multipartData = new MultipartData().addFile("file", file.getName(), content, "application/vnd.ms-excel")
+                .addText("locale", locale).addText("dateFormat", dateFormat);
+        return ok(() -> clientBulkImportApi.uploadClientTemplate(legalFormType, multipartData));
+    }
+
+    /** The raw output workbook of a bulk import; the status column stays empty until the import job has run. */
+    public byte[] downloadImportOutputTemplate(Long importDocumentId) {
+        return readBody(clientBulkImportApi.downloadOutputTemplate(importDocumentId));
+    }
+
+    private static Workbook readWorkbook(Response response) {
+        try {
+            return new HSSFWorkbook(new ByteArrayInputStream(readBody(response)));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    private static byte[] readBody(Response response) {
+        try (response; InputStream body = response.body().asInputStream()) {
+            byte[] bytes = body.readAllBytes();
+            if (response.status() < 200 || response.status() >= 300) {
+                throw new IllegalStateException("HTTP " + response.status() + " from " + response.request().url() + ": "
+                        + new String(bytes, StandardCharsets.UTF_8));
+            }
+            return bytes;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public PostClientsResponse createClientPending() {

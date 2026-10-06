@@ -69,9 +69,10 @@ import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.dataqueries.data.EntityTables;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
-import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
@@ -85,6 +86,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class DatatableAdvancedQueryTest {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final Logger LOG = LoggerFactory.getLogger(DatatableAdvancedQueryTest.class);
 
@@ -134,7 +137,7 @@ public class DatatableAdvancedQueryTest {
                     new PutGlobalConfigurationsRequest().enabled(true));
             BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, today);
 
-            final Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, yesterdayS);
+            final Integer clientId = clientHelper.createClient(yesterdayS).intValue();
             assertNotNull(clientId);
             final Integer savingsId = createSavingsAccountDailyPosting(clientId, yesterdayS);
             assertNotNull(savingsId);
@@ -220,7 +223,7 @@ public class DatatableAdvancedQueryTest {
                     new PutGlobalConfigurationsRequest().enabled(true));
             BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, today);
 
-            final Integer clientId = ClientHelper.createClient(requestSpec, responseSpec, yesterdayS);
+            final Integer clientId = clientHelper.createClient(yesterdayS).intValue();
             assertNotNull(clientId);
             final Integer savingsId = createSavingsAccountDailyPosting(clientId, yesterdayS);
             assertNotNull(savingsId);
