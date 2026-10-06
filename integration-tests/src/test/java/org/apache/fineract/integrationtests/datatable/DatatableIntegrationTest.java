@@ -366,9 +366,8 @@ public class DatatableIntegrationTest extends IntegrationTest {
         String deletedDataTableName = datatableHelper.deleteDatatable(datatableName).getResourceIdentifier();
         assertEquals(datatableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
 
-        CallFailedRuntimeException notFound = assertThrows(CallFailedRuntimeException.class,
-                () -> datatableHelper.getDatatable(datatableName));
-        assertEquals(404, notFound.getStatus());
+        // the server answers a missing datatable with a 200 and a null body rather than a 404
+        assertNull(datatableHelper.getDatatable(datatableName));
     }
 
     @Test
