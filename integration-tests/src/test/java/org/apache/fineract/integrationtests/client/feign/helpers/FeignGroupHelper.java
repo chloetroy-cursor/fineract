@@ -18,6 +18,7 @@
  */
 package org.apache.fineract.integrationtests.client.feign.helpers;
 
+import static org.apache.fineract.client.feign.util.FeignCalls.fail;
 import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
 import java.util.List;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.fineract.client.feign.FineractFeignClient;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.DeleteGroupsGroupIdResponse;
 import org.apache.fineract.client.models.GetGroupsGroupIdAccountsResponse;
 import org.apache.fineract.client.models.GetGroupsGroupIdClientMembers;
@@ -54,10 +56,12 @@ public class FeignGroupHelper {
 
     private final FineractFeignClient fineractClient;
     private final NonPagedListingApi nonPagedListingApi;
+    private final GroupDatatablesApi groupDatatablesApi;
 
     public FeignGroupHelper(FineractFeignClient fineractClient) {
         this.fineractClient = fineractClient;
         this.nonPagedListingApi = fineractClient.create(NonPagedListingApi.class);
+        this.groupDatatablesApi = fineractClient.create(GroupDatatablesApi.class);
     }
 
     /** Creates a group in {@code pending} status (active=false) in the default office. */
@@ -67,7 +71,18 @@ public class FeignGroupHelper {
 
     /** Creates a group in {@code pending} status (active=false). */
     public PostGroupsResponse createGroup(Long officeId) {
-        PostGroupsRequest request = new PostGroupsRequest()//
+        return createGroup(pendingGroupRequest(officeId));
+    }
+
+    /**
+     * A request for a {@code pending} group (active=false) in the default office, with a random name and external id.
+     */
+    public PostGroupsRequest pendingGroupRequest() {
+        return pendingGroupRequest(DEFAULT_OFFICE_ID);
+    }
+
+    public PostGroupsRequest pendingGroupRequest(Long officeId) {
+        return new PostGroupsRequest()//
                 .officeId(officeId)//
                 .name(Utils.uniqueRandomStringGenerator("Group_Name_", 5))//
                 .externalId(UUID.randomUUID().toString())//
@@ -75,7 +90,29 @@ public class FeignGroupHelper {
                 .submittedOnDate(DEFAULT_SUBMITTED_DATE)//
                 .dateFormat(LoanTestData.DATETIME_PATTERN)//
                 .locale(LoanTestData.LOCALE);
-        return createGroup(request);
+    }
+
+    /**
+     * Creates a {@code pending} group in the default office and inserts one row into {@code registeredTableName} in the
+     * same request, which is what an entity-datatable check on {@code m_group} demands.
+     */
+    public PostGroupsResponse createGroupWithDatatable(String registeredTableName, Map<String, Object> datatableRow) {
+        GroupDatatablesApi.DatatableEntry entry = new GroupDatatablesApi.DatatableEntry().registeredTableName(registeredTableName)
+                .data(datatableRow);
+        GroupDatatablesApi.GroupWithDatatablesRequest request = new GroupDatatablesApi.GroupWithDatatablesRequest()//
+                .officeId(DEFAULT_OFFICE_ID)//
+                .name(Utils.uniqueRandomStringGenerator("Group_Name_", 5))//
+                .externalId(UUID.randomUUID().toString())//
+                .active(false)//
+                .submittedOnDate(DEFAULT_SUBMITTED_DATE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN)//
+                .locale(LoanTestData.LOCALE)//
+                .datatables(List.of(entry));
+        return ok(() -> groupDatatablesApi.createGroupWithDatatables(request));
+    }
+
+    public CallFailedRuntimeException createGroupExpectingError(PostGroupsRequest request) {
+        return fail(() -> fineractClient.groups().createGroup(request));
     }
 
     /** Creates an {@code active} group in the default office. */
