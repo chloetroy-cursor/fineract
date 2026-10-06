@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.client.models.AccountRequest;
 import org.apache.fineract.client.models.GetClientsClientIdResponse;
 import org.apache.fineract.client.models.GetSearchResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
@@ -38,6 +39,7 @@ import org.apache.fineract.client.models.PostLoansLoanIdTransactionsResponse;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsResponse;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignSearchHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareAccountHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
@@ -46,8 +48,6 @@ import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuil
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.savings.AccountTransferHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
-import org.apache.fineract.integrationtests.common.shares.ShareAccountHelper;
-import org.apache.fineract.integrationtests.common.shares.ShareAccountTransactionHelper;
 import org.apache.fineract.integrationtests.common.shares.ShareProductHelper;
 import org.apache.fineract.integrationtests.common.shares.ShareProductTransactionHelper;
 import org.junit.jupiter.api.BeforeEach;
@@ -63,6 +63,7 @@ public class SearchResourcesTest {
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
     private FeignSearchHelper searchHelper;
+    private FeignShareAccountHelper shareAccountHelper;
 
     @BeforeEach
     public void setup() {
@@ -71,6 +72,7 @@ public class SearchResourcesTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.searchHelper = new FeignSearchHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.shareAccountHelper = new FeignShareAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -158,27 +160,15 @@ public class SearchResourcesTest {
 
         final Integer savingsId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId.intValue(), "1000");
 
-        final String shareJson = new ShareAccountHelper().withClientId(String.valueOf(clientId)).withProductId(String.valueOf(productId))
-                .withSavingsAccountId(String.valueOf(savingsId)).withSubmittedDate("01 January 2026").withApplicationDate("01 January 2026")
-                .withRequestedShares("10").build();
+        final Long shareAccountId = shareAccountHelper.applyShareAccount(new AccountRequest().clientId(clientId)
+                .productId(productId.longValue()).savingsAccountId(savingsId.longValue()).submittedDate("01 January 2026")
+                .applicationDate("01 January 2026").requestedShares(10L).dateFormat("dd MMMM yyyy").locale("en_GB"));
 
-        final Integer shareAccountId = ShareAccountTransactionHelper.createShareAccount(shareJson, requestSpec, responseSpec);
+        shareAccountHelper.approve(shareAccountId);
+        shareAccountHelper.activate(shareAccountId, "01 January 2026", "dd MMMM yyyy", "en");
 
-        final String approveJson = "{}";
-        ShareAccountTransactionHelper.postCommand("approve", shareAccountId, approveJson, requestSpec, responseSpec);
-
-        final String activateJson = """
-                {
-                  "activatedDate": "01 January 2026",
-                  "dateFormat": "dd MMMM yyyy",
-                  "locale": "en"
-                }
-                """;
-        ShareAccountTransactionHelper.postCommand("activate", shareAccountId, activateJson, requestSpec, responseSpec);
-
-        final Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        final String query = (String) shareAccountData.get("accountNo");
+        final String query = shareAccountHelper.getShareAccount(shareAccountId).getAccountNo();
+        assertNotNull(query);
 
         final List<GetSearchResponse> searchResponse = searchHelper.search(query, resources, Boolean.FALSE);
 

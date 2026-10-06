@@ -32,7 +32,10 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.fineract.client.models.AccountRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareAccountHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.junit.jupiter.api.Assertions;
@@ -46,6 +49,7 @@ public class DividendsIntegrationTests {
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
+    private FeignShareAccountHelper shareAccountHelper;
 
     @BeforeEach
     public void setup() {
@@ -53,6 +57,7 @@ public class DividendsIntegrationTests {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        this.shareAccountHelper = new FeignShareAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @SuppressWarnings("unchecked")
@@ -60,33 +65,18 @@ public class DividendsIntegrationTests {
     public void testCreateDividends() {
         DateFormat simple = new SimpleDateFormat("dd MMMM yyyy");
         final Integer productId = createShareProduct();
-        ArrayList<Integer> shareAccounts = new ArrayList<>();
+        ArrayList<Long> shareAccounts = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
             Assertions.assertNotNull(clientId);
             Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
             Assertions.assertNotNull(savingsAccountId);
-            final Integer shareAccountId = createShareAccount(clientId, productId, savingsAccountId, dates[i], shares[i]);
+            final Long shareAccountId = createShareAccount(clientId, productId, savingsAccountId, dates[i], shares[i]);
             shareAccounts.add(shareAccountId);
             Assertions.assertNotNull(shareAccountId);
-            Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                    responseSpec);
-            Assertions.assertNotNull(shareAccountData);
-            // Approve share Account
-            Map<String, Object> approveMap = new HashMap<>();
-            approveMap.put("note", "Share Account Approval Note");
-            approveMap.put("dateFormat", "dd MMMM yyyy");
-            approveMap.put("approvedDate", "01 Jan 2016");
-            approveMap.put("locale", "en");
-            String approve = new Gson().toJson(approveMap);
-            ShareAccountTransactionHelper.postCommand("approve", shareAccountId, approve, requestSpec, responseSpec);
-            // Activate Share Account
-            Map<String, Object> activateMap = new HashMap<>();
-            activateMap.put("dateFormat", "dd MMMM yyyy");
-            activateMap.put("activatedDate", "01 Jan 2016");
-            activateMap.put("locale", "en");
-            String activateJson = new Gson().toJson(activateMap);
-            ShareAccountTransactionHelper.postCommand("activate", shareAccountId, activateJson, requestSpec, responseSpec);
+            Assertions.assertNotNull(shareAccountHelper.getShareAccount(shareAccountId));
+            shareAccountHelper.approve(shareAccountId, "01 Jan 2016", "Share Account Approval Note", "dd MMMM yyyy", "en");
+            shareAccountHelper.activate(shareAccountId, "01 Jan 2016", "dd MMMM yyyy", "en");
         }
 
         Map<String, Object> dividendsMap = new HashMap<>();
@@ -186,11 +176,11 @@ public class DividendsIntegrationTests {
         return ShareProductTransactionHelper.createShareProduct(shareProductJson, requestSpec, responseSpec);
     }
 
-    private Integer createShareAccount(final Integer clientId, final Integer productId, final Integer savingsAccountId,
-            String applicationDate, String requestedShares) {
-        String josn = new ShareAccountHelper().withClientId(String.valueOf(clientId)).withProductId(String.valueOf(productId))
-                .withExternalId("External1").withSavingsAccountId(String.valueOf(savingsAccountId)).withSubmittedDate("01 Jan 2016")
-                .withApplicationDate(applicationDate).withRequestedShares(requestedShares).build();
-        return ShareAccountTransactionHelper.createShareAccount(josn, requestSpec, responseSpec);
+    private Long createShareAccount(final Integer clientId, final Integer productId, final Integer savingsAccountId, String applicationDate,
+            String requestedShares) {
+        return shareAccountHelper.applyShareAccount(
+                new AccountRequest().clientId(clientId.longValue()).productId(productId.longValue()).externalId("External1")
+                        .savingsAccountId(savingsAccountId.longValue()).submittedDate("01 Jan 2016").applicationDate(applicationDate)
+                        .requestedShares(Long.valueOf(requestedShares)).dateFormat("dd MMMM yyyy").locale("en_GB"));
     }
 }
