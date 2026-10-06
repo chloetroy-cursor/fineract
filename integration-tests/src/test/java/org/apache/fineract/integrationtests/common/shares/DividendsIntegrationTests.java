@@ -18,21 +18,22 @@
  */
 package org.apache.fineract.integrationtests.common.shares;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.gson.Gson;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareDividendHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.junit.jupiter.api.Assertions;
@@ -43,9 +44,11 @@ public class DividendsIntegrationTests {
 
     private final String[] dates = { "01 Jan 2015", "01 Apr 2015", "01 Oct 2015", "01 Dec 2015", "01 Mar 2016" };
     private final String[] shares = { "100", "200", "300", "100", "500" };
+    private static final BigDecimal DIVIDEND_AMOUNT = new BigDecimal("50000");
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
+    private FeignShareDividendHelper shareDividendHelper;
 
     @BeforeEach
     public void setup() {
@@ -53,12 +56,11 @@ public class DividendsIntegrationTests {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        this.shareDividendHelper = new FeignShareDividendHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testCreateDividends() {
-        DateFormat simple = new SimpleDateFormat("dd MMMM yyyy");
         final Integer productId = createShareProduct();
         ArrayList<Integer> shareAccounts = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
@@ -89,96 +91,56 @@ public class DividendsIntegrationTests {
             ShareAccountTransactionHelper.postCommand("activate", shareAccountId, activateJson, requestSpec, responseSpec);
         }
 
-        Map<String, Object> dividendsMap = new HashMap<>();
-        dividendsMap.put("dividendPeriodStartDate", "01 Jan 2015");
-        dividendsMap.put("dividendPeriodEndDate", "01 Apr 2016");
-        dividendsMap.put("dividendAmount", "50000");
-        dividendsMap.put("dateFormat", "dd MMMM yyyy");
-        dividendsMap.put("locale", "en");
-        String createDividendsJson = new Gson().toJson(dividendsMap);
-        final Integer dividendId = ShareDividendsTransactionHelper.createShareProductDividends(productId, createDividendsJson, requestSpec,
-                responseSpec);
+        final Long dividendId = shareDividendHelper.createDividend(productId.longValue(), "01 Jan 2015", "01 Apr 2016", DIVIDEND_AMOUNT,
+                "dd MMMM yyyy", "en");
 
-        Map<String, Object> productdividends = ShareDividendsTransactionHelper.retrieveAllDividends(productId, requestSpec, responseSpec);
-        Assertions.assertEquals("1", String.valueOf(productdividends.get("totalFilteredRecords")));
-        Map<String, Object> dividend = ((List<Map<String, Object>>) productdividends.get("pageItems")).get(0);
-        Assertions.assertEquals("50000.0", String.valueOf(dividend.get("amount")));
-        Map<String, Object> status = (Map<String, Object>) dividend.get("status");
-        Assertions.assertEquals("shareAccountDividendStatusType.initiated", String.valueOf(status.get("code")));
-        List<Integer> startdateList = (List<Integer>) dividend.get("dividendPeriodStartDate");
-        Calendar cal = Calendar.getInstance();
-        cal.set(startdateList.get(0), startdateList.get(1) - 1, startdateList.get(2));
-        Date startDate = cal.getTime();
-        Assertions.assertEquals("01 January 2015", simple.format(startDate));
-        List<Integer> enddateList = (List<Integer>) dividend.get("dividendPeriodEndDate");
-        cal = Calendar.getInstance();
-        cal.set(enddateList.get(0), enddateList.get(1) - 1, enddateList.get(2));
-        Date endDate = cal.getTime();
-        Assertions.assertEquals("01 April 2016", simple.format(endDate));
+        assertProductDividend(productId, "shareAccountDividendStatusType.initiated");
+        assertAccountDividends(productId, dividendId, shareAccounts);
 
-        Map<String, Object> dividenddetails = ShareDividendsTransactionHelper.retrieveDividendDetails(productId, dividendId, requestSpec,
-                responseSpec);
-        Assertions.assertEquals("5", String.valueOf(dividenddetails.get("totalFilteredRecords")));
-        List<Map<String, Object>> pageItems = (List<Map<String, Object>>) dividenddetails.get("pageItems");
-        for (Map<String, Object> dividendData : pageItems) {
-            Map<String, Object> accountData = (Map<String, Object>) dividendData.get("accountData");
-            String accountId = String.valueOf(accountData.get("id"));
-            if (String.valueOf(shareAccounts.get(0)).equals(accountId)) {
-                Assertions.assertEquals("11320.755", String.valueOf(dividendData.get("amount")));
-            } else if (String.valueOf(shareAccounts.get(1)).equals(accountId)) {
-                Assertions.assertEquals("18172.791", String.valueOf(dividendData.get("amount")));
-            } else if (String.valueOf(shareAccounts.get(2)).equals(accountId)) {
-                Assertions.assertEquals("13629.593", String.valueOf(dividendData.get("amount")));
-            } else if (String.valueOf(shareAccounts.get(3)).equals(accountId)) {
-                Assertions.assertEquals("3028.7983", String.valueOf(dividendData.get("amount")));
-            } else if (String.valueOf(shareAccounts.get(4)).equals(accountId)) {
-                Assertions.assertEquals("3848.0637", String.valueOf(dividendData.get("amount")));
-            }
-            Map<String, Object> statusMap = (Map<String, Object>) dividendData.get("status");
-            Assertions.assertEquals("shareAccountDividendStatusType.initiated", String.valueOf(statusMap.get("code")));
+        shareDividendHelper.approveDividend(productId.longValue(), dividendId);
+
+        assertProductDividend(productId, "shareAccountDividendStatusType.approved");
+        assertAccountDividends(productId, dividendId, shareAccounts);
+    }
+
+    private void assertProductDividend(final Integer productId, final String expectedStatusCode) {
+        JsonNode productDividends = shareDividendHelper.getDividends(productId.longValue());
+        Assertions.assertEquals(1, productDividends.get("totalFilteredRecords").asInt());
+        JsonNode dividend = productDividends.get("pageItems").get(0);
+        assertAmount(DIVIDEND_AMOUNT, dividend.get("amount"));
+        Assertions.assertEquals(expectedStatusCode, dividend.get("status").get("code").asText());
+        Assertions.assertEquals(LocalDate.of(2015, 1, 1), toLocalDate(dividend.get("dividendPeriodStartDate")));
+        Assertions.assertEquals(LocalDate.of(2016, 4, 1), toLocalDate(dividend.get("dividendPeriodEndDate")));
+    }
+
+    /**
+     * 50,000 spread over 201,400 share-days (100 x 456 + 200 x 366 + 300 x 183 + 100 x 122 + 500 x 31), then rounded to
+     * the product's four decimals per account. Approving the payout leaves the per-account details in initiated state;
+     * the scheduler job posts them.
+     */
+    private void assertAccountDividends(final Integer productId, final Long dividendId, final List<Integer> shareAccounts) {
+        final BigDecimal[] expectedAmounts = { new BigDecimal("11320.7547"), new BigDecimal("18172.7905"), new BigDecimal("13629.5929"),
+                new BigDecimal("3028.7984"), new BigDecimal("3848.0636") };
+        JsonNode dividendDetails = shareDividendHelper.getDividendDetails(productId.longValue(), dividendId);
+        Assertions.assertEquals(shareAccounts.size(), dividendDetails.get("totalFilteredRecords").asInt());
+        int matched = 0;
+        for (JsonNode dividendData : dividendDetails.get("pageItems")) {
+            int accountId = dividendData.get("accountData").get("id").asInt();
+            int index = shareAccounts.indexOf(accountId);
+            Assertions.assertTrue(index >= 0, "unexpected share account " + accountId + " in dividend details");
+            assertAmount(expectedAmounts[index], dividendData.get("amount"));
+            Assertions.assertEquals("shareAccountDividendStatusType.initiated", dividendData.get("status").get("code").asText());
+            matched++;
         }
+        Assertions.assertEquals(shareAccounts.size(), matched);
+    }
 
-        String jsonString = "";
-        ShareDividendsTransactionHelper.postCommand("approve", productId, dividendId, jsonString, requestSpec, responseSpec);
+    private static void assertAmount(final BigDecimal expected, final JsonNode actual) {
+        Assertions.assertEquals(0, expected.compareTo(actual.decimalValue()), () -> "expected " + expected + " but was " + actual);
+    }
 
-        productdividends = ShareDividendsTransactionHelper.retrieveAllDividends(productId, requestSpec, responseSpec);
-        Assertions.assertEquals("1", String.valueOf(productdividends.get("totalFilteredRecords")));
-        dividend = ((List<Map<String, Object>>) productdividends.get("pageItems")).get(0);
-        Assertions.assertEquals("50000.0", String.valueOf(dividend.get("amount")));
-        status = (Map<String, Object>) dividend.get("status");
-        Assertions.assertEquals("shareAccountDividendStatusType.approved", String.valueOf(status.get("code")));
-        startdateList = (List<Integer>) dividend.get("dividendPeriodStartDate");
-        cal = Calendar.getInstance();
-        cal.set(startdateList.get(0), startdateList.get(1) - 1, startdateList.get(2));
-        startDate = cal.getTime();
-        Assertions.assertEquals("01 January 2015", simple.format(startDate));
-        enddateList = (List<Integer>) dividend.get("dividendPeriodEndDate");
-        cal = Calendar.getInstance();
-        cal.set(enddateList.get(0), enddateList.get(1) - 1, enddateList.get(2));
-        endDate = cal.getTime();
-        Assertions.assertEquals("01 April 2016", simple.format(endDate));
-
-        dividenddetails = ShareDividendsTransactionHelper.retrieveDividendDetails(productId, dividendId, requestSpec, responseSpec);
-        Assertions.assertEquals("5", String.valueOf(dividenddetails.get("totalFilteredRecords")));
-        pageItems = (List<Map<String, Object>>) dividenddetails.get("pageItems");
-        for (Map<String, Object> dividendData : pageItems) {
-            Map<String, Object> accountData = (Map<String, Object>) dividendData.get("accountData");
-            String accountId = String.valueOf(accountData.get("id"));
-            if (String.valueOf(shareAccounts.get(0)).equals(accountId)) {
-                Assertions.assertEquals("11320.755", String.valueOf(dividendData.get("amount")));
-            } else if (String.valueOf(shareAccounts.get(1)).equals(accountId)) {
-                Assertions.assertEquals("18172.791", String.valueOf(dividendData.get("amount")));
-            } else if (String.valueOf(shareAccounts.get(2)).equals(accountId)) {
-                Assertions.assertEquals("13629.593", String.valueOf(dividendData.get("amount")));
-            } else if (String.valueOf(shareAccounts.get(3)).equals(accountId)) {
-                Assertions.assertEquals("3028.7983", String.valueOf(dividendData.get("amount")));
-            } else if (String.valueOf(shareAccounts.get(4)).equals(accountId)) {
-                Assertions.assertEquals("3848.0637", String.valueOf(dividendData.get("amount")));
-            }
-            Map<String, Object> statusMap = (Map<String, Object>) dividendData.get("status");
-            Assertions.assertEquals("shareAccountDividendStatusType.initiated", String.valueOf(statusMap.get("code")));
-        }
-
+    private static LocalDate toLocalDate(final JsonNode dateArray) {
+        return LocalDate.of(dateArray.get(0).asInt(), dateArray.get(1).asInt(), dateArray.get(2).asInt());
     }
 
     private Integer createShareProduct() {
