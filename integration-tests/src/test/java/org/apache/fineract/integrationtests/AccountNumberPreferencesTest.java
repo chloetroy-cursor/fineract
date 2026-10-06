@@ -29,12 +29,13 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignGroupHelper;
 import org.apache.fineract.integrationtests.common.CenterDomain;
 import org.apache.fineract.integrationtests.common.CenterHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
-import org.apache.fineract.integrationtests.common.GroupHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
@@ -76,6 +77,7 @@ public class AccountNumberPreferencesTest {
     private LoanTransactionHelper loanTransactionHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private AccountNumberPreferencesHelper accountNumberPreferencesHelper;
+    private final FeignGroupHelper groupHelper = new FeignGroupHelper(FineractFeignClientHelper.getFineractFeignClient());
     private Integer clientAccountNumberPreferenceId;
     private Integer loanAccountNumberPreferenceId;
     private Integer savingsAccountNumberPreferenceId;
@@ -286,11 +288,12 @@ public class AccountNumberPreferencesTest {
 
     private void createAndValidateGroup(Boolean isAccountPreferenceSetUp) {
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.groupID = GroupHelper.createGroup(this.requestSpec, this.responseSpec);
-        GroupHelper.verifyGroupCreatedOnServer(this.requestSpec, this.responseSpec, groupID);
+        final Long groupId = this.groupHelper.createGroup().getGroupId();
+        Assertions.assertEquals(groupId, this.groupHelper.retrieveGroup(groupId).getId(), "ERROR IN CREATING THE GROUP");
 
-        this.groupID = GroupHelper.activateGroup(this.requestSpec, this.responseSpec, groupID.toString());
-        GroupHelper.verifyGroupActivatedOnServer(this.requestSpec, this.responseSpec, groupID, true);
+        this.groupHelper.activateGroup(groupId);
+        Assertions.assertTrue(this.groupHelper.isGroupActive(groupId), "ERROR IN ACTIVATING THE GROUP");
+        this.groupID = groupId.intValue();
 
         final String GROUP_URL = "/fineract-provider/api/v1/groups/" + this.groupID + "?" + Utils.TENANT_IDENTIFIER;
         this.groupAccountNo = Utils.performServerGet(requestSpec, responseSpec, GROUP_URL, "accountNo");

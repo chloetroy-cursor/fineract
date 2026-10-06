@@ -37,7 +37,6 @@ import org.apache.fineract.integrationtests.client.feign.modules.LoanRequestBuil
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
-import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.junit.jupiter.api.BeforeAll;
@@ -112,7 +111,7 @@ public class GroupTest extends FeignLoanTestBase {
     private static PostGroupsRequest groupRequest(final String externalId) {
         final PostGroupsRequest request = new PostGroupsRequest();
         request.officeId(1L);
-        request.name(GroupHelper.randomNameGenerator("Group_Name_", 5));
+        request.name(Utils.uniqueRandomStringGenerator("Group_Name_", 5));
         request.externalId(externalId);
         request.active(true);
         request.activationDate("04 March 2011");
