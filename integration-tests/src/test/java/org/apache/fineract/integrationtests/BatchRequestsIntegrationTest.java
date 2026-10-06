@@ -32,9 +32,10 @@ import org.apache.fineract.batch.domain.BatchRequest;
 import org.apache.fineract.batch.domain.BatchResponse;
 import org.apache.fineract.batch.domain.Header;
 import org.apache.fineract.infrastructure.core.exception.AbstractIdempotentCommandException;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCollateralHelper;
 import org.apache.fineract.integrationtests.common.BatchHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
@@ -57,6 +58,7 @@ public class BatchRequestsIntegrationTest {
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
     private static final SecureRandom secureRandom = new SecureRandom();
+    private final FeignCollateralHelper collateralHelper = new FeignCollateralHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     public BatchRequestsIntegrationTest() {
 
@@ -127,13 +129,13 @@ public class BatchRequestsIntegrationTest {
         Integer selClientsCount = (int) Math.ceil(secureRandom.nextDouble() * clientsCount) + 2;
         for (int i = 0; i < selClientsCount; i++) {
 
-            final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
+            final Long collateralId = collateralHelper.createCollateralProduct().getResourceId();
             Assertions.assertNotNull(collateralId);
-            final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec,
-                    String.valueOf(clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))]), collateralId);
+            final Long clientCollateralId = collateralHelper.createClientCollateral(
+                    clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))].longValue(), collateralId).getResourceId();
             Assertions.assertNotNull(clientCollateralId);
 
-            BatchRequest br = BatchHelper.applyLoanRequest((long) selClientsCount, null, loanProductID, clientCollateralId);
+            BatchRequest br = BatchHelper.applyLoanRequest((long) selClientsCount, null, loanProductID, clientCollateralId.intValue());
             br.setBody(br.getBody().replace("$.clientId",
                     String.valueOf(clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))])));
             batchRequests.add(br);
@@ -198,13 +200,13 @@ public class BatchRequestsIntegrationTest {
         Integer selClientsCount = (int) Math.ceil(secureRandom.nextDouble() * clientsCount) + 2;
         for (int i = 0; i < selClientsCount; i++) {
 
-            final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
+            final Long collateralId = collateralHelper.createCollateralProduct().getResourceId();
             Assertions.assertNotNull(collateralId);
-            final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec,
-                    String.valueOf(clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))]), collateralId);
+            final Long clientCollateralId = collateralHelper.createClientCollateral(
+                    clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))].longValue(), collateralId).getResourceId();
             Assertions.assertNotNull(clientCollateralId);
 
-            BatchRequest br = BatchHelper.applyLoanRequest((long) selClientsCount, null, loanProductID, clientCollateralId);
+            BatchRequest br = BatchHelper.applyLoanRequest((long) selClientsCount, null, loanProductID, clientCollateralId.intValue());
             br.setBody(br.getBody().replace("$.clientId",
                     String.valueOf(clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))])));
             br.setHeaders(new HashSet<>());
