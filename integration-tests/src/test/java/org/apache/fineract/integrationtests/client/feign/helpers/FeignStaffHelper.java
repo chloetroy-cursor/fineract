@@ -18,11 +18,17 @@
  */
 package org.apache.fineract.integrationtests.client.feign.helpers;
 
+import static org.apache.fineract.client.feign.util.FeignCalls.fail;
 import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
+import java.util.List;
 import org.apache.fineract.client.feign.FineractFeignClient;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.StaffCreateRequest;
 import org.apache.fineract.client.models.StaffCreateResponse;
+import org.apache.fineract.client.models.StaffData;
+import org.apache.fineract.client.models.StaffUpdateRequest;
+import org.apache.fineract.client.models.StaffUpdateResponse;
 import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
 import org.apache.fineract.integrationtests.common.Utils;
 
@@ -30,7 +36,7 @@ import org.apache.fineract.integrationtests.common.Utils;
 public class FeignStaffHelper {
 
     public static final Long DEFAULT_OFFICE_ID = 1L;
-    private static final String DEFAULT_JOINING_DATE = "20 September 2011";
+    public static final String DEFAULT_JOINING_DATE = "20 September 2011";
 
     private final FineractFeignClient fineractClient;
 
@@ -38,23 +44,64 @@ public class FeignStaffHelper {
         this.fineractClient = fineractClient;
     }
 
+    /** A valid loan-officer request in the head office; callers adjust fields before sending it. */
+    public static StaffCreateRequest defaultStaffCreateRequest() {
+        return new StaffCreateRequest()//
+                .officeId(DEFAULT_OFFICE_ID)//
+                .firstname(Utils.uniqueRandomStringGenerator("michael_", 5))//
+                .lastname(Utils.uniqueRandomStringGenerator("Doe_", 4))//
+                .isLoanOfficer(true)//
+                .joiningDate(DEFAULT_JOINING_DATE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN)//
+                .locale(LoanTestData.LOCALE);
+    }
+
     public StaffCreateResponse createStaff() {
         return createStaff(DEFAULT_OFFICE_ID, DEFAULT_JOINING_DATE);
     }
 
     public StaffCreateResponse createStaff(Long officeId, String joiningDate) {
-        StaffCreateRequest request = new StaffCreateRequest()//
-                .officeId(officeId)//
-                .firstname(Utils.uniqueRandomStringGenerator("michael_", 5))//
-                .lastname(Utils.uniqueRandomStringGenerator("Doe_", 4))//
-                .isLoanOfficer(true)//
-                .joiningDate(joiningDate)//
-                .dateFormat(LoanTestData.DATETIME_PATTERN)//
-                .locale(LoanTestData.LOCALE);
-        return createStaff(request);
+        return createStaff(defaultStaffCreateRequest().officeId(officeId).joiningDate(joiningDate));
     }
 
     public StaffCreateResponse createStaff(StaffCreateRequest request) {
         return ok(() -> fineractClient.staff().createStaff(request));
+    }
+
+    public CallFailedRuntimeException createStaffExpectingError(StaffCreateRequest request) {
+        return fail(() -> fineractClient.staff().createStaff(request));
+    }
+
+    public StaffData getStaff(Long staffId) {
+        return ok(() -> fineractClient.staff().retrieveOneStaff(staffId));
+    }
+
+    public CallFailedRuntimeException getStaffExpectingError(Long staffId) {
+        return fail(() -> fineractClient.staff().retrieveOneStaff(staffId));
+    }
+
+    public List<StaffData> getStaffList() {
+        return ok(() -> fineractClient.staff().retrieveAllStaff(null, false, false, null));
+    }
+
+    /** {@code status} is {@code active}, {@code inactive} or {@code all}. */
+    public List<StaffData> getStaffListWithStatus(String status) {
+        return ok(() -> fineractClient.staff().retrieveAllStaff(null, false, false, status));
+    }
+
+    public CallFailedRuntimeException getStaffListWithStatusExpectingError(String status) {
+        return fail(() -> fineractClient.staff().retrieveAllStaff(null, false, false, status));
+    }
+
+    public List<StaffData> getLoanOfficers() {
+        return ok(() -> fineractClient.staff().retrieveAllStaff(null, false, true, null));
+    }
+
+    public StaffUpdateResponse updateStaff(Long staffId, StaffUpdateRequest request) {
+        return ok(() -> fineractClient.staff().updateStaff(staffId, request));
+    }
+
+    public CallFailedRuntimeException updateStaffExpectingError(Long staffId, StaffUpdateRequest request) {
+        return fail(() -> fineractClient.staff().updateStaff(staffId, request));
     }
 }

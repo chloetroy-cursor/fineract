@@ -38,9 +38,10 @@ import org.apache.fineract.client.models.PutUsersUserIdRequest;
 import org.apache.fineract.client.models.PutUsersUserIdResponse;
 import org.apache.fineract.client.util.CallFailedRuntimeException;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignStaffHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
 import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.apache.fineract.useradministration.service.AppUserConstants;
@@ -84,7 +85,8 @@ public class UserAdministrationTest extends IntegrationTest {
         final Integer roleId = RolesHelper.createRole(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(roleId);
 
-        final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
+        final Integer staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId()
+                .intValue();
         Assertions.assertNotNull(staffId);
 
         final Integer userId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, "alphabet",
@@ -105,7 +107,8 @@ public class UserAdministrationTest extends IntegrationTest {
         final Integer roleId = RolesHelper.createRole(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(roleId);
 
-        final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
+        final Integer staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId()
+                .intValue();
         Assertions.assertNotNull(staffId);
 
         final Integer userId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, "alphabet",
@@ -125,7 +128,8 @@ public class UserAdministrationTest extends IntegrationTest {
         final Integer roleId = RolesHelper.createRole(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(roleId);
 
-        final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
+        final Integer staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId()
+                .intValue();
         Assertions.assertNotNull(staffId);
 
         final Integer userId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, "alphabet",
