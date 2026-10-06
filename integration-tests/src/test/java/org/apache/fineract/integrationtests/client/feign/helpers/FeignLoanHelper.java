@@ -22,10 +22,18 @@ import static org.apache.fineract.client.feign.util.FeignCalls.executeVoid;
 import static org.apache.fineract.client.feign.util.FeignCalls.fail;
 import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
+import feign.Response;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import org.apache.fineract.client.feign.FineractFeignClient;
+import org.apache.fineract.client.feign.FineractMultipartEncoder.MultipartData;
 import org.apache.fineract.client.feign.ObjectMapperFactory;
 import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.AdvancedPaymentData;
@@ -79,6 +87,8 @@ import org.apache.fineract.client.models.PutLoansLoanIdDisbursementsDisbursement
 import org.apache.fineract.client.models.PutLoansLoanIdRequest;
 import org.apache.fineract.client.models.PutLoansLoanIdResponse;
 import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.Workbook;
 
 public class FeignLoanHelper {
 
@@ -202,6 +212,47 @@ public class FeignLoanHelper {
 
     public PostLoansResponse applyForLoan(PostLoansRequest request) {
         return ok(() -> fineractClient.loans().calculateOrSubmitLoanApplication(request, (String) null));
+    }
+
+    /** Whether the loan is flagged as a non-performing asset; the generated loan response has no field for it. */
+    public boolean isNpa(Long loanId) {
+        Map<String, Object> loan = ok(() -> fineractClient.create(LoanFieldsApi.class).retrieveLoanAsMap(loanId));
+        return Boolean.TRUE.equals(loan.get("isNPA"));
+    }
+
+    public <T> T applyForLoanError(PostLoansRequest request, String jsonAttributeToGetBack) {
+        CallFailedRuntimeException ex = fail(() -> fineractClient.loans().calculateOrSubmitLoanApplication(request, (String) null));
+        return extractErrorAttribute(ex, jsonAttributeToGetBack);
+    }
+
+    public Workbook getLoanWorkbook(String dateFormat) throws IOException {
+        byte[] body = readBinaryBody(fineractClient.create(LoanBulkImportApi.class).downloadLoanTemplate(dateFormat));
+        return new HSSFWorkbook(new ByteArrayInputStream(body));
+    }
+
+    /** Uploads a filled-in loan template workbook and returns the import document id. */
+    public String importLoanTemplate(File file) throws IOException {
+        MultipartData multipartData = new MultipartData()
+                .addFile("file", file.getName(), Files.readAllBytes(file.toPath()), "application/vnd.ms-excel").addText("locale", "en")
+                .addText("dateFormat", "dd MMMM yyyy");
+        return ok(() -> fineractClient.create(LoanBulkImportApi.class).uploadLoanTemplate(multipartData));
+    }
+
+    public byte[] downloadOutputTemplate(String importDocumentId) {
+        return readBinaryBody(fineractClient.create(LoanBulkImportApi.class).downloadOutputTemplate(importDocumentId));
+    }
+
+    private static byte[] readBinaryBody(Response response) {
+        try (Response closeable = response) {
+            if (closeable.status() < 200 || closeable.status() >= 300) {
+                throw new IllegalStateException("HTTP " + closeable.status() + " from " + closeable.request().url());
+            }
+            try (InputStream inputStream = closeable.body().asInputStream()) {
+                return inputStream.readAllBytes();
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     public PostLoansResponse calculateLoanSchedule(PostLoansRequest request) {

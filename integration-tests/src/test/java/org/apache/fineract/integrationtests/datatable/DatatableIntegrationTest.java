@@ -47,17 +47,20 @@ import java.util.Map;
 import org.apache.fineract.client.models.GetDataTablesResponse;
 import org.apache.fineract.client.models.PostDataTablesAppTableIdResponse;
 import org.apache.fineract.client.models.PostDataTablesResponse;
+import org.apache.fineract.client.models.PostLoansRequest;
 import org.apache.fineract.client.models.PutDataTablesAppTableIdDatatableIdResponse;
 import org.apache.fineract.client.models.PutDataTablesResponse;
 import org.apache.fineract.client.models.ResultsetColumnHeaderData;
 import org.apache.fineract.client.util.Calls;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.system.CodeHelper;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,7 +93,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
     private ResponseSpecification responseSpec;
     private DatatableHelper datatableHelper;
 
-    private LoanTransactionHelper loanTransactionHelper;
+    private FeignLoanHelper loanHelper;
 
     @BeforeEach
     public void setup() {
@@ -99,7 +102,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.datatableHelper = new DatatableHelper(this.requestSpec, this.responseSpec);
-        this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
+        this.loanHelper = new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -946,24 +949,22 @@ public class DatatableIntegrationTest extends IntegrationTest {
 
     private Integer applyForLoanApplication(final Integer clientID, final Integer loanProductID) {
         LOG.info("--------------------------------APPLYING FOR LOAN APPLICATION--------------------------------");
-        final String loanApplicationJSON = new LoanApplicationTestBuilder().withPrincipal(LP_PRINCIPAL.toString())
-                .withLoanTermFrequency(LOAN_TERM_FREQUENCY).withLoanTermFrequencyAsMonths().withNumberOfRepayments(LP_REPAYMENTS)
-                .withRepaymentEveryAfter(LP_REPAYMENT_PERIOD).withRepaymentFrequencyTypeAsMonths()
-                .withInterestRatePerPeriod(LP_INTEREST_RATE).withInterestTypeAsFlatBalance().withAmortizationTypeAsEqualPrincipalPayments()
-                .withInterestCalculationPeriodTypeSameAsRepaymentPeriod().withExpectedDisbursementDate(EXPECTED_DISBURSAL_DATE)
-                .withSubmittedOnDate(LOAN_APPLICATION_SUBMISSION_DATE).withLoanType(INDIVIDUAL_LOAN)
-                .build(clientID.toString(), loanProductID.toString(), null);
-        return this.loanTransactionHelper.getLoanId(loanApplicationJSON);
+        final PostLoansRequest loanApplication = LoanRequestBuilders
+                .legacyIndividualApplication(clientID.longValue(), loanProductID.longValue(), LP_PRINCIPAL.toString(),
+                        Integer.parseInt(LP_REPAYMENTS), new BigDecimal(LP_INTEREST_RATE), EXPECTED_DISBURSAL_DATE)
+                .loanTermFrequency(Integer.parseInt(LOAN_TERM_FREQUENCY)).repaymentEvery(Integer.parseInt(LP_REPAYMENT_PERIOD))
+                .interestType(LoanTestData.InterestType.FLAT).amortizationType(LoanTestData.AmortizationType.EQUAL_PRINCIPAL)
+                .submittedOnDate(LOAN_APPLICATION_SUBMISSION_DATE).loanType(INDIVIDUAL_LOAN);
+        return this.loanHelper.applyForLoan(loanApplication).getLoanId().intValue();
     }
 
     private Integer createLoanProductWithPeriodicAccrualAccountingEnabled() {
         LOG.info("------------------------------CREATING NEW LOAN PRODUCT ---------------------------------------");
-        final String loanProductJSON = new LoanProductTestBuilder().withPrincipal(LP_PRINCIPAL.toString()).withRepaymentTypeAsMonth()
-                .withRepaymentAfterEvery(LP_REPAYMENT_PERIOD).withNumberOfRepayments(LP_REPAYMENTS).withRepaymentTypeAsMonth()
-                .withinterestRatePerPeriod(LP_INTEREST_RATE).withInterestRateFrequencyTypeAsMonths()
+        return this.loanHelper.createLoanProduct(new LoanProductTestBuilder().withPrincipal(LP_PRINCIPAL.toString())
+                .withRepaymentTypeAsMonth().withRepaymentAfterEvery(LP_REPAYMENT_PERIOD).withNumberOfRepayments(LP_REPAYMENTS)
+                .withRepaymentTypeAsMonth().withinterestRatePerPeriod(LP_INTEREST_RATE).withInterestRateFrequencyTypeAsMonths()
                 .withAmortizationTypeAsEqualPrincipalPayment().withInterestTypeAsFlat().withAccountingRuleAsNone().withDaysInMonth("30")
-                .withDaysInYear("365").build(null);
-        return this.loanTransactionHelper.getLoanProductId(loanProductJSON);
+                .withDaysInYear("365").buildRequest()).getResourceId().intValue();
     }
 
     @Test

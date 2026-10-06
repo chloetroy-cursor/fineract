@@ -31,14 +31,16 @@ import java.util.UUID;
 import org.apache.fineract.batch.domain.BatchRequest;
 import org.apache.fineract.batch.domain.BatchResponse;
 import org.apache.fineract.batch.domain.Header;
+import org.apache.fineract.client.models.PostLoanProductsRequest;
 import org.apache.fineract.infrastructure.core.exception.AbstractIdempotentCommandException;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
 import org.apache.fineract.integrationtests.common.BatchHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -104,18 +106,7 @@ public class BatchRequestsIntegrationTest {
 
         // Create new loan Products
         for (Integer i = 0; i < loansCount; i++) {
-            final String loanProductJSON = new LoanProductTestBuilder() //
-                    .withPrincipal(String.valueOf(10000.00 + Math.ceil(secureRandom.nextDouble() * 1000000.00))) //
-                    .withNumberOfRepayments(String.valueOf(2 + (int) Math.ceil(secureRandom.nextDouble() * 36))) //
-                    .withRepaymentAfterEvery(String.valueOf(1 + (int) Math.ceil(secureRandom.nextDouble() * 3))) //
-                    .withRepaymentTypeAsMonth() //
-                    .withinterestRatePerPeriod(String.valueOf(1 + (int) Math.ceil(secureRandom.nextDouble() * 4))) //
-                    .withInterestRateFrequencyTypeAsMonths() //
-                    .withAmortizationTypeAsEqualPrincipalPayment() //
-                    .withInterestTypeAsDecliningBalance() //
-                    .currencyDetails("0", "100").build(null);
-
-            loanProducts[i] = new LoanTransactionHelper(this.requestSpec, this.responseSpec).getLoanProductId(loanProductJSON);
+            loanProducts[i] = createRandomLoanProduct();
         }
 
         // Select anyone of the loan products at random
@@ -173,20 +164,8 @@ public class BatchRequestsIntegrationTest {
         final Integer[] loanProducts = new Integer[loansCount];
 
         // Create new loan Products
-        LoanTransactionHelper helper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
         for (Integer i = 0; i < loansCount; i++) {
-            final String loanProductJSON = new LoanProductTestBuilder() //
-                    .withPrincipal(String.valueOf(10000.00 + Math.ceil(secureRandom.nextDouble() * 1000000.00))) //
-                    .withNumberOfRepayments(String.valueOf(2 + (int) Math.ceil(secureRandom.nextDouble() * 36))) //
-                    .withRepaymentAfterEvery(String.valueOf(1 + (int) Math.ceil(secureRandom.nextDouble() * 3))) //
-                    .withRepaymentTypeAsMonth() //
-                    .withinterestRatePerPeriod(String.valueOf(1 + (int) Math.ceil(secureRandom.nextDouble() * 4))) //
-                    .withInterestRateFrequencyTypeAsMonths() //
-                    .withAmortizationTypeAsEqualPrincipalPayment() //
-                    .withInterestTypeAsDecliningBalance() //
-                    .currencyDetails("0", "100").build(null);
-
-            loanProducts[i] = helper.getLoanProductId(loanProductJSON);
+            loanProducts[i] = createRandomLoanProduct();
         }
 
         // Select anyone of the loan products at random
@@ -239,5 +218,20 @@ public class BatchRequestsIntegrationTest {
                     "Not cached by idempotency key!");
             Assertions.assertEquals(200L, (long) res.getStatusCode(), "Verify Status Code 200");
         }
+    }
+
+    private Integer createRandomLoanProduct() {
+        final PostLoanProductsRequest loanProduct = new LoanProductTestBuilder() //
+                .withPrincipal(String.valueOf(10000.00 + Math.ceil(secureRandom.nextDouble() * 1000000.00))) //
+                .withNumberOfRepayments(String.valueOf(2 + (int) Math.ceil(secureRandom.nextDouble() * 36))) //
+                .withRepaymentAfterEvery(String.valueOf(1 + (int) Math.ceil(secureRandom.nextDouble() * 3))) //
+                .withRepaymentTypeAsMonth() //
+                .withinterestRatePerPeriod(String.valueOf(1 + (int) Math.ceil(secureRandom.nextDouble() * 4))) //
+                .withInterestRateFrequencyTypeAsMonths() //
+                .withAmortizationTypeAsEqualPrincipalPayment() //
+                .withInterestTypeAsDecliningBalance() //
+                .currencyDetails("0", "100").buildRequest();
+        return new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient()).createLoanProduct(loanProduct).getResourceId()
+                .intValue();
     }
 }

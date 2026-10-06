@@ -31,18 +31,25 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.apache.fineract.client.models.GetEntityDatatableChecksResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.client.models.PostEntityDatatableChecksTemplateResponse;
+import org.apache.fineract.client.models.PostLoanProductsRequest;
+import org.apache.fineract.client.models.PostLoansDataTable;
+import org.apache.fineract.client.models.PostLoansRequest;
+import org.apache.fineract.client.models.PostLoansRequestCollateralData;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
@@ -64,8 +71,7 @@ public class EntityDatatableChecksIntegrationTest {
     private ResponseSpecification responseSpec;
     private DatatableHelper datatableHelper;
     private SavingsAccountHelper savingsAccountHelper;
-    private LoanTransactionHelper loanTransactionHelper;
-    private LoanTransactionHelper validationErrorHelper;
+    private FeignLoanHelper loanHelper;
 
     private static final String CLIENT_APP_TABLE_NAME = "m_client";
     private static final String GROUP_APP_TABLE_NAME = "m_group";
@@ -84,6 +90,7 @@ public class EntityDatatableChecksIntegrationTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.datatableHelper = new DatatableHelper(this.requestSpec, this.responseSpec);
+        this.loanHelper = new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -343,8 +350,6 @@ public class EntityDatatableChecksIntegrationTest {
 
     @Test
     public void validateCreateLoanWithEntityDatatableCheck() {
-        this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
-
         // creating client
         final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, clientID);
@@ -382,12 +387,6 @@ public class EntityDatatableChecksIntegrationTest {
     @SuppressWarnings("unchecked")
     @Test
     public void validateCreateLoanWithEntityDatatableCheckWithFailure() {
-        this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
-
-        // building error response with status code 403
-        final ResponseSpecification errorResponse = new ResponseSpecBuilder().expectStatusCode(403).build();
-        this.validationErrorHelper = new LoanTransactionHelper(this.requestSpec, errorResponse);
-
         // creating client
         final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, clientID);
@@ -458,7 +457,7 @@ public class EntityDatatableChecksIntegrationTest {
 
     private Integer createLoanProduct(final String inMultiplesOf, final String digitsAfterDecimal, final String repaymentStrategy) {
         LOG.info("------------------------------CREATING NEW LOAN PRODUCT ---------------------------------------");
-        final String loanProductJSON = new LoanProductTestBuilder() //
+        final PostLoanProductsRequest loanProduct = new LoanProductTestBuilder() //
                 .withPrincipal("10000000.00") //
                 .withNumberOfRepayments("24") //
                 .withRepaymentAfterEvery("1") //
@@ -468,75 +467,43 @@ public class EntityDatatableChecksIntegrationTest {
                 .withRepaymentStrategy(repaymentStrategy) //
                 .withAmortizationTypeAsEqualPrincipalPayment() //
                 .withInterestTypeAsDecliningBalance() //
-                .currencyDetails(digitsAfterDecimal, inMultiplesOf).build(null);
-        return this.loanTransactionHelper.getLoanProductId(loanProductJSON);
+                .currencyDetails(digitsAfterDecimal, inMultiplesOf).buildRequest();
+        return this.loanHelper.createLoanProduct(loanProduct).getResourceId().intValue();
     }
 
     private Integer applyForLoanApplication(final Integer clientID, final Integer loanProductID, String graceOnPrincipalPayment,
             final String registeredTableName) {
         LOG.info("--------------------------------APPLYING FOR LOAN APPLICATION--------------------------------");
-        List<HashMap> collaterals = new ArrayList<>();
-        final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
-        Assertions.assertNotNull(collateralId);
-        final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec,
-                clientID.toString(), collateralId);
-        Assertions.assertNotNull(clientCollateralId);
-        addCollaterals(collaterals, clientCollateralId, BigDecimal.valueOf(1));
-
-        final String loanApplicationJSON = new LoanApplicationTestBuilder() //
-                .withPrincipal("10000000.00") //
-                .withLoanTermFrequency("24") //
-                .withLoanTermFrequencyAsMonths() //
-                .withNumberOfRepayments("24") //
-                .withRepaymentEveryAfter("1") //
-                .withRepaymentFrequencyTypeAsMonths() //
-                .withInterestRatePerPeriod("2") //
-                .withAmortizationTypeAsEqualPrincipalPayments() //
-                .withInterestTypeAsDecliningBalance() //
-                .withInterestCalculationPeriodTypeSameAsRepaymentPeriod() //
-                .withPrincipalGrace(graceOnPrincipalPayment).withExpectedDisbursementDate("02 June 2014") //
-                .withSubmittedOnDate("02 June 2014") //
-                .withDatatables(getTestDatatableAsJson(registeredTableName)) //
-                .withCollaterals(collaterals).build(clientID.toString(), loanProductID.toString(), null);
-        return this.loanTransactionHelper.getLoanId(loanApplicationJSON);
+        final PostLoansRequest loanApplication = loanApplication(clientID, loanProductID, graceOnPrincipalPayment)
+                .datatables(getTestDatatables(registeredTableName));
+        return this.loanHelper.applyForLoan(loanApplication).getLoanId().intValue();
     }
 
     private Object applyForLoanApplicationWithError(final Integer clientID, final Integer loanProductID, String graceOnPrincipalPayment,
             final String responseAttribute) {
         LOG.info("--------------------------------APPLYING FOR LOAN APPLICATION--------------------------------");
-        List<HashMap> collaterals = new ArrayList<>();
+        return this.loanHelper.applyForLoanError(loanApplication(clientID, loanProductID, graceOnPrincipalPayment), responseAttribute);
+    }
+
+    private PostLoansRequest loanApplication(final Integer clientID, final Integer loanProductID, final String graceOnPrincipalPayment) {
         final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(collateralId);
         final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec,
                 clientID.toString(), collateralId);
         Assertions.assertNotNull(clientCollateralId);
-        addCollaterals(collaterals, clientCollateralId, BigDecimal.valueOf(1));
-        final String loanApplicationJSON = new LoanApplicationTestBuilder() //
-                .withPrincipal("10000000.00") //
-                .withLoanTermFrequency("24") //
-                .withLoanTermFrequencyAsMonths() //
-                .withNumberOfRepayments("24") //
-                .withRepaymentEveryAfter("1") //
-                .withRepaymentFrequencyTypeAsMonths() //
-                .withInterestRatePerPeriod("2") //
-                .withAmortizationTypeAsEqualPrincipalPayments() //
-                .withInterestTypeAsDecliningBalance() //
-                .withInterestCalculationPeriodTypeSameAsRepaymentPeriod() //
-                .withPrincipalGrace(graceOnPrincipalPayment).withExpectedDisbursementDate("02 June 2014") //
-                .withSubmittedOnDate("02 June 2014") //
-                .withCollaterals(collaterals).build(clientID.toString(), loanProductID.toString(), null);
-        return this.validationErrorHelper.getLoanError(loanApplicationJSON, responseAttribute);
+        return LoanRequestBuilders
+                .legacyIndividualApplication(clientID.longValue(), loanProductID.longValue(), "10000000.00", 24, new BigDecimal("2"),
+                        "02 June 2014")
+                .amortizationType(LoanTestData.AmortizationType.EQUAL_PRINCIPAL)
+                .graceOnPrincipalPayment(Integer.valueOf(graceOnPrincipalPayment)).collateral(List.of(new PostLoansRequestCollateralData()
+                        .clientCollateralId(clientCollateralId.longValue()).quantity(BigDecimal.valueOf(1))));
     }
 
-    private HashMap<String, String> collaterals(Integer collateralId, BigDecimal quantity) {
-        HashMap<String, String> collateral = new HashMap<String, String>(1);
-        collateral.put("clientCollateralId", collateralId.toString());
-        collateral.put("quantity", quantity.toString());
-        return collateral;
-    }
-
-    private void addCollaterals(List<HashMap> collaterals, Integer collateralId, BigDecimal amount) {
-        collaterals.add(collaterals(collateralId, amount));
+    @SuppressWarnings("unchecked")
+    private static List<PostLoansDataTable> getTestDatatables(final String registeredTableName) {
+        return getTestDatatableAsJson(registeredTableName).stream().map(datatable -> new PostLoansDataTable()
+                .registeredTableName((String) datatable.get("registeredTableName")).data((Map<String, Object>) datatable.get("data")))
+                .toList();
     }
 
     public static List<HashMap<String, Object>> getTestDatatableAsJson(final String registeredTableName) {

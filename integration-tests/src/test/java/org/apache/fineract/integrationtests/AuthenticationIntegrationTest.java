@@ -22,21 +22,27 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
-import java.util.Collections;
+import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.client.models.PostLoansRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
-import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +57,7 @@ public class AuthenticationIntegrationTest {
     private static final String APPROVE_COMMAND = "approve";
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
-    private LoanTransactionHelper loanTransactionHelper;
+    private FeignLoanHelper loanHelper;
     private Integer loanID;
 
     @BeforeEach
@@ -59,7 +65,7 @@ public class AuthenticationIntegrationTest {
         Utils.initializeRESTAssured();
         setupAuthenticatedRequestSpec();
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
+        this.loanHelper = new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient());
 
         AccountHelper accountHelper = new AccountHelper(this.requestSpec, this.responseSpec);
         Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
@@ -68,8 +74,10 @@ public class AuthenticationIntegrationTest {
         Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
 
         Integer loanProductID = setupLoanProduct(accountHelper);
-        this.loanID = loanTransactionHelper.applyForLoanApplicationWithPaymentStrategyAndPastMonth(clientID, loanProductID,
-                Collections.emptyList(), null, "10000", LoanApplicationTestBuilder.DEFAULT_STRATEGY, "10 July 2022", LOAN_DATE);
+        final PostLoansRequest loanApplication = LoanRequestBuilders
+                .legacyIndividualApplication(clientID.longValue(), loanProductID.longValue(), "10000", 6, new BigDecimal("2"), LOAN_DATE)
+                .submittedOnDate("10 July 2022").interestType(LoanTestData.InterestType.FLAT);
+        this.loanID = this.loanHelper.applyForLoan(loanApplication).getLoanId().intValue();
     }
 
     @Test
@@ -103,9 +111,13 @@ public class AuthenticationIntegrationTest {
     }
 
     private Integer setupLoanProduct(AccountHelper accountHelper) {
-        return this.loanTransactionHelper.createLoanProduct("0", "0", LoanProductTestBuilder.DEFAULT_STRATEGY, "2",
-                accountHelper.createAssetAccount(), accountHelper.createIncomeAccount(), accountHelper.createExpenseAccount(),
-                accountHelper.createLiabilityAccount());
+        final Account[] accounts = { accountHelper.createAssetAccount(), accountHelper.createIncomeAccount(),
+                accountHelper.createExpenseAccount(), accountHelper.createLiabilityAccount() };
+        return this.loanHelper.createLoanProduct(new LoanProductTestBuilder().withPrincipal("10000000.00").withNumberOfRepayments("24")
+                .withRepaymentAfterEvery("1").withRepaymentTypeAsMonth().withinterestRatePerPeriod("2")
+                .withInterestRateFrequencyTypeAsMonths().withRepaymentStrategy(LoanProductTestBuilder.DEFAULT_STRATEGY)
+                .withAmortizationTypeAsEqualPrincipalPayment().withInterestTypeAsDecliningBalance().currencyDetails("0", "0")
+                .withAccounting(LoanProductTestBuilder.CASH_BASED, accounts).buildRequest()).getResourceId().intValue();
     }
 
     private void setupAuthenticatedRequestSpec() {
@@ -118,10 +130,11 @@ public class AuthenticationIntegrationTest {
     }
 
     private String createLoanApprovalRequest() {
-        return this.loanTransactionHelper.getApproveLoanAsJSON(LOAN_DATE);
+        return new Gson()
+                .toJson(Map.of("locale", "en", "dateFormat", "dd MMMM yyyy", "approvedOnDate", LOAN_DATE, "note", "Approval NOTE"));
     }
 
     private String createLoanApprovalCommand() {
-        return this.loanTransactionHelper.createLoanOperationURL(APPROVE_COMMAND, loanID);
+        return "/fineract-provider/api/v1/loans/" + loanID + "?command=" + APPROVE_COMMAND + "&" + Utils.TENANT_IDENTIFIER;
     }
 }

@@ -35,15 +35,19 @@ import org.apache.fineract.client.models.GetSearchResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsResponse;
+import org.apache.fineract.client.models.PostLoansRequest;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignSearchHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignTransactionHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
+import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.savings.AccountTransferHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.shares.ShareAccountHelper;
@@ -199,21 +203,27 @@ public class SearchResourcesTest {
         final String resources = "loanTransactions";
         final Long clientId = ClientHelper.addClientAsPerson(ClientHelper.DEFAULT_OFFICE_ID, ClientHelper.LEGALFORM_ID_PERSON, null)
                 .getClientId();
-        final LoanTransactionHelper loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-        final Integer loanProductId = loanTransactionHelper.createLoanProduct(null, "2", LoanApplicationTestBuilder.DEFAULT_STRATEGY, "1");
-        final Integer loanId = createLoanAccount(clientId, loanProductId, loanTransactionHelper);
+        final FeignLoanHelper loanHelper = new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient());
+        final Long loanProductId = loanHelper.createLoanProduct(
+                new LoanProductTestBuilder().withPrincipal("10000000.00").withNumberOfRepayments("24").withRepaymentAfterEvery("1")
+                        .withRepaymentTypeAsMonth().withinterestRatePerPeriod("2").withInterestRateFrequencyTypeAsMonths()
+                        .withRepaymentStrategy(LoanProductTestBuilder.DEFAULT_STRATEGY).withAmortizationTypeAsEqualPrincipalPayment()
+                        .withInterestTypeAsDecliningBalance().currencyDetails("2", null).buildRequest())
+                .getResourceId();
+        final Integer loanId = createLoanAccount(clientId, loanProductId, loanHelper);
 
         final String disbursementExternalId = "disbursement-" + UUID.randomUUID();
-        loanTransactionHelper.disburseLoan("01 January 2026", loanId, "1000", disbursementExternalId);
+        loanHelper.disburseLoanWithExternalId("01 January 2026", loanId.longValue(), "1000", disbursementExternalId);
 
         final String repaymentExternalId = "repayment-" + UUID.randomUUID();
         final String checkNumber = "loan-check-" + UUID.randomUUID();
         final String routingCode = "loan-routing-" + UUID.randomUUID();
         final String receiptNumber = "loan-receipt-" + UUID.randomUUID();
-        final PostLoansLoanIdTransactionsResponse repayment = loanTransactionHelper.makeLoanRepayment(loanId.longValue(),
-                new PostLoansLoanIdTransactionsRequest().transactionDate("01 February 2026").dateFormat("dd MMMM yyyy").locale("en")
-                        .transactionAmount(100.0).paymentTypeId(1L).checkNumber(checkNumber).routingCode(routingCode)
-                        .receiptNumber(receiptNumber).externalId(repaymentExternalId));
+        final PostLoansLoanIdTransactionsResponse repayment = new FeignTransactionHelper(FineractFeignClientHelper.getFineractFeignClient())
+                .makeLoanRepayment(loanId.longValue(),
+                        new PostLoansLoanIdTransactionsRequest().transactionDate("01 February 2026").dateFormat("dd MMMM yyyy").locale("en")
+                                .transactionAmount(100.0).paymentTypeId(1L).checkNumber(checkNumber).routingCode(routingCode)
+                                .receiptNumber(receiptNumber).externalId(repaymentExternalId));
         final Long repaymentTransactionId = repayment.getResourceId();
 
         assertEquals(0, searchHelper.search(disbursementExternalId, resources, Boolean.TRUE).size());
@@ -374,16 +384,13 @@ public class SearchResourcesTest {
         assertEquals(0, searchHelper.search("unknown-transfer-payment-detail-" + UUID.randomUUID(), resources, Boolean.TRUE).size());
     }
 
-    private Integer createLoanAccount(final Long clientId, final Integer loanProductId, final LoanTransactionHelper loanTransactionHelper) {
-        final String loanApplicationJSON = new LoanApplicationTestBuilder().withPrincipal("1000").withLoanTermFrequency("2")
-                .withLoanTermFrequencyAsMonths().withNumberOfRepayments("2").withRepaymentEveryAfter("1")
-                .withRepaymentFrequencyTypeAsMonths().withInterestRatePerPeriod("0").withInterestTypeAsFlatBalance()
-                .withInterestCalculationPeriodTypeSameAsRepaymentPeriod().withExpectedDisbursementDate("01 January 2026")
-                .withSubmittedOnDate("01 January 2026").withRepaymentStrategy(LoanApplicationTestBuilder.DEFAULT_STRATEGY)
-                .build(clientId.toString(), loanProductId.toString(), null);
-        final Integer loanId = loanTransactionHelper.getLoanId(loanApplicationJSON);
-        loanTransactionHelper.approveLoan("01 January 2026", loanId);
-        return loanId;
+    private Integer createLoanAccount(final Long clientId, final Long loanProductId, final FeignLoanHelper loanHelper) {
+        final PostLoansRequest loanApplication = LoanRequestBuilders
+                .legacyIndividualApplication(clientId, loanProductId, "1000", 2, BigDecimal.ZERO, "01 January 2026")
+                .amortizationType(LoanTestData.AmortizationType.EQUAL_PRINCIPAL).interestType(LoanTestData.InterestType.FLAT);
+        final Long loanId = loanHelper.applyForLoan(loanApplication).getLoanId();
+        loanHelper.approveLoan(loanId, LoanRequestBuilders.approveLoan("01 January 2026"));
+        return loanId.intValue();
     }
 
     private PostSavingsAccountTransactionsResponse executeSavingsTransaction(
