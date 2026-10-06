@@ -38,10 +38,10 @@ import org.apache.fineract.client.models.PutUsersUserIdRequest;
 import org.apache.fineract.client.models.PutUsersUserIdResponse;
 import org.apache.fineract.client.util.CallFailedRuntimeException;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRoleHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
-import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
 import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.apache.fineract.useradministration.service.AppUserConstants;
 import org.junit.jupiter.api.AfterEach;
@@ -81,7 +81,7 @@ public class UserAdministrationTest extends IntegrationTest {
     @Test
     public void testCreateNewUserBlocksDuplicateUsername() {
 
-        final Integer roleId = RolesHelper.createRole(this.requestSpec, this.responseSpec);
+        final Integer roleId = FeignRoleHelper.createRole().intValue();
         Assertions.assertNotNull(roleId);
 
         final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
@@ -102,7 +102,7 @@ public class UserAdministrationTest extends IntegrationTest {
 
     @Test
     public void testUpdateUserAcceptsNewOrSameUsername() {
-        final Integer roleId = RolesHelper.createRole(this.requestSpec, this.responseSpec);
+        final Integer roleId = FeignRoleHelper.createRole().intValue();
         Assertions.assertNotNull(roleId);
 
         final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
@@ -122,7 +122,7 @@ public class UserAdministrationTest extends IntegrationTest {
 
     @Test
     public void testUpdateUserBlockDuplicateUsername() {
-        final Integer roleId = RolesHelper.createRole(this.requestSpec, this.responseSpec);
+        final Integer roleId = FeignRoleHelper.createRole().intValue();
         Assertions.assertNotNull(roleId);
 
         final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
@@ -155,7 +155,7 @@ public class UserAdministrationTest extends IntegrationTest {
     @Test
     public void testApplicationUserCanUpdateOwnPassword() {
         // Admin creates a new user with an empty role
-        Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
+        Integer roleId = FeignRoleHelper.createRole().intValue();
         String originalPassword = "QwE!5rTy#9uP0";
         String simpleUsername = Utils.uniqueRandomStringGenerator("NotificationUser", 4);
         GetOfficesResponse headOffice = OfficeHelper.getHeadOffice();
@@ -188,7 +188,7 @@ public class UserAdministrationTest extends IntegrationTest {
     @Test
     public void testApplicationUserCanChangeOwnPassword() {
         // Admin creates a new user with an empty role
-        Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
+        Integer roleId = FeignRoleHelper.createRole().intValue();
         String originalPassword = "QwE!5rTy#9uP0";
         String simpleUsername = Utils.uniqueRandomStringGenerator("NotificationUser", 4);
         GetOfficesResponse headOffice = OfficeHelper.getHeadOffice();
@@ -222,7 +222,7 @@ public class UserAdministrationTest extends IntegrationTest {
     @Test
     public void testApplicationUserShallNotBeAbleToChangeItsOwnRoles() {
         // Admin creates a new user with one role assigned
-        Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
+        Integer roleId = FeignRoleHelper.createRole().intValue();
         String password = "QwE!5rTy#9uP0";
         String simpleUsername = Utils.uniqueRandomStringGenerator("NotificationUser", 4);
         GetOfficesResponse headOffice = OfficeHelper.getHeadOffice();
@@ -235,7 +235,7 @@ public class UserAdministrationTest extends IntegrationTest {
         Assertions.assertNotNull(userId);
 
         // Admin creates a second role
-        Integer roleId2 = RolesHelper.createRole(requestSpec, responseSpec);
+        Integer roleId2 = FeignRoleHelper.createRole().intValue();
 
         // User tries to update it's own roles
         CallFailedRuntimeException callFailedRuntimeException = Assertions.assertThrows(CallFailedRuntimeException.class, () -> {
