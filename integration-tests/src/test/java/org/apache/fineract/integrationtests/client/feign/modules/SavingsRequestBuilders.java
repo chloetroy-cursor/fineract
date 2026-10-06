@@ -116,7 +116,7 @@ public final class SavingsRequestBuilders {
                 .interestReceivableAccountId(accountId(interestReceivableAccount));
     }
 
-    /** The cash-based mapping the RestAssured {@code SavingsProductHelper} built from one account per type. */
+    /** The cash-based mapping built from one account per type: the asset account also backs the overdraft portfolio. */
     public static PostSavingsProductsRequest withCashBasedAccounting(PostSavingsProductsRequest request, Account assetAccount,
             Account liabilityAccount, Account incomeAccount, Account expenseAccount) {
         return request//
