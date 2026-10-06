@@ -64,7 +64,6 @@
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]ShareProductDatatableIntegrationTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]SmsApiResourceIntegrationTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]SmsCampaignIntegrationTest\.java$"/>
-    <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]StaffTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]SwaggeruiTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]SystemCodeTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]TemplateIntegrationTest\.java$"/>
@@ -113,7 +112,6 @@
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]organisation[/\\]CampaignsHelper\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]organisation[/\\]CampaignsTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]organisation[/\\]EntityDatatableChecksIntegrationTest\.java$"/>
-    <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]organisation[/\\]StaffHelper\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]recurringdeposit[/\\]RecurringDepositAccountHelper\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]recurringdeposit[/\\]RecurringDepositAccountStatusChecker\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]recurringdeposit[/\\]RecurringDepositProductHelper\.java$"/>

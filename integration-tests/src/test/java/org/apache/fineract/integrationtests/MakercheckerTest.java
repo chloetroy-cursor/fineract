@@ -33,13 +33,14 @@ import java.util.Map;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutPermissionsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignStaffHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.commands.MakercheckersHelper;
-import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
@@ -103,7 +104,8 @@ public class MakercheckerTest {
             Map<String, Boolean> permissionMap = Map.of("CREATE_CLIENT", true, "CREATE_CLIENT_CHECKER", true, "ACTIVATE_CLIENT", true,
                     "ACTIVATE_CLIENT_CHECKER", true, "WITHDRAWAL_SAVINGSACCOUNT", true, "WITHDRAWAL_SAVINGSACCOUNT_CHECKER", true);
             RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
-            final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
+            final Integer staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId()
+                    .intValue();
             // create maker user
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
             final Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,
@@ -219,7 +221,8 @@ public class MakercheckerTest {
             RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
 
             // create maker user
-            Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
+            Integer staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId()
+                    .intValue();
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
             Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,
                     "A1b2c3d4e5f$", "resourceId");
@@ -284,7 +287,8 @@ public class MakercheckerTest {
             Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
             Map<String, Boolean> permissionMap = Map.of("CREATE_CLIENT", true, "CREATE_CLIENT_CHECKER", true, "ACTIVATE_CLIENT", true);
             RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
-            final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
+            final Integer staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId()
+                    .intValue();
 
             String maker1 = Utils.uniqueRandomStringGenerator("user", 8);
             String maker2 = Utils.uniqueRandomStringGenerator("user", 8);
@@ -335,7 +339,8 @@ public class MakercheckerTest {
             Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
             Map<String, Boolean> permissionMap = Map.of("CREATE_CLIENT", true, "CREATE_CLIENT_CHECKER", true, "ACTIVATE_CLIENT", true);
             RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
-            final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
+            final Integer staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId()
+                    .intValue();
 
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
             final Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,

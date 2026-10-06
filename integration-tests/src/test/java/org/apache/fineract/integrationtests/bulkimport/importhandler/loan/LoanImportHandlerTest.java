@@ -39,14 +39,16 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import org.apache.fineract.client.models.GetOfficesResponse;
 import org.apache.fineract.client.models.PaymentTypeCreateRequest;
+import org.apache.fineract.client.models.StaffData;
 import org.apache.fineract.infrastructure.bulkimport.constants.LoanConstants;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
 import org.apache.fineract.integrationtests.bulkimport.importhandler.BulkImportOutputTemplateHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignStaffHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.PaymentTypeHelper;
@@ -56,7 +58,6 @@ import org.apache.fineract.integrationtests.common.funds.FundsHelper;
 import org.apache.fineract.integrationtests.common.funds.FundsResourceHandler;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
-import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -142,11 +143,12 @@ public class LoanImportHandlerTest {
         Assertions.assertNotNull(outcome_group_creation, "Could not create group");
 
         // in order to populate helper sheets
-        Integer outcome_staff_creation = StaffHelper.createStaff(requestSpec, responseSpec);
+        FeignStaffHelper staffHelper = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient());
+        Long outcome_staff_creation = staffHelper.createStaff().getResourceId();
         Assertions.assertNotNull(outcome_staff_creation, "Could not create staff");
 
-        Map<String, Object> staffMap = StaffHelper.getStaff(requestSpec, responseSpec, outcome_staff_creation);
-        Assertions.assertNotNull(staffMap, "Could not retrieve created staff");
+        StaffData staff = staffHelper.getStaff(outcome_staff_creation);
+        Assertions.assertNotNull(staff, "Could not retrieve created staff");
 
         LoanTransactionHelper ltHelper = new LoanTransactionHelper(requestSpec, responseSpec);
         LoanProductTestBuilder loanProductTestBuilder = new LoanProductTestBuilder();
@@ -184,7 +186,7 @@ public class LoanImportHandlerTest {
                 .setCellValue(firstName + " " + lastName + "(" + outcome_client_creation + ")");
         firstLoanRow.createCell(LoanConstants.CLIENT_EXTERNAL_ID).setCellValue(externalId);
         firstLoanRow.createCell(LoanConstants.PRODUCT_COL).setCellValue(loanProductJson.getString("name"));
-        firstLoanRow.createCell(LoanConstants.LOAN_OFFICER_NAME_COL).setCellValue((String) staffMap.get("displayName"));
+        firstLoanRow.createCell(LoanConstants.LOAN_OFFICER_NAME_COL).setCellValue(staff.getDisplayName());
 
         final DateTimeFormatter dateFormat = DateTimeFormatter.ofPattern(DATE_FORMAT, Locale.US);
         final LocalDate localDate = LocalDate.parse("17 May 2017", dateFormat);
