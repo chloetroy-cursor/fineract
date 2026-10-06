@@ -27,10 +27,10 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.HashMap;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignUserHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
-import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -139,10 +139,10 @@ public class RolesTest {
         final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(staffId);
 
-        final Integer userId = UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId);
+        final Long userId = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue()).getResourceId();
         Assertions.assertNotNull(userId);
 
-        final Integer deletedUserId = UserHelper.deleteUser(this.requestSpec, this.responseSpec, userId);
+        final Long deletedUserId = FeignUserHelper.deleteUser(userId).getResourceId();
         Assertions.assertEquals(deletedUserId, userId);
 
         final Integer deletedRoleId = RolesHelper.deleteRole(this.requestSpec, this.responseSpec, roleId);
@@ -157,7 +157,7 @@ public class RolesTest {
         final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(staffId);
 
-        final Integer userId = UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId);
+        final Long userId = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue()).getResourceId();
         Assertions.assertNotNull(userId);
 
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(403).build();
