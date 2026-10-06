@@ -41,6 +41,11 @@ public interface RawHttpApi {
     @Headers("Authorization: {authorization}")
     Response get(URI uri, @Param("authorization") String authorization);
 
+    /** Binary downloads such as Excel templates: the server answers 406 to the client's default JSON {@code Accept}. */
+    @RequestLine("GET")
+    @Headers({ "Accept: */*", "Authorization: {authorization}" })
+    Response getBinary(URI uri, @Param("authorization") String authorization);
+
     @RequestLine("POST")
     @Headers({ "Content-Type: application/json", "Authorization: {authorization}" })
     Response post(URI uri, @Param("authorization") String authorization, String jsonBody);

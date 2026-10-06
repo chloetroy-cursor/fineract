@@ -30,6 +30,7 @@ import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -286,7 +287,40 @@ public final class FeignRawHttpHelper {
         } else {
             url = serverOrigin() + API_V1_PREFIX + (path.startsWith("/") ? path : "/" + path);
         }
-        return URI.create(percentEncodeIllegalCharacters(url));
+        int query = url.indexOf('?');
+        if (query < 0) {
+            return URI.create(percentEncodeIllegalCharacters(url));
+        }
+        return URI.create(percentEncodeIllegalCharacters(url.substring(0, query)) + "?" + encodeQuery(url.substring(query + 1)));
+    }
+
+    /**
+     * REST Assured encoded every query parameter name and value itself, so legacy URLs carry raw spaces, quotes,
+     * semicolons and the like, and tests rely on the server receiving them verbatim (for instance to reject an
+     * {@code order} parameter carrying SQL). A semicolon left unencoded is read as a parameter separator instead.
+     */
+    private static String encodeQuery(String rawQuery) {
+        StringBuilder sb = new StringBuilder(rawQuery.length());
+        for (String parameter : rawQuery.split("&")) {
+            if (parameter.isEmpty()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append('&');
+            }
+            int equals = parameter.indexOf('=');
+            if (equals < 0) {
+                sb.append(encodeQueryComponent(parameter));
+            } else {
+                sb.append(encodeQueryComponent(parameter.substring(0, equals))).append('=')
+                        .append(encodeQueryComponent(parameter.substring(equals + 1)));
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String encodeQueryComponent(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     private static String serverOrigin() {
@@ -298,10 +332,7 @@ public final class FeignRawHttpHelper {
         return ConfigProperties.Backend.PROTOCOL + "://" + ConfigProperties.Backend.HOST + ":" + ConfigProperties.Backend.PORT;
     }
 
-    /**
-     * REST Assured encoded query values itself, so the legacy URLs contain raw spaces and the like. Only characters a
-     * URI may never contain are encoded here; already encoded sequences are left alone.
-     */
+    /** Path part: only characters a URI may never contain are encoded, so a path keeps its structure. */
     private static String percentEncodeIllegalCharacters(String url) {
         StringBuilder sb = new StringBuilder(url.length());
         for (char c : url.toCharArray()) {
@@ -365,7 +396,7 @@ public final class FeignRawHttpHelper {
         }
 
         public byte[] getBytes(String path) {
-            return exchange("GET", path, () -> api.get(resolve(path), authorization)).body();
+            return exchange("GET", path, () -> api.getBinary(resolve(path), authorization)).body();
         }
 
         /**
