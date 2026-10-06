@@ -41,10 +41,11 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAccountHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
-import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositAccountHelper;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositProductHelper;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
@@ -72,7 +73,7 @@ public class DateValidationTest {
     private ClientHelper clientHelper;
     private LoanTransactionHelper loanTransactionHelper;
     private InteropHelper interopHelper;
-    private AccountHelper accountHelper;
+    private FeignAccountHelper accountHelper;
 
     @BeforeEach
     public void setup() {
@@ -84,7 +85,7 @@ public class DateValidationTest {
         this.clientHelper = new ClientHelper(this.requestSpec, this.responseSpec);
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
         this.interopHelper = new InteropHelper(requestSpec, errorResponseSpec);
-        this.accountHelper = new AccountHelper(requestSpec, responseSpec);
+        this.accountHelper = new FeignAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test

@@ -29,9 +29,10 @@ import io.restassured.specification.ResponseSpecification;
 import java.util.Map;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.client.models.PostFinancialActivityAccountsRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAccountHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
-import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.accounting.FinancialActivityAccountHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.junit.jupiter.api.BeforeAll;
@@ -59,7 +60,7 @@ public class AllocateCashToCashierValidationTest {
         requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         final ResponseSpecification responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
 
-        final AccountHelper accountHelper = new AccountHelper(requestSpec, responseSpec);
+        final FeignAccountHelper accountHelper = new FeignAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
         final FinancialActivityAccountHelper financialActivityAccountHelper = new FinancialActivityAccountHelper(requestSpec);
 
         // Allocating cash to a cashier posts journal entries between these two financial-activity accounts; the
@@ -70,7 +71,7 @@ public class AllocateCashToCashierValidationTest {
     }
 
     private static void ensureFinancialActivityAccountMapping(final FinancialActivityAccountHelper financialActivityAccountHelper,
-            final AccountHelper accountHelper, final Integer financialActivityId) {
+            final FeignAccountHelper accountHelper, final Integer financialActivityId) {
         final boolean alreadyMapped = financialActivityAccountHelper.getAllFinancialActivityAccounts().stream()
                 .anyMatch(mapping -> financialActivityId.equals(mapping.getFinancialActivityData().getId()));
         if (alreadyMapped) {
