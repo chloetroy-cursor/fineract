@@ -18,6 +18,9 @@
  */
 package org.apache.fineract.integrationtests.common.organisation;
 
+import static org.apache.fineract.integrationtests.client.feign.modules.DatatableRequestBuilders.PERSON_ENTITY_SUB_TYPE;
+import static org.apache.fineract.integrationtests.client.feign.modules.DatatableRequestBuilders.stringColumn;
+import static org.apache.fineract.integrationtests.client.feign.modules.DatatableRequestBuilders.testDatatable;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -33,10 +36,13 @@ import java.util.HashMap;
 import java.util.List;
 import org.apache.fineract.client.models.GetEntityDatatableChecksResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.client.models.PostDataTablesRequest;
 import org.apache.fineract.client.models.PostEntityDatatableChecksTemplateResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignDatatableHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
@@ -45,7 +51,6 @@ import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtens
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
-import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,7 +67,7 @@ public class EntityDatatableChecksIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(EntityDatatableChecksIntegrationTest.class);
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
-    private DatatableHelper datatableHelper;
+    private FeignDatatableHelper datatableHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private LoanTransactionHelper loanTransactionHelper;
     private LoanTransactionHelper validationErrorHelper;
@@ -83,14 +88,14 @@ public class EntityDatatableChecksIntegrationTest {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.datatableHelper = new DatatableHelper(this.requestSpec, this.responseSpec);
+        this.datatableHelper = new FeignDatatableHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
     public void validateCreateDeleteDatatableCheck() {
         // creating datatable
-        String datatableName = this.datatableHelper.createDatatable(CLIENT_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, datatableName);
+        String datatableName = this.datatableHelper.createDatatable(testDatatable(CLIENT_APP_TABLE_NAME, false)).getResourceIdentifier();
+        verifyDatatableCreatedOnServer(datatableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -102,15 +107,15 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(datatableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(datatableName).getResourceIdentifier();
         assertEquals(datatableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
     @Test
     public void validateCreateDeleteEntityDatatableCheck() {
         // creating datatable
-        String datatableName = this.datatableHelper.createDatatable(CLIENT_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, datatableName);
+        String datatableName = this.datatableHelper.createDatatable(testDatatable(CLIENT_APP_TABLE_NAME, false)).getResourceIdentifier();
+        verifyDatatableCreatedOnServer(datatableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -122,7 +127,7 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(datatableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(datatableName).getResourceIdentifier();
         assertEquals(datatableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
@@ -137,8 +142,9 @@ public class EntityDatatableChecksIntegrationTest {
     public void validateCreateClientWithEntityDatatableCheck() {
 
         // creating datatable
-        String registeredTableName = this.datatableHelper.createDatatable(CLIENT_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
+        String registeredTableName = this.datatableHelper.createDatatable(testDatatable(CLIENT_APP_TABLE_NAME, false))
+                .getResourceIdentifier();
+        verifyDatatableCreatedOnServer(registeredTableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -154,11 +160,11 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting datatable entries
-        Integer appTableId = (Integer) this.datatableHelper.deleteDatatableEntries(registeredTableName, clientID, "clientId");
-        assertEquals(clientID, appTableId, "ERROR IN DELETING THE DATATABLE ENTRIES");
+        Long appTableId = this.datatableHelper.deleteDatatableEntries(registeredTableName, clientID.longValue()).getResourceId();
+        assertEquals(clientID.longValue(), appTableId, "ERROR IN DELETING THE DATATABLE ENTRIES");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName).getResourceIdentifier();
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
@@ -170,8 +176,9 @@ public class EntityDatatableChecksIntegrationTest {
         final ClientHelper validationErrorHelper = new ClientHelper(this.requestSpec, errorResponse);
 
         // creating datatable
-        String registeredTableName = this.datatableHelper.createDatatable(CLIENT_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
+        String registeredTableName = this.datatableHelper.createDatatable(testDatatable(CLIENT_APP_TABLE_NAME, false))
+                .getResourceIdentifier();
+        verifyDatatableCreatedOnServer(registeredTableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -189,7 +196,7 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName).getResourceIdentifier();
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
@@ -197,8 +204,9 @@ public class EntityDatatableChecksIntegrationTest {
     public void validateCreateGroupWithEntityDatatableCheck() {
 
         // creating datatable
-        String registeredTableName = this.datatableHelper.createDatatable(GROUP_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
+        String registeredTableName = this.datatableHelper.createDatatable(testDatatable(GROUP_APP_TABLE_NAME, false))
+                .getResourceIdentifier();
+        verifyDatatableCreatedOnServer(registeredTableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -214,11 +222,11 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting datatable entries
-        Integer appTableId = (Integer) this.datatableHelper.deleteDatatableEntries(registeredTableName, groupId, "groupId");
-        assertEquals(groupId, appTableId, "ERROR IN DELETING THE DATATABLE ENTRIES");
+        Long appTableId = this.datatableHelper.deleteDatatableEntries(registeredTableName, groupId.longValue()).getResourceId();
+        assertEquals(groupId.longValue(), appTableId, "ERROR IN DELETING THE DATATABLE ENTRIES");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName).getResourceIdentifier();
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
@@ -230,8 +238,9 @@ public class EntityDatatableChecksIntegrationTest {
         final GroupHelper validationErrorHelper = new GroupHelper(this.requestSpec, errorResponse);
 
         // creating datatable
-        String registeredTableName = this.datatableHelper.createDatatable(GROUP_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
+        String registeredTableName = this.datatableHelper.createDatatable(testDatatable(GROUP_APP_TABLE_NAME, false))
+                .getResourceIdentifier();
+        verifyDatatableCreatedOnServer(registeredTableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -249,7 +258,7 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName).getResourceIdentifier();
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
@@ -264,8 +273,9 @@ public class EntityDatatableChecksIntegrationTest {
         final boolean allowOverdraft = false;
 
         // creating datatable
-        String registeredTableName = this.datatableHelper.createDatatable(SAVINGS_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
+        String registeredTableName = this.datatableHelper.createDatatable(testDatatable(SAVINGS_APP_TABLE_NAME, false))
+                .getResourceIdentifier();
+        verifyDatatableCreatedOnServer(registeredTableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -289,11 +299,11 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting datatable entries
-        Integer appTableId = (Integer) this.datatableHelper.deleteDatatableEntries(registeredTableName, savingsId, "savingsId");
-        assertEquals(savingsId, appTableId, "ERROR IN DELETING THE DATATABLE ENTRIES");
+        Long appTableId = this.datatableHelper.deleteDatatableEntries(registeredTableName, savingsId.longValue()).getResourceId();
+        assertEquals(savingsId.longValue(), appTableId, "ERROR IN DELETING THE DATATABLE ENTRIES");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName).getResourceIdentifier();
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
@@ -310,8 +320,9 @@ public class EntityDatatableChecksIntegrationTest {
         final boolean allowOverdraft = false;
 
         // creating datatable
-        String registeredTableName = this.datatableHelper.createDatatable(SAVINGS_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
+        String registeredTableName = this.datatableHelper.createDatatable(testDatatable(SAVINGS_APP_TABLE_NAME, false))
+                .getResourceIdentifier();
+        verifyDatatableCreatedOnServer(registeredTableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -337,7 +348,7 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName).getResourceIdentifier();
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
@@ -354,8 +365,9 @@ public class EntityDatatableChecksIntegrationTest {
         Assertions.assertNotNull(loanProductID);
 
         // creating datatable
-        String registeredTableName = this.datatableHelper.createDatatable(LOAN_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
+        String registeredTableName = this.datatableHelper.createDatatable(testDatatable(LOAN_APP_TABLE_NAME, false))
+                .getResourceIdentifier();
+        verifyDatatableCreatedOnServer(registeredTableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -371,11 +383,11 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting datatable entries
-        Integer appTableId = (Integer) this.datatableHelper.deleteDatatableEntries(registeredTableName, loanID, "loanId");
-        assertEquals(loanID, appTableId, "ERROR IN DELETING THE DATATABLE ENTRIES");
+        Long appTableId = this.datatableHelper.deleteDatatableEntries(registeredTableName, loanID.longValue()).getResourceId();
+        assertEquals(loanID.longValue(), appTableId, "ERROR IN DELETING THE DATATABLE ENTRIES");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName).getResourceIdentifier();
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
@@ -397,8 +409,9 @@ public class EntityDatatableChecksIntegrationTest {
         Assertions.assertNotNull(loanProductID);
 
         // creating datatable
-        String registeredTableName = this.datatableHelper.createDatatable(LOAN_APP_TABLE_NAME, false);
-        DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
+        String registeredTableName = this.datatableHelper.createDatatable(testDatatable(LOAN_APP_TABLE_NAME, false))
+                .getResourceIdentifier();
+        verifyDatatableCreatedOnServer(registeredTableName);
 
         // creating new entity datatable check
         Long entityDatatableCheckId = EntityDatatableChecksHelper
@@ -416,7 +429,7 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN DELETING THE ENTITY DATATABLE CHECK");
 
         // deleting the datatable
-        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName);
+        String deletedDataTableName = this.datatableHelper.deleteDatatable(registeredTableName).getResourceIdentifier();
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
@@ -558,28 +571,18 @@ public class EntityDatatableChecksIntegrationTest {
     @Test
     public void createClientWithDatatableUsingEntitySubtype() {
         // creating datatable for client entity person subentity
-        HashMap<String, Object> columnMap = new HashMap<>();
-        final List<HashMap<String, Object>> datatableColumnsList = new ArrayList<>();
-        final String datatableNamePerson = Utils.uniqueRandomStringGenerator(CLIENT_APP_TABLE_NAME + "_person_", 5).toLowerCase()
-                .toLowerCase();
-        final String datatableNameEntity = Utils.uniqueRandomStringGenerator(CLIENT_APP_TABLE_NAME + "_entity_", 5).toLowerCase()
-                .toLowerCase();
+        final String datatableNamePerson = Utils.uniqueRandomStringGenerator(CLIENT_APP_TABLE_NAME + "_person_", 5).toLowerCase();
+        final String datatableNameEntity = Utils.uniqueRandomStringGenerator(CLIENT_APP_TABLE_NAME + "_entity_", 5).toLowerCase();
 
         String itsAString = "itsastring";
-        DatatableHelper.addDatatableColumn(datatableColumnsList, itsAString, "String", true, 10, null);
 
         // Person Subtype
-        columnMap.put("datatableName", datatableNamePerson);
-        columnMap.put("apptableName", CLIENT_APP_TABLE_NAME);
-        columnMap.put("entitySubType", "PERSON");
-        columnMap.put("multiRow", false);
-        String dateFormat = "dateFormat";
+        PostDataTablesRequest personDatatable = new PostDataTablesRequest().datatableName(datatableNamePerson)
+                .apptableName(CLIENT_APP_TABLE_NAME).entitySubType(PERSON_ENTITY_SUB_TYPE).multiRow(false)
+                .columns(List.of(stringColumn(itsAString, 10L, true)));
+        LOG.info("request : {}", personDatatable);
 
-        columnMap.put("columns", datatableColumnsList);
-        String datatabelRequestJsonString = new Gson().toJson(columnMap);
-        LOG.info("map : {}", datatabelRequestJsonString);
-
-        datatableHelper.createDatatable(datatabelRequestJsonString, "");
+        datatableHelper.createDatatable(personDatatable);
 
         PostEntityDatatableChecksTemplateResponse entityDatatableChecksResponse = EntityDatatableChecksHelper
                 .createEntityDatatableCheck(CLIENT_APP_TABLE_NAME, datatableNamePerson, 100L, null);
@@ -588,17 +591,12 @@ public class EntityDatatableChecksIntegrationTest {
         LOG.info("entityDatatableChecksResponse Person: {}", entityDatatableChecksResponse.getResourceId());
 
         // Entity Subtype
-        columnMap = new HashMap<>();
-        columnMap.put("datatableName", datatableNameEntity);
-        columnMap.put("apptableName", CLIENT_APP_TABLE_NAME);
-        columnMap.put("entitySubType", "ENTITY");
-        columnMap.put("multiRow", false);
+        PostDataTablesRequest entityDatatable = new PostDataTablesRequest().datatableName(datatableNameEntity)
+                .apptableName(CLIENT_APP_TABLE_NAME).entitySubType("ENTITY").multiRow(false)
+                .columns(List.of(stringColumn(itsAString, 10L, true)));
+        LOG.info("request : {}", entityDatatable);
 
-        columnMap.put("columns", datatableColumnsList);
-        datatabelRequestJsonString = new Gson().toJson(columnMap);
-        LOG.info("map : {}", datatabelRequestJsonString);
-
-        datatableHelper.createDatatable(datatabelRequestJsonString, "");
+        datatableHelper.createDatatable(entityDatatable);
 
         entityDatatableChecksResponse = EntityDatatableChecksHelper.createEntityDatatableCheck(CLIENT_APP_TABLE_NAME, datatableNameEntity,
                 100L, null);
@@ -625,6 +623,10 @@ public class EntityDatatableChecksIntegrationTest {
         // Remove the Entity Datatable checks for others tests
         EntityDatatableChecksHelper.deleteEntityDatatableCheck(personDatatableCheck);
         EntityDatatableChecksHelper.deleteEntityDatatableCheck(entityDatatableCheck);
+    }
+
+    private void verifyDatatableCreatedOnServer(String datatableName) {
+        assertEquals(datatableName, datatableHelper.getDatatable(datatableName).getRegisteredTableName());
     }
 
 }
