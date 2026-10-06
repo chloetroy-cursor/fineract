@@ -42,11 +42,12 @@ import org.apache.fineract.client.models.GetOfficesResponse;
 import org.apache.fineract.infrastructure.bulkimport.constants.SavingsConstants;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
 import org.apache.fineract.integrationtests.bulkimport.importhandler.BulkImportOutputTemplateHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsTestLifecycleExtension;
 import org.apache.poi.ss.usermodel.Cell;
@@ -127,8 +128,8 @@ public class SavingsImportHandlerTest {
         Integer outcome_sp_creaction = SavingsProductHelper.createSavingsProduct(jsonSavingsProduct, requestSpec, responseSpec);
         Assertions.assertNotNull(outcome_sp_creaction, "Could not create Savings product");
 
-        SavingsAccountHelper savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
-        Workbook workbook = savingsAccountHelper.getSavingsWorkbook("dd MMMM yyyy");
+        FeignSavingsHelper savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
+        Workbook workbook = savingsHelper.getSavingsWorkbook("dd MMMM yyyy");
 
         // insert dummy data into Savings sheet
         Sheet savingsSheet = workbook.getSheet(TemplatePopulateImportConstants.SAVINGS_ACCOUNTS_SHEET_NAME);
@@ -179,7 +180,7 @@ public class SavingsImportHandlerTest {
             workbook.write(outputStream);
         }
 
-        String importDocumentId = savingsAccountHelper.importSavingsTemplate(file);
+        String importDocumentId = savingsHelper.importSavingsTemplate(file);
         file.delete();
         Assertions.assertNotNull(importDocumentId);
 
@@ -187,8 +188,7 @@ public class SavingsImportHandlerTest {
         Thread.sleep(1000);
 
         // check status column of output excel
-        try (Workbook wb = BulkImportOutputTemplateHelper.waitForWorkbook(
-                () -> savingsAccountHelper.downloadOutputTemplate(importDocumentId),
+        try (Workbook wb = BulkImportOutputTemplateHelper.waitForWorkbook(() -> savingsHelper.downloadOutputTemplate(importDocumentId),
                 TemplatePopulateImportConstants.SAVINGS_ACCOUNTS_SHEET_NAME, 1, SavingsConstants.STATUS_COL)) {
             Sheet sheet = wb.getSheet(TemplatePopulateImportConstants.SAVINGS_ACCOUNTS_SHEET_NAME);
             Row row = sheet.getRow(1);

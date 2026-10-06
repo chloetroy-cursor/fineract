@@ -18,11 +18,6 @@
  */
 package org.apache.fineract.integrationtests.common.savings;
 
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.builder.ResponseSpecBuilder;
-import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.time.format.DateTimeFormatter;
@@ -58,11 +53,7 @@ public class SavingsTestLifecycleExtension implements AfterAllCallback {
     @Override
     public void afterAll(ExtensionContext context) {
         BusinessDateHelper.runAt(DateTimeFormatter.ofPattern(DATE_FORMAT).format(Utils.getLocalDateOfTenant()), () -> {
-            RequestSpecification requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-            requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-            requestSpec.header("Fineract-Platform-TenantId", "default");
-            ResponseSpecification responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-            this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
+            this.savingsAccountHelper = new SavingsAccountHelper();
             String jobName = "Post Interest For Savings";
             SchedulerJobHelper.executeAndAwaitJob(jobName);
             // Close open savings accounts
