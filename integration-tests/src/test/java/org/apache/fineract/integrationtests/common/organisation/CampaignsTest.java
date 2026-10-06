@@ -18,20 +18,22 @@
  */
 package org.apache.fineract.integrationtests.common.organisation;
 
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper.ACTIVATE_COMMAND;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper.CLOSE_COMMAND;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper.DIRECT_TRIGGER_TYPE;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper.REACTIVATE_COMMAND;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper.SCHEDULED_TRIGGER_TYPE;
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper.TRIGGERED_TRIGGER_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.builder.ResponseSpecBuilder;
-import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.FeignErrors;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
-import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,24 +47,13 @@ import org.mockserver.model.MediaType;
 @MockServerSettings(ports = { 9191 })
 public class CampaignsTest {
 
-    private RequestSpecification requestSpec;
-    private ResponseSpecification responseSpec;
-    private CampaignsHelper campaignsHelper;
-
     private static final String NON_TRIGGERED_REPORT_NAME = "Prospective Clients";
     private static final String TRIGGERED_REPORT_NAME = "Client Activated";
-
-    private static final Integer DIRECT_TRIGGER_TYPE = 1;
-    private static final Integer SCHEDULED_TRIGGER_TYPE = 2;
-    private static final Integer TRIGGERED_TRIGGER_TYPE = 3;
-
-    private static final String ACTIVATE_COMMAND = "activate";
-    private static final String CLOSE_COMMAND = "close";
-    private static final String REACTIVATE_COMMAND = "reactivate";
 
     public static final String DATE_FORMAT = "dd MMMM yyyy";
 
     private final ClientAndServer client;
+    private final FeignSmsCampaignHelper campaignsHelper = new FeignSmsCampaignHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     public CampaignsTest(ClientAndServer client) {
         this.client = client;
@@ -70,7 +61,6 @@ public class CampaignsTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         // Set up mock server for message-gateway
         this.client.when(request().withMethod("GET").withPath("/smsbridges"))
                 .respond(response().withContentType(MediaType.APPLICATION_JSON).withBody("[\n" //
@@ -83,164 +73,89 @@ public class CampaignsTest {
                         + "     }\n" //
                         + "]") //
                 );
-        this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        this.requestSpec.header("Fineract-Platform-TenantId", "default");
-        this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.campaignsHelper = new CampaignsHelper(this.requestSpec, this.responseSpec);
     }
 
     @Test
     public void testSupportedActionsForCampaignWithTriggerTypeAsDirect() {
         BusinessDateHelper.runAt(DateTimeFormatter.ofPattern(DATE_FORMAT).format(Utils.getLocalDateOfTenant()), () -> {
-            // creating new campaign
-            Integer campaignId = this.campaignsHelper.createCampaign(NON_TRIGGERED_REPORT_NAME, DIRECT_TRIGGER_TYPE);
-            this.campaignsHelper.verifyCampaignCreatedOnServer(this.requestSpec, this.responseSpec, campaignId);
-
-            // updating campaign
-            Integer updatedCampaignId = this.campaignsHelper.updateCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    NON_TRIGGERED_REPORT_NAME, DIRECT_TRIGGER_TYPE);
-            assertEquals(campaignId, updatedCampaignId);
-
-            // activating campaign
-            Integer activatedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    ACTIVATE_COMMAND);
-            assertEquals(activatedCampaignId, campaignId);
-
-            // closing campaign
-            Integer closedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    CLOSE_COMMAND);
-            assertEquals(closedCampaignId, campaignId);
-
-            // reactivating campaign
-            Integer reactivateCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    REACTIVATE_COMMAND);
-            assertEquals(reactivateCampaignId, campaignId);
-
-            // closing campaign again for deletion
-            closedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    CLOSE_COMMAND);
-            assertEquals(closedCampaignId, campaignId);
-
-            // deleting campaign
-            Integer deletedCampaignId = this.campaignsHelper.deleteCampaign(this.requestSpec, this.responseSpec, campaignId);
-            assertEquals(deletedCampaignId, campaignId);
+            runCampaignLifecycle(NON_TRIGGERED_REPORT_NAME, DIRECT_TRIGGER_TYPE);
         });
     }
 
     @Test
     public void testSupportedActionsForCampaignWithTriggerTypeAsScheduled() {
         BusinessDateHelper.runAt(DateTimeFormatter.ofPattern(DATE_FORMAT).format(Utils.getLocalDateOfTenant()), () -> {
-            // creating new campaign
-            Integer campaignId = this.campaignsHelper.createCampaign(NON_TRIGGERED_REPORT_NAME, SCHEDULED_TRIGGER_TYPE);
-            this.campaignsHelper.verifyCampaignCreatedOnServer(this.requestSpec, this.responseSpec, campaignId);
-
-            // updating campaign
-            Integer updatedCampaignId = this.campaignsHelper.updateCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    NON_TRIGGERED_REPORT_NAME, SCHEDULED_TRIGGER_TYPE);
-            assertEquals(campaignId, updatedCampaignId);
-
-            // activating campaign
-            Integer activatedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    ACTIVATE_COMMAND);
-            assertEquals(activatedCampaignId, campaignId);
-
-            // closing campaign
-            Integer closedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    CLOSE_COMMAND);
-            assertEquals(closedCampaignId, campaignId);
-
-            // reactivating campaign
-            Integer reactivateCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    REACTIVATE_COMMAND);
-            assertEquals(reactivateCampaignId, campaignId);
-
-            // closing campaign again for deletion
-            closedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    CLOSE_COMMAND);
-            assertEquals(closedCampaignId, campaignId);
-
-            // deleting campaign
-            Integer deletedCampaignId = this.campaignsHelper.deleteCampaign(this.requestSpec, this.responseSpec, campaignId);
-            assertEquals(deletedCampaignId, campaignId);
+            runCampaignLifecycle(NON_TRIGGERED_REPORT_NAME, SCHEDULED_TRIGGER_TYPE);
         });
     }
 
     @Test
     public void testSupportedActionsForCampaignWithTriggerTypeAsTriggered() {
         BusinessDateHelper.runAt(DateTimeFormatter.ofPattern(DATE_FORMAT).format(Utils.getLocalDateOfTenant()), () -> {
-            // creating new campaign
-            Integer campaignId = this.campaignsHelper.createCampaign(TRIGGERED_REPORT_NAME, TRIGGERED_TRIGGER_TYPE);
-            this.campaignsHelper.verifyCampaignCreatedOnServer(this.requestSpec, this.responseSpec, campaignId);
+            runCampaignLifecycle(TRIGGERED_REPORT_NAME, TRIGGERED_TRIGGER_TYPE);
+        });
+    }
 
-            // updating campaign
-            Integer updatedCampaignId = this.campaignsHelper.updateCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    TRIGGERED_REPORT_NAME, TRIGGERED_TRIGGER_TYPE);
-            assertEquals(campaignId, updatedCampaignId);
+    @Test
+    public void testSupportedActionsForCampaignWithError() {
+        BusinessDateHelper.runAt(DateTimeFormatter.ofPattern(DATE_FORMAT).format(Utils.getLocalDateOfTenant()), () -> {
+            // creating new campaign
+            Long campaignId = this.campaignsHelper.createCampaign(NON_TRIGGERED_REPORT_NAME, DIRECT_TRIGGER_TYPE);
+            assertEquals(campaignId, this.campaignsHelper.getCampaign(campaignId).getId());
+
+            // activating campaign with failure
+            CallFailedRuntimeException futureActivation = this.campaignsHelper.performActionExpectingError(campaignId, ACTIVATE_COMMAND,
+                    Utils.getLocalDateOfTenant().plusDays(1));
+            assertEquals(400, futureActivation.getStatus());
+            assertEquals("error.msg.campaign.activationDate.in.the.future", FeignErrors.errorGlobalisationCode(futureActivation));
 
             // activating campaign
-            Integer activatedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    ACTIVATE_COMMAND);
+            Long activatedCampaignId = this.campaignsHelper.performAction(campaignId, ACTIVATE_COMMAND);
             assertEquals(activatedCampaignId, campaignId);
 
-            // closing campaign
-            Integer closedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    CLOSE_COMMAND);
-            assertEquals(closedCampaignId, campaignId);
-
-            // reactivating campaign
-            Integer reactivateCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    REACTIVATE_COMMAND);
-            assertEquals(reactivateCampaignId, campaignId);
+            // activating campaign with failure
+            CallFailedRuntimeException secondActivation = this.campaignsHelper.performActionExpectingError(activatedCampaignId,
+                    ACTIVATE_COMMAND, Utils.getLocalDateOfTenant());
+            assertEquals(400, secondActivation.getStatus());
+            assertEquals("error.msg.campaign.already.active", FeignErrors.errorGlobalisationCode(secondActivation));
 
             // closing campaign again for deletion
-            closedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    CLOSE_COMMAND);
+            Long closedCampaignId = this.campaignsHelper.performAction(campaignId, CLOSE_COMMAND);
             assertEquals(closedCampaignId, campaignId);
 
             // deleting campaign
-            Integer deletedCampaignId = this.campaignsHelper.deleteCampaign(this.requestSpec, this.responseSpec, campaignId);
+            Long deletedCampaignId = this.campaignsHelper.deleteCampaign(campaignId);
             assertEquals(deletedCampaignId, campaignId);
         });
     }
 
-    @SuppressWarnings("unchecked")
-    @Test
-    public void testSupportedActionsForCampaignWithError() {
-        BusinessDateHelper.runAt(DateTimeFormatter.ofPattern(DATE_FORMAT).format(Utils.getLocalDateOfTenant()), () -> {
-            final ResponseSpecification responseSpecWithError = new ResponseSpecBuilder().expectStatusCode(400).build();
-            CampaignsHelper campaignsHelperWithError = new CampaignsHelper(this.requestSpec, responseSpecWithError);
-            // creating new campaign
-            Integer campaignId = this.campaignsHelper.createCampaign(NON_TRIGGERED_REPORT_NAME, DIRECT_TRIGGER_TYPE);
-            this.campaignsHelper.verifyCampaignCreatedOnServer(this.requestSpec, this.responseSpec, campaignId);
+    private void runCampaignLifecycle(String reportName, int triggerType) {
+        // creating new campaign
+        Long campaignId = this.campaignsHelper.createCampaign(reportName, triggerType);
+        assertEquals(campaignId, this.campaignsHelper.getCampaign(campaignId).getId());
 
-            // activating campaign with failure
-            ArrayList<HashMap<String, Object>> campaignDateValidationData = (ArrayList<HashMap<String, Object>>) campaignsHelperWithError
-                    .performActionsOnCampaignWithFailure(campaignId, ACTIVATE_COMMAND,
-                            Utils.getLocalDateOfTenant().plusDays(1).format(DateTimeFormatter.ofPattern(DATE_FORMAT)),
-                            CommonConstants.RESPONSE_ERROR);
-            assertEquals("error.msg.campaign.activationDate.in.the.future",
-                    campaignDateValidationData.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
+        // updating campaign
+        Long updatedCampaignId = this.campaignsHelper.updateCampaign(campaignId, reportName, triggerType);
+        assertEquals(campaignId, updatedCampaignId);
 
-            // activating campaign
-            Integer activatedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    ACTIVATE_COMMAND);
-            assertEquals(activatedCampaignId, campaignId);
+        // activating campaign
+        Long activatedCampaignId = this.campaignsHelper.performAction(campaignId, ACTIVATE_COMMAND);
+        assertEquals(activatedCampaignId, campaignId);
 
-            // activating campaign with failure
-            ArrayList<HashMap<String, Object>> campaignErrorData = (ArrayList<HashMap<String, Object>>) campaignsHelperWithError
-                    .performActionsOnCampaignWithFailure(activatedCampaignId, ACTIVATE_COMMAND,
-                            Utils.getLocalDateOfTenant().format(DateTimeFormatter.ofPattern(DATE_FORMAT)), CommonConstants.RESPONSE_ERROR);
-            assertEquals("error.msg.campaign.already.active", campaignErrorData.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
+        // closing campaign
+        Long closedCampaignId = this.campaignsHelper.performAction(campaignId, CLOSE_COMMAND);
+        assertEquals(closedCampaignId, campaignId);
 
-            // closing campaign again for deletion
-            Integer closedCampaignId = this.campaignsHelper.performActionsOnCampaign(this.requestSpec, this.responseSpec, campaignId,
-                    CLOSE_COMMAND);
-            assertEquals(closedCampaignId, campaignId);
+        // reactivating campaign
+        Long reactivateCampaignId = this.campaignsHelper.performAction(campaignId, REACTIVATE_COMMAND);
+        assertEquals(reactivateCampaignId, campaignId);
 
-            // deleting campaign
-            Integer deletedCampaignId = this.campaignsHelper.deleteCampaign(this.requestSpec, this.responseSpec, campaignId);
-            assertEquals(deletedCampaignId, campaignId);
-        });
+        // closing campaign again for deletion
+        closedCampaignId = this.campaignsHelper.performAction(campaignId, CLOSE_COMMAND);
+        assertEquals(closedCampaignId, campaignId);
+
+        // deleting campaign
+        Long deletedCampaignId = this.campaignsHelper.deleteCampaign(campaignId);
+        assertEquals(deletedCampaignId, campaignId);
     }
 }
