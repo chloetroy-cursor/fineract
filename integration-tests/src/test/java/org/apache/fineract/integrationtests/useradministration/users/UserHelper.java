@@ -32,9 +32,9 @@ import org.apache.fineract.client.models.GetOfficesResponse;
 import org.apache.fineract.client.models.PostUsersRequest;
 import org.apache.fineract.client.models.PostUsersResponse;
 import org.apache.fineract.client.util.JSON;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRoleHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
 import org.junit.jupiter.api.Assertions;
 
 public final class UserHelper {
@@ -197,7 +197,7 @@ public final class UserHelper {
         String password = SIMPLE_USER_PASSWORD;
         if (!SIMPLE_USER_CREATED) {
             GetOfficesResponse headOffice = OfficeHelper.getHeadOffice();
-            String simpleRoleId = createSimpleRole(requestSpec, responseSpec);
+            String simpleRoleId = createSimpleRole();
             PostUsersRequest createUserRequest = new PostUsersRequest().username(SIMPLE_USER_NAME)
                     .firstname(Utils.randomFirstNameGenerator()).lastname(Utils.randomLastNameGenerator()).email("whatever@mifos.org")
                     .password(password).repeatPassword(password).sendPasswordToEmail(false).roles(List.of(Long.valueOf(simpleRoleId)))
@@ -218,31 +218,22 @@ public final class UserHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public static PostUsersRequest buildUserRequest(ResponseSpecification responseSpec, RequestSpecification requestSpec, String password) {
-        Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
+        Long roleId = FeignRoleHelper.createRole();
         String uniqueUsername = Utils.uniqueRandomStringGenerator("TestUser", 4);
         GetOfficesResponse headOffice = OfficeHelper.getHeadOffice();
 
         return new PostUsersRequest().username(uniqueUsername).firstname(Utils.randomFirstNameGenerator())
                 .lastname(Utils.randomLastNameGenerator()).email("testuser@example.com").password(password).repeatPassword(password)
-                .sendPasswordToEmail(false).officeId(headOffice.getId()).roles(List.of(roleId.longValue()));
+                .sendPasswordToEmail(false).officeId(headOffice.getId()).roles(List.of(roleId));
     }
 
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    private static String createSimpleRole(final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
-        Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
-        addRepaymentPermissionToRole(requestSpec, responseSpec, roleId);
+    private static String createSimpleRole() {
+        Long roleId = FeignRoleHelper.createRole();
+        addRepaymentPermissionToRole(roleId);
         return roleId.toString();
     }
 
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    private static void addRepaymentPermissionToRole(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
-            Integer roleId) {
+    private static void addRepaymentPermissionToRole(Long roleId) {
         HashMap<String, Boolean> permissionMap = new HashMap<>();
         permissionMap.put(REPAYMENT_LOAN_PERMISSION, true);
         permissionMap.put(READ_LOAN_PERMISSION, true);
@@ -250,6 +241,6 @@ public final class UserHelper {
         permissionMap.put("CREATE_RESCHEDULELOAN", true);
         permissionMap.put("REJECT_RESCHEDULELOAN", true);
         permissionMap.put("APPROVE_RESCHEDULELOAN", true);
-        RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
+        FeignRoleHelper.addPermissionsToRole(roleId, permissionMap);
     }
 }

@@ -33,6 +33,7 @@ import java.util.Map;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutPermissionsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRoleHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
@@ -99,10 +100,10 @@ public class MakercheckerTest {
             putPermissionsRequest = new PutPermissionsRequest().putPermissionsItem("ACTIVATE_CLIENT", false);
             rolesHelper.updatePermissions(putPermissionsRequest);
 
-            Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
+            Integer roleId = FeignRoleHelper.createRole().intValue();
             Map<String, Boolean> permissionMap = Map.of("CREATE_CLIENT", true, "CREATE_CLIENT_CHECKER", true, "ACTIVATE_CLIENT", true,
                     "ACTIVATE_CLIENT_CHECKER", true, "WITHDRAWAL_SAVINGSACCOUNT", true, "WITHDRAWAL_SAVINGSACCOUNT_CHECKER", true);
-            RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
+            FeignRoleHelper.addPermissionsToRole(roleId.longValue(), permissionMap);
             final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
             // create maker user
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
@@ -174,7 +175,7 @@ public class MakercheckerTest {
 
             // add checker superuser permission - actions are performed in one step
             permissionMap = Map.of("CHECKER_SUPER_USER", true);
-            RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
+            FeignRoleHelper.addPermissionsToRole(roleId.longValue(), permissionMap);
             clientId = ClientHelper.createClient(makerRequestSpec, this.responseSpec);
             assertNotNull(clientId);
             ClientHelper.verifyClientCreatedOnServer(requestSpec, this.responseSpec, clientId);
@@ -214,9 +215,9 @@ public class MakercheckerTest {
             rolesHelper.updatePermissions(putPermissionsRequest);
 
             // create role with permissions for maker and checker
-            Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
+            Integer roleId = FeignRoleHelper.createRole().intValue();
             Map<String, Boolean> permissionMap = Map.of("CREATE_DATATABLE", true, "CREATE_DATATABLE_CHECKER", true);
-            RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
+            FeignRoleHelper.addPermissionsToRole(roleId.longValue(), permissionMap);
 
             // create maker user
             Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
@@ -281,9 +282,9 @@ public class MakercheckerTest {
             PutPermissionsRequest putPermissionsRequest = new PutPermissionsRequest().putPermissionsItem("CREATE_CLIENT", true);
             rolesHelper.updatePermissions(putPermissionsRequest);
 
-            Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
+            Integer roleId = FeignRoleHelper.createRole().intValue();
             Map<String, Boolean> permissionMap = Map.of("CREATE_CLIENT", true, "CREATE_CLIENT_CHECKER", true, "ACTIVATE_CLIENT", true);
-            RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
+            FeignRoleHelper.addPermissionsToRole(roleId.longValue(), permissionMap);
             final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
 
             String maker1 = Utils.uniqueRandomStringGenerator("user", 8);
@@ -332,9 +333,9 @@ public class MakercheckerTest {
             PutPermissionsRequest putPermissionsRequest = new PutPermissionsRequest().putPermissionsItem("CREATE_CLIENT", true);
             rolesHelper.updatePermissions(putPermissionsRequest);
 
-            Integer roleId = RolesHelper.createRole(requestSpec, responseSpec);
+            Integer roleId = FeignRoleHelper.createRole().intValue();
             Map<String, Boolean> permissionMap = Map.of("CREATE_CLIENT", true, "CREATE_CLIENT_CHECKER", true, "ACTIVATE_CLIENT", true);
-            RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
+            FeignRoleHelper.addPermissionsToRole(roleId.longValue(), permissionMap);
             final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
 
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
