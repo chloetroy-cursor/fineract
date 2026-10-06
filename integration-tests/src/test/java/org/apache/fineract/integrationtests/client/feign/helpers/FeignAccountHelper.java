@@ -125,6 +125,10 @@ public class FeignAccountHelper {
         return ok(() -> fineractClient.generalLedgerAccount().retreiveAccount(glAccountId, Collections.emptyMap()));
     }
 
+    public GetGLAccountsResponse getGLAccountWithRunningBalance(Long glAccountId) {
+        return ok(() -> fineractClient.generalLedgerAccount().retreiveAccount(glAccountId, true));
+    }
+
     public PutGLAccountsResponse updateGLAccount(Long glAccountId, PutGLAccountsRequest request) {
         return ok(() -> fineractClient.generalLedgerAccount().updateGLAccount(glAccountId, request));
     }
