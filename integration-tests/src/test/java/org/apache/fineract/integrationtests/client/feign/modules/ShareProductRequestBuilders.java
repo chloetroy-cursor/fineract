@@ -23,22 +23,17 @@ import org.apache.fineract.integrationtests.common.Utils;
 
 public final class ShareProductRequestBuilders {
 
-    private static final String CURRENCY = "USD";
-    private static final String LOCALE = "en_GB";
-    private static final int DAYS = 0;
+    public static final String LOCALE = "en_GB";
 
     private ShareProductRequestBuilders() {}
 
-    /**
-     * The share product the share integration tests have always used: 10,000 shares at 2.00 each, no accounting, a
-     * one-day lock-in and a one-day minimum active period for dividends.
-     */
+    /** The share product the RestAssured {@code ShareProductHelper} built by default: no accounting, unit price 2. */
     public static PostProductsTypeRequest defaultShareProduct() {
         return new PostProductsTypeRequest()//
                 .name(Utils.uniqueRandomStringGenerator("SHARE_PRODUCT_", 6))//
                 .shortName(Utils.uniqueRandomStringGenerator("", 4))//
                 .description(Utils.randomStringGenerator("", 20))//
-                .currencyCode(CURRENCY)//
+                .currencyCode("USD")//
                 .locale(LOCALE)//
                 .digitsAfterDecimal(4)//
                 .inMultiplesOf(0)//
@@ -49,10 +44,10 @@ public final class ShareProductRequestBuilders {
                 .nominalShares(20)//
                 .maximumShares(3000)//
                 .allowDividendCalculationForInactiveClients(true)//
-                .accountingRule(SavingsTestData.AccountingRule.NONE)//
                 .minimumActivePeriodForDividends(1)//
-                .minimumactiveperiodFrequencyType(DAYS)//
+                .minimumactiveperiodFrequencyType(SavingsTestData.PeriodFrequencyType.DAYS)//
                 .lockinPeriodFrequency(1)//
-                .lockinPeriodFrequencyType(DAYS);
+                .lockinPeriodFrequencyType(SavingsTestData.PeriodFrequencyType.DAYS)//
+                .accountingRule(SavingsTestData.AccountingRule.NONE);
     }
 }

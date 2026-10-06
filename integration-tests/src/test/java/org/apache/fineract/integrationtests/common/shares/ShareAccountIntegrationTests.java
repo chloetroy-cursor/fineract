@@ -35,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.fineract.client.models.GetProductsTypeProductIdResponse;
 import org.apache.fineract.client.models.PostProductsTypeRequest;
-import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareAccountHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareProductHelper;
 import org.apache.fineract.integrationtests.client.feign.modules.ShareProductRequestBuilders;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
@@ -53,7 +53,7 @@ public class ShareAccountIntegrationTests {
     private static final Logger LOG = LoggerFactory.getLogger(ShareAccountIntegrationTests.class);
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
-    private FeignShareAccountHelper shareAccountHelper;
+    private FeignShareProductHelper shareProductHelper;
 
     @BeforeEach
     public void setup() {
@@ -62,7 +62,7 @@ public class ShareAccountIntegrationTests {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.requestSpec.header("Fineract-Platform-TenantId", "default");
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.shareAccountHelper = new FeignShareAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.shareProductHelper = new FeignShareProductHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -70,37 +70,50 @@ public class ShareAccountIntegrationTests {
         // This method will check create share product, get share product,
         // update share product.
         LOG.info("------------------------------CREATING NEW SHARE PRODUCT ---------------------------------------");
-        final PostProductsTypeRequest shareProductRequest = ShareProductRequestBuilders.defaultShareProduct();
-        final Long shareProductId = shareAccountHelper.createShareProduct(shareProductRequest);
+        final PostProductsTypeRequest request = ShareProductRequestBuilders.defaultShareProduct();
+        final Long shareProductId = shareProductHelper.createShareProduct(request);
         Assertions.assertNotNull(shareProductId);
         LOG.info("------------------------------CREATING SHARE PRODUCT COMPLETE---------------------------------------");
 
         LOG.info("------------------------------RETRIEVING SHARE PRODUCT---------------------------------------");
-        final GetProductsTypeProductIdResponse shareProduct = shareAccountHelper.getShareProduct(shareProductId);
+        GetProductsTypeProductIdResponse shareProduct = shareProductHelper.getShareProduct(shareProductId);
         Assertions.assertNotNull(shareProduct);
-        verifyShareProduct(shareProductRequest, shareProduct);
+        verifyShareProduct(request, shareProduct);
 
         LOG.info("------------------------------RETRIEVING SHARE PRODUCT COMPLETE---------------------------------------");
 
         LOG.info("------------------------------UPDATING SHARE PRODUCT---------------------------------------");
 
-        Map<String, Object> shareProductDataForUpdate = new HashMap<>();
-
-        shareProductDataForUpdate.put("totalShares", "2000");
-        shareProductDataForUpdate.put("sharesIssued", "2000");
-
-        String updateShareProductJsonString = new Gson().toJson(shareProductDataForUpdate);
-        Integer updatedProductId = ShareProductTransactionHelper.updateShareProduct(shareProductId.intValue(), updateShareProductJsonString,
-                requestSpec, responseSpec);
+        Long updatedProductId = shareProductHelper.updateShareCounts(shareProductId, 2000, 2000, ShareProductRequestBuilders.LOCALE);
         Assertions.assertNotNull(updatedProductId);
-        Map<String, Object> updatedShareProductData = ShareProductTransactionHelper.retrieveShareProduct(updatedProductId, requestSpec,
-                responseSpec);
-        String updatedTotalShares = String.valueOf(updatedShareProductData.get("totalShares"));
-        String updatedSharesIssued = String.valueOf(updatedShareProductData.get("totalSharesIssued"));
-        Assertions.assertEquals("2000", updatedTotalShares);
-        Assertions.assertEquals("2000", updatedSharesIssued);
+        GetProductsTypeProductIdResponse updatedShareProduct = shareProductHelper.getShareProduct(updatedProductId);
+        Assertions.assertEquals(2000, updatedShareProduct.getTotalShares());
+        Assertions.assertEquals(2000, updatedShareProduct.getTotalSharesIssued());
         LOG.info("------------------------------UPDATING SHARE PRODUCT COMPLETE---------------------------------------");
 
+    }
+
+    private static void verifyShareProduct(PostProductsTypeRequest expected, GetProductsTypeProductIdResponse actual) {
+        Assertions.assertEquals(expected.getName(), actual.getName());
+        Assertions.assertEquals(expected.getShortName(), actual.getShortName());
+        Assertions.assertEquals(expected.getDescription(), actual.getDescription());
+        Assertions.assertEquals(expected.getCurrencyCode(), actual.getCurrency().getCode());
+        Assertions.assertEquals(expected.getDigitsAfterDecimal(), actual.getCurrency().getDecimalPlaces());
+        Assertions.assertEquals(expected.getInMultiplesOf(), actual.getCurrency().getInMultiplesOf());
+        Assertions.assertEquals(expected.getTotalShares(), actual.getTotalShares());
+        Assertions.assertEquals(expected.getSharesIssued(), actual.getTotalSharesIssued());
+        Assertions.assertEquals(expected.getUnitPrice(), actual.getUnitPrice());
+        Assertions.assertEquals(expected.getMinimumShares(), actual.getMinimumShares());
+        Assertions.assertEquals(expected.getNominalShares(), actual.getNominalShares());
+        Assertions.assertEquals(expected.getMaximumShares(), actual.getMaximumShares());
+        Assertions.assertEquals(expected.getAllowDividendCalculationForInactiveClients(),
+                actual.getAllowDividendCalculationForInactiveClients());
+        Assertions.assertEquals(expected.getAccountingRule().longValue(), actual.getAccountingRule().getId());
+        Assertions.assertEquals(expected.getMinimumActivePeriodForDividends(), actual.getMinimumActivePeriod());
+        Assertions.assertEquals(expected.getMinimumactiveperiodFrequencyType().longValue(),
+                actual.getMinimumActivePeriodForDividendsTypeEnum().getId());
+        Assertions.assertEquals(expected.getLockinPeriodFrequency(), actual.getLockinPeriod());
+        Assertions.assertEquals(expected.getLockinPeriodFrequencyType().longValue(), actual.getLockPeriodTypeEnum().getId());
     }
 
     @SuppressWarnings("unchecked")
@@ -1258,30 +1271,7 @@ public class ShareAccountIntegrationTests {
     }
 
     private Integer createShareProduct() {
-        return shareAccountHelper.createShareProduct(ShareProductRequestBuilders.defaultShareProduct()).intValue();
-    }
-
-    private void verifyShareProduct(PostProductsTypeRequest expected, GetProductsTypeProductIdResponse actual) {
-        Assertions.assertEquals(expected.getName(), actual.getName());
-        Assertions.assertEquals(expected.getShortName(), actual.getShortName());
-        Assertions.assertEquals(expected.getDescription(), actual.getDescription());
-        Assertions.assertEquals(expected.getCurrencyCode(), actual.getCurrency().getCode());
-        Assertions.assertEquals(expected.getDigitsAfterDecimal(), actual.getCurrency().getDecimalPlaces());
-        Assertions.assertEquals(expected.getInMultiplesOf(), actual.getCurrency().getInMultiplesOf());
-        Assertions.assertEquals(expected.getTotalShares(), actual.getTotalShares());
-        Assertions.assertEquals(expected.getSharesIssued(), actual.getTotalSharesIssued());
-        Assertions.assertEquals(expected.getUnitPrice(), actual.getUnitPrice());
-        Assertions.assertEquals(expected.getMinimumShares(), actual.getMinimumShares());
-        Assertions.assertEquals(expected.getNominalShares(), actual.getNominalShares());
-        Assertions.assertEquals(expected.getMaximumShares(), actual.getMaximumShares());
-        Assertions.assertEquals(expected.getAllowDividendCalculationForInactiveClients(),
-                actual.getAllowDividendCalculationForInactiveClients());
-        Assertions.assertEquals(expected.getAccountingRule().longValue(), actual.getAccountingRule().getId());
-        Assertions.assertEquals(expected.getMinimumActivePeriodForDividends(), actual.getMinimumActivePeriod());
-        Assertions.assertEquals(expected.getMinimumactiveperiodFrequencyType().longValue(),
-                actual.getMinimumActivePeriodForDividendsTypeEnum().getId());
-        Assertions.assertEquals(expected.getLockinPeriodFrequency(), actual.getLockinPeriod());
-        Assertions.assertEquals(expected.getLockinPeriodFrequencyType().longValue(), actual.getLockPeriodTypeEnum().getId());
+        return shareProductHelper.createShareProduct(ShareProductRequestBuilders.defaultShareProduct()).intValue();
     }
 
     private Integer createShareAccount(final Integer clientId, final Integer productId, final Integer savingsAccountId) {

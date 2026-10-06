@@ -35,7 +35,7 @@ import org.apache.fineract.client.models.PostColumnHeaderData;
 import org.apache.fineract.client.models.PostDataTablesRequest;
 import org.apache.fineract.client.models.PostDataTablesResponse;
 import org.apache.fineract.client.models.ResultsetColumnHeaderData;
-import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareAccountHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareProductHelper;
 import org.apache.fineract.integrationtests.client.feign.modules.ShareProductRequestBuilders;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -49,7 +49,7 @@ public class ShareProductDatatableIntegrationTest {
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private DatatableHelper datatableHelper;
-    private FeignShareAccountHelper shareAccountHelper;
+    private FeignShareProductHelper shareProductHelper;
 
     @BeforeEach
     public void setup() {
@@ -58,7 +58,7 @@ public class ShareProductDatatableIntegrationTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.datatableHelper = new DatatableHelper(this.requestSpec, this.responseSpec);
-        this.shareAccountHelper = new FeignShareAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.shareProductHelper = new FeignShareProductHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -168,6 +168,6 @@ public class ShareProductDatatableIntegrationTest {
     }
 
     private Integer createShareProduct() {
-        return shareAccountHelper.createShareProduct(ShareProductRequestBuilders.defaultShareProduct()).intValue();
+        return shareProductHelper.createShareProduct(ShareProductRequestBuilders.defaultShareProduct()).intValue();
     }
 }
