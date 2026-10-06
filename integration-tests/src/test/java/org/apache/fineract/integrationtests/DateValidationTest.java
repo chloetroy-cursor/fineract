@@ -41,12 +41,16 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.client.models.PostFixedDepositProductsRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignFixedDepositProductHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.DepositRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.DepositTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositAccountHelper;
-import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositProductHelper;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
@@ -200,13 +204,14 @@ public class DateValidationTest {
         return new Gson().toJson(map);
     }
 
-    private Integer createFixedDepositProduct(final String validFrom, final String validTo, Account... accounts) {
+    private Integer createFixedDepositProduct(final String validFrom, final String validTo, final Account assetAccount,
+            final Account liabilityAccount, final Account incomeAccount, final Account expenseAccount) {
         log.info("------------------------------CREATING NEW FIXED DEPOSIT PRODUCT ---------------------------------------");
-        FixedDepositProductHelper fixedDepositProductHelper = new FixedDepositProductHelper(this.requestSpec, this.responseSpec);
-        fixedDepositProductHelper = fixedDepositProductHelper.withAccountingRuleAsCashBased(accounts);
-        final String fixedDepositProductJSON = fixedDepositProductHelper.withPeriodRangeChart() //
-                .build(validFrom, validTo, true);
-        return FixedDepositProductHelper.createFixedDepositProduct(fixedDepositProductJSON, requestSpec, responseSpec);
+        PostFixedDepositProductsRequest request = DepositRequestBuilders.withCashBasedAccounting(
+                DepositRequestBuilders.fixedDepositProduct(), assetAccount, liabilityAccount, incomeAccount, expenseAccount);
+        return new FeignFixedDepositProductHelper(FineractFeignClientHelper.getFineractFeignClient())
+                .createProduct(DepositRequestBuilders.withChart(request, validFrom, validTo, DepositTestData.periodRangeChartSlabs()))
+                .getResourceId().intValue();
     }
 
     private String applyForFixedDepositApplication(final String clientID, final String productID, final String submittedOnDate,
