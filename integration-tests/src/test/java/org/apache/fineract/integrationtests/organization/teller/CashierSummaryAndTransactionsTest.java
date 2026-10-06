@@ -50,7 +50,7 @@ public class CashierSummaryAndTransactionsTest {
         tellerHelper = new FeignTellerHelper(FineractFeignClientHelper.getFineractFeignClient());
         final Long staffId = Long.valueOf(StaffHelper.createStaff(requestSpecification, responseSpecification));
         tellerId = tellerHelper.createTeller().getResourceId();
-        cashierId = tellerHelper.createCashier(tellerId, staffId).getSubResourceId();
+        cashierId = tellerHelper.createCashier(tellerId, staffId);
     }
 
     @Test

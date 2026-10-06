@@ -23,10 +23,13 @@ import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Comparator;
 import org.apache.fineract.client.feign.FineractFeignClient;
 import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
+import org.apache.fineract.client.models.CashierData;
 import org.apache.fineract.client.models.GetTellersTellerIdCashiersCashiersIdSummaryAndTransactionsResponse;
 import org.apache.fineract.client.models.GetTellersTellerIdCashiersCashiersIdTransactionsResponse;
+import org.apache.fineract.client.models.GetTellersTellerIdCashiersResponse;
 import org.apache.fineract.client.models.PostTellersResponse;
 import org.apache.fineract.client.models.PostTellersTellerIdCashiersCashierIdAllocateRequest;
 import org.apache.fineract.client.models.PostTellersTellerIdCashiersCashierIdAllocateResponse;
@@ -70,8 +73,14 @@ public class FeignTellerHelper {
         return ok(() -> tellerCommands.createTeller(request));
     }
 
-    public PostTellersTellerIdCashiersResponse createCashier(Long tellerId, Long staffId) {
-        return createCashier(tellerId, new PostTellersTellerIdCashiersRequest()//
+    /**
+     * Creates a cashier for {@code staffId} on the teller and returns the new cashier's id.
+     * <p>
+     * The create response carries the teller id in {@code resourceId} and nothing else, so the id is read back from the
+     * teller's cashier list. The staff member must not already be a cashier of this teller.
+     */
+    public Long createCashier(Long tellerId, Long staffId) {
+        createCashier(tellerId, new PostTellersTellerIdCashiersRequest()//
                 .staffId(staffId)//
                 .description(Utils.uniqueRandomStringGenerator("test__", 4))//
                 .startDate(DEFAULT_CASHIER_START_DATE)//
@@ -79,10 +88,17 @@ public class FeignTellerHelper {
                 .isFullDay(true)//
                 .dateFormat(FeignTestConstants.ISO_DATE_PATTERN)//
                 .locale(FeignTestConstants.LOCALE));
+        return retrieveCashiers(tellerId).getCashiers().stream().filter(cashier -> staffId.equals(cashier.getStaffId()))
+                .map(CashierData::getId).max(Comparator.naturalOrder())
+                .orElseThrow(() -> new AssertionError("Teller " + tellerId + " has no cashier for staff " + staffId));
     }
 
     public PostTellersTellerIdCashiersResponse createCashier(Long tellerId, PostTellersTellerIdCashiersRequest request) {
         return ok(() -> fineractClient.tellerCashManagement().createCashierForTeller(tellerId, request));
+    }
+
+    public GetTellersTellerIdCashiersResponse retrieveCashiers(Long tellerId) {
+        return ok(() -> fineractClient.tellerCashManagement().retrieveAllCashiersForTeller(tellerId, (String) null, null));
     }
 
     public static PostTellersTellerIdCashiersCashierIdAllocateRequest allocateCashRequest(BigDecimal txnAmount) {
