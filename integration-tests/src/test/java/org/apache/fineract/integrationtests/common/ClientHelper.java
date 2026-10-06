@@ -81,7 +81,7 @@ public class ClientHelper {
             PostClientsRequest request) {
         log.info("---------------------------------CREATING A CLIENT---------------------------------------------");
         String requestBody = GSON.toJson(request);
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_CLIENT_URL, requestBody, "clientId");
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_CLIENT_URL, requestBody, "clientId");
     }
 
     public static PostClientsResponse createClient(final PostClientsRequest request) {
@@ -127,8 +127,7 @@ public class ClientHelper {
     public static Integer createClient(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final String activationDate, final String officeId) {
         log.info("---------------------------------CREATING A CLIENT---------------------------------------------");
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_CLIENT_URL, getTestClientAsJSON(activationDate, officeId),
-                "clientId");
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_CLIENT_URL, getTestClientAsJSON(activationDate, officeId), "clientId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -138,7 +137,7 @@ public class ClientHelper {
     public static PostClientsResponse createClient(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final String activationDate, final String officeId, final String externalId) {
         log.info("---------------------------------CREATING A CLIENT---------------------------------------------");
-        final String response = Utils.performServerPost(requestSpec, responseSpec, CREATE_CLIENT_URL,
+        final String response = Utils.feign(requestSpec, responseSpec).post(CREATE_CLIENT_URL,
                 getTestClientAsJSON(activationDate, officeId));
         return GSON.fromJson(response, PostClientsResponse.class);
     }
@@ -149,8 +148,8 @@ public class ClientHelper {
     @Deprecated(forRemoval = true)
     public Object createClientPendingWithError(final String jsonAttributeToGetBack) {
         log.info("---------------------------------CREATING A CLIENT IN PENDING WITH ERROR---------------------------------------------");
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, CREATE_CLIENT_URL,
-                getTestClientAsJSONPending("04 March 2014", "1"), jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, this.responseSpec).post(CREATE_CLIENT_URL, getTestClientAsJSONPending("04 March 2014", "1"),
+                jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -160,8 +159,8 @@ public class ClientHelper {
     public static Integer createClientPendingWithDatatable(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final String registeredTableName) {
         log.info("-------------------------- CREATING A CLIENT IN PENDING WITH DATATABLES --------------------------------");
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_CLIENT_URL,
-                getTestPendingClientWithDatatableAsJson(registeredTableName), "clientId");
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_CLIENT_URL, getTestPendingClientWithDatatableAsJson(registeredTableName),
+                "clientId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -190,8 +189,7 @@ public class ClientHelper {
 
         log.info(
                 "---------------------------------CREATING A CLIENT NON PERSON(ORGANISATION)---------------------------------------------");
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_CLIENT_URL, getTestClientAsJSON(activationDate, officeId),
-                "clientId");
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_CLIENT_URL, getTestClientAsJSON(activationDate, officeId), "clientId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -202,7 +200,7 @@ public class ClientHelper {
             final ResponseSpecification responseSpec, final String activationDate, final String officeId,
             final HashMap<String, Object> datatables) {
         log.info("---------------------------------CREATING A CLIENT PERSON WITH DATATABLE---------------------------------------------");
-        final String response = Utils.performServerPost(requestSpec, responseSpec, CREATE_CLIENT_URL,
+        final String response = Utils.feign(requestSpec, responseSpec).post(CREATE_CLIENT_URL,
                 getTestPersonClientAsJSON(activationDate, officeId, datatables), null);
         return GSON.fromJson(response, PostClientsResponse.class);
     }
@@ -217,7 +215,7 @@ public class ClientHelper {
         final String officeId = "1";
         log.info(
                 "---------------------------------CREATING A CLIENT BASED ON ACCOUNT PREFERENCE---------------------------------------------");
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_CLIENT_URL,
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_CLIENT_URL,
                 getTestClientWithClientTypeAsJSON(activationDate, officeId, clientType.toString()), jsonAttributeToGetBack);
     }
 
@@ -231,7 +229,7 @@ public class ClientHelper {
                 + "&command=assignStaff";
 
         log.info("---------------------------------CREATING A CLIENT---------------------------------------------");
-        return Utils.performServerPost(requestSpec, responseSpec, CLIENT_ASSIGN_STAFF_URL, assignStaffToClientAsJson(staffId), "changes");
+        return Utils.feign(requestSpec, responseSpec).post(CLIENT_ASSIGN_STAFF_URL, assignStaffToClientAsJson(staffId), "changes");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -402,7 +400,7 @@ public class ClientHelper {
             final Integer clientId) {
         log.info("------------------------------CHECK CLIENT DETAILS------------------------------------\n");
         final String CLIENT_URL = "/fineract-provider/api/v1/clients/" + clientId + "?" + Utils.TENANT_IDENTIFIER;
-        final Integer responseClientID = Utils.performServerGet(requestSpec, responseSpec, CLIENT_URL, "id");
+        final Integer responseClientID = Utils.feign(requestSpec, responseSpec).get(CLIENT_URL, "id");
         assertEquals(clientId, responseClientID, "ERROR IN CREATING THE CLIENT");
     }
 
@@ -424,7 +422,7 @@ public class ClientHelper {
             final String jsonReturn) {
         final String GET_CLIENT_URL = "/fineract-provider/api/v1/clients/" + clientId + "?" + Utils.TENANT_IDENTIFIER;
         log.info("---------------------------------GET A CLIENT---------------------------------------------");
-        return Utils.performServerGet(requestSpec, responseSpec, GET_CLIENT_URL, jsonReturn);
+        return Utils.feign(requestSpec, responseSpec).get(GET_CLIENT_URL, jsonReturn);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -509,7 +507,7 @@ public class ClientHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     private HashMap<String, Object> performClientActions(final String postURLForClient, final String jsonToBeSent, final Integer clientId) {
-        Utils.performServerPost(this.requestSpec, this.responseSpec, postURLForClient, jsonToBeSent, CommonConstants.RESPONSE_STATUS);
+        Utils.feign(this.requestSpec, this.responseSpec).post(postURLForClient, jsonToBeSent, CommonConstants.RESPONSE_STATUS);
         HashMap<String, Object> response = ClientHelper.getClientStatus(requestSpec, responseSpec, String.valueOf(clientId));
 
         return response;
@@ -522,7 +520,7 @@ public class ClientHelper {
     public static PostClientsClientIdResponse performClientActionUsingExternalId(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final String externalId, final String command, final String jsonPayload) {
         final String url = CLIENT_EXTERNALID_URL + "/" + externalId + "?" + Utils.TENANT_IDENTIFIER + "&command=" + command;
-        final String response = Utils.performServerPost(requestSpec, responseSpec, url, jsonPayload);
+        final String response = Utils.feign(requestSpec, responseSpec).post(url, jsonPayload);
         return GSON.fromJson(response, PostClientsClientIdResponse.class);
     }
 
@@ -532,8 +530,8 @@ public class ClientHelper {
     @Deprecated(forRemoval = true)
     public Workbook getClientEntityWorkbook(GlobalEntityType clientsEntity, String dateFormat) throws IOException {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, "application/vnd.ms-excel");
-        byte[] byteArray = Utils.performGetBinaryResponse(requestSpec, responseSpec, CLIENT_URL + "/downloadtemplate" + "?"
-                + Utils.TENANT_IDENTIFIER + "&legalFormType=" + clientsEntity + "&dateFormat=" + dateFormat);
+        byte[] byteArray = Utils.feign(requestSpec, responseSpec).getBytes(CLIENT_URL + "/downloadtemplate" + "?" + Utils.TENANT_IDENTIFIER
+                + "&legalFormType=" + clientsEntity + "&dateFormat=" + dateFormat);
         InputStream inputStream = new ByteArrayInputStream(byteArray);
         Workbook workbook = new HSSFWorkbook(inputStream);
         return workbook;
@@ -545,14 +543,14 @@ public class ClientHelper {
     @Deprecated(forRemoval = true)
     public String getOutputTemplateLocation(final String importDocumentId) {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN);
-        return Utils.performServerOutputTemplateLocationGet(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).getOutputTemplateLocation(
                 "/fineract-provider/api/v1/imports/getOutputTemplateLocation" + "?" + Utils.TENANT_IDENTIFIER, importDocumentId);
     }
 
     @Deprecated(forRemoval = true)
     public byte[] downloadOutputTemplate(final String importDocumentId) {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, "application/vnd.ms-excel");
-        return Utils.performServerOutputTemplateDownloadGet(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).getOutputTemplate(
                 "/fineract-provider/api/v1/imports/downloadOutputTemplate" + "?" + Utils.TENANT_IDENTIFIER, importDocumentId);
     }
 
@@ -565,7 +563,7 @@ public class ClientHelper {
         String dateFormat = "dd MMMM yyyy";
         String legalFormType = GlobalEntityType.CLIENTS_ENTITY.toString();
         requestSpec.header(HttpHeaders.CONTENT_TYPE, MediaType.MULTIPART_FORM_DATA);
-        return Utils.performServerTemplatePost(requestSpec, responseSpec, CLIENT_URL + "/uploadtemplate" + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(requestSpec, responseSpec).postTemplate(CLIENT_URL + "/uploadtemplate" + "?" + Utils.TENANT_IDENTIFIER,
                 legalFormType, file, locale, dateFormat);
     }
 

@@ -154,7 +154,7 @@ public class InteropHelper {
         String url = buildUrl(HEALTH_URL);
         LOG.debug("Calling Interoperable GET Health: {}", url);
 
-        String response = Utils.performServerGet(requestSpec, responseSpec, url, null);
+        String response = Utils.feign(requestSpec, responseSpec).get(url, null);
         LOG.debug("Response Interoperable GET Health: {}", response);
         return response;
     }
@@ -170,7 +170,7 @@ public class InteropHelper {
         String url = buildUrl(PARTIES_URL + '/' + idType + '/' + idValue);
         LOG.debug("Calling Interoperable GET Party: {}", url);
 
-        String response = Utils.performServerGet(requestSpec, responseSpec, url, null);
+        String response = Utils.feign(requestSpec, responseSpec).get(url, null);
         LOG.debug("Response Interoperable GET Party: {}", response);
         return getJsonAttribute(response, InteropUtil.PARAM_ACCOUNT_ID);
     }
@@ -187,7 +187,7 @@ public class InteropHelper {
         String request = buildPartiesJson();
         LOG.debug("Calling Interoperable POST Party: {}, body: {}", url, request);
 
-        String response = Utils.performServerPost(requestSpec, responseSpec, url, request, null);
+        String response = Utils.feign(requestSpec, responseSpec).post(url, request, null);
         LOG.debug("Response Interoperable POST Party: {}", response);
         return getJsonAttribute(response, InteropUtil.PARAM_ACCOUNT_ID);
     }
@@ -204,7 +204,7 @@ public class InteropHelper {
         String request = buildPartiesJson();
         LOG.debug("Calling Interoperable DELETE Party: {}, body: {}", url, request);
 
-        String response = Utils.performServerDelete(requestSpec, responseSpec, url, request, null);
+        String response = Utils.feign(requestSpec, responseSpec).delete(url, request, null);
         LOG.debug("Response Interoperable DELETE Party: {}", response);
         return getJsonAttribute(response, InteropUtil.PARAM_ACCOUNT_ID);
     }
@@ -230,7 +230,7 @@ public class InteropHelper {
         String url = buildUrl(TRANSACTIONS_URL + '/' + transactionCode + '/' + REQUESTS_URL_PARAM + '/' + requestCode);
         LOG.debug("Calling Interoperable GET Request: {}", url);
 
-        String response = Utils.performServerGet(requestSpec, responseSpec, url, null);
+        String response = Utils.feign(requestSpec, responseSpec).get(url, null);
         LOG.debug("Response Interoperable GET Request: {}", response);
         return getJsonAttribute(response, InteropUtil.PARAM_REQUEST_CODE);
     }
@@ -249,7 +249,7 @@ public class InteropHelper {
         String request = buildTransactionRequestJson(requestCode, role);
         LOG.debug("Calling Interoperable POST Request: {}, body: {}", url, request);
 
-        String response = Utils.performServerPost(requestSpec, responseSpec, url, request, null);
+        String response = Utils.feign(requestSpec, responseSpec).post(url, request, null);
         LOG.debug("Response Interoperable POST Request: {}", response);
         return response;
     }
@@ -262,7 +262,7 @@ public class InteropHelper {
         String url = buildUrl(REQUESTS_URL);
         LOG.debug("Calling Interoperable POST Request: {}, body: {}", url, request);
 
-        String response = Utils.performServerPost(requestSpec, responseSpec, url, request, null);
+        String response = Utils.feign(requestSpec, responseSpec).post(url, request, null);
         LOG.debug("Response Interoperable POST Request: {}", response);
         return response;
     }
@@ -303,7 +303,7 @@ public class InteropHelper {
         String url = buildUrl(TRANSACTIONS_URL + '/' + transactionCode + '/' + QUOTES_URL_PARAM + '/' + quoteCode);
         LOG.debug("Calling Interoperable GET Quote: {}", url);
 
-        String response = Utils.performServerGet(requestSpec, responseSpec, url, null);
+        String response = Utils.feign(requestSpec, responseSpec).get(url, null);
         LOG.debug("Response Interoperable GET Quote: {}", response);
         return getJsonAttribute(response, InteropUtil.PARAM_QUOTE_CODE);
     }
@@ -320,7 +320,7 @@ public class InteropHelper {
         String request = buildQuoteJson(quoteCode, role);
         LOG.debug("Calling Interoperable POST Quote: {}, body: {}", url, request);
 
-        String response = Utils.performServerPost(requestSpec, responseSpec, url, request, null);
+        String response = Utils.feign(requestSpec, responseSpec).post(url, request, null);
         LOG.debug("Response Interoperable POST Quote: {}", response);
         return response;
     }
@@ -363,7 +363,7 @@ public class InteropHelper {
         String url = buildUrl(TRANSACTIONS_URL + '/' + transactionCode + '/' + TRANSFERS_URL_PARAM + '/' + transferCode);
         LOG.debug("Calling Interoperable GET Transfer: {}", url);
 
-        String response = Utils.performServerGet(requestSpec, responseSpec, url, null);
+        String response = Utils.feign(requestSpec, responseSpec).get(url, null);
         LOG.debug("Response Interoperable GET Transfer: {}", response);
         return getJsonAttribute(response, InteropUtil.PARAM_TRANSFER_CODE);
     }
@@ -402,7 +402,7 @@ public class InteropHelper {
         String request = buildTransferJson(transferCode, role);
         LOG.debug("Calling Interoperable POST Transfer: {}, body: {}", url, request);
 
-        String response = Utils.performServerPost(requestSpec, responseSpec, url, request, null);
+        String response = Utils.feign(requestSpec, responseSpec).post(url, request, null);
         LOG.debug("Response Interoperable POST Transfer: {}", response);
         return response;
     }
@@ -416,7 +416,7 @@ public class InteropHelper {
         String request = buildTransferJson(transferCode, role);
         LOG.debug("Calling Interoperable POST Transfer: {}, body: {}", url, request);
 
-        String response = Utils.performServerPost(requestSpec, responseSpec, url, request, null);
+        String response = Utils.feign(requestSpec, responseSpec).post(url, request, null);
         LOG.debug("Response Interoperable POST Transfer: {}", response);
         return response;
     }

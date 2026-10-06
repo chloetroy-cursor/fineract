@@ -55,7 +55,7 @@ public final class RolesHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public static Integer createRole(final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_ROLE_URL, getTestCreateRoleAsJSON(), "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_ROLE_URL, getTestCreateRoleAsJSON(), "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -76,7 +76,7 @@ public final class RolesHelper {
     public static HashMap<String, Object> getRoleDetails(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer roleId) {
         final String GET_ROLE_URL = "/fineract-provider/api/v1/roles/" + roleId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, GET_ROLE_URL, "");
+        return Utils.feign(requestSpec, responseSpec).get(GET_ROLE_URL, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -85,7 +85,7 @@ public final class RolesHelper {
     @Deprecated(forRemoval = true)
     public static Integer disableRole(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer roleId) {
-        return Utils.performServerPost(requestSpec, responseSpec, createRoleOperationURL(DISABLE_ROLE_COMMAND, roleId), "", "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(createRoleOperationURL(DISABLE_ROLE_COMMAND, roleId), "", "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -94,7 +94,7 @@ public final class RolesHelper {
     @Deprecated(forRemoval = true)
     public static Integer enableRole(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer roleId) {
-        return Utils.performServerPost(requestSpec, responseSpec, createRoleOperationURL(ENABLE_ROLE_COMMAND, roleId), "", "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(createRoleOperationURL(ENABLE_ROLE_COMMAND, roleId), "", "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -103,7 +103,7 @@ public final class RolesHelper {
     @Deprecated(forRemoval = true)
     public static Integer deleteRole(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer roleId) {
-        return Utils.performServerDelete(requestSpec, responseSpec, createRoleOperationURL(ENABLE_ROLE_COMMAND, roleId), "resourceId");
+        return Utils.feign(requestSpec, responseSpec).delete(createRoleOperationURL(ENABLE_ROLE_COMMAND, roleId), "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -112,7 +112,7 @@ public final class RolesHelper {
     @Deprecated(forRemoval = true)
     public static String addPermissionsToRole(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer roleId, final Map<String, Boolean> permissionMap) {
-        return Utils.performServerPut(requestSpec, responseSpec, ROLE_URL + "/" + roleId + "/permissions?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(requestSpec, responseSpec).put(ROLE_URL + "/" + roleId + "/permissions?" + Utils.TENANT_IDENTIFIER,
                 getAddPermissionsToRoleJSON(permissionMap));
     }
 
@@ -122,8 +122,7 @@ public final class RolesHelper {
     @Deprecated(forRemoval = true)
     public static List<PermissionData> getPermissions(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             boolean makerCheckerable) {
-        String response = Utils.performServerGet(requestSpec, responseSpec,
-                PERMISSIONS_URL + "?" + makerCheckerable + "=" + makerCheckerable);
+        String response = Utils.feign(requestSpec, responseSpec).get(PERMISSIONS_URL + "?" + makerCheckerable + "=" + makerCheckerable);
         final Type listType = new TypeToken<List<PermissionData>>() {}.getType();
         return GSON.fromJson(response, listType);
     }

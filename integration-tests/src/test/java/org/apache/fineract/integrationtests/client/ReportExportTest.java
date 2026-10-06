@@ -25,7 +25,6 @@ import okhttp3.MediaType;
 import okhttp3.ResponseBody;
 import org.apache.fineract.client.util.FineractClient;
 import org.apache.fineract.integrationtests.CIOnly;
-import org.apache.fineract.integrationtests.common.Utils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import retrofit2.Response;
@@ -43,9 +42,7 @@ public class ReportExportTest extends IntegrationTest {
     }
 
     @BeforeEach
-    public void setup() {
-        Utils.initializeRESTAssured();
-    }
+    public void setup() {}
 
     @Test
     void runClientListingTableReportCSV() throws IOException {

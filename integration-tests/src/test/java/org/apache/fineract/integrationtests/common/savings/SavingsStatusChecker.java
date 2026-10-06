@@ -83,13 +83,13 @@ public final class SavingsStatusChecker {
     public static HashMap getStatusOfSavings(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer savingsID) {
         final String url = SAVINGS_ACCOUNT_URL + "/" + savingsID + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "status");
+        return Utils.feign(requestSpec, responseSpec).get(url, "status");
     }
 
     public static HashMap getSubStatusOfSavings(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer savingsID) {
         final String url = SAVINGS_ACCOUNT_URL + "/" + savingsID + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "subStatus");
+        return Utils.feign(requestSpec, responseSpec).get(url, "subStatus");
     }
 
     private static boolean getStatus(final HashMap savingsStatusMap, final String nameOfSavingsStatusString) {

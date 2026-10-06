@@ -29,7 +29,10 @@ import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
@@ -56,7 +59,6 @@ public class AuthenticationIntegrationTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         setupAuthenticatedRequestSpec();
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
@@ -74,29 +76,26 @@ public class AuthenticationIntegrationTest {
 
     @Test
     public void shouldAllowAccessForAuthenticatedUser() {
-        setupAuthenticatedRequestSpec();
         String loanApprovalCommand = createLoanApprovalCommand();
         String loanApprovalRequest = createLoanApprovalRequest();
 
-        HashMap response = Utils.performServerPost(this.requestSpec, this.responseSpec, loanApprovalCommand, loanApprovalRequest,
-                "changes");
-        HashMap status = (HashMap) response.get("status");
+        Map<String, Object> response = FeignRawHttpHelper.post(loanApprovalCommand, loanApprovalRequest, "changes");
+        Map<String, Object> status = (Map<String, Object>) response.get("status");
 
         assertEquals(200, (Integer) status.get("id"));
     }
 
     @Test
     public void shouldReturnUnauthorizedForUnauthenticatedAccess() throws JsonProcessingException {
-        setupUnauthenticatedRequestSpec();
-        this.responseSpec = new ResponseSpecBuilder().expectStatusCode(401).build();
-
         String loanApprovalCommand = createLoanApprovalCommand();
         String loanApprovalRequest = createLoanApprovalRequest();
 
-        String rawResponse = Utils.performServerPost(this.requestSpec, this.responseSpec, loanApprovalCommand, loanApprovalRequest, null);
+        FeignRawHttpHelper.RawResponse rawResponse = FeignRawHttpHelper.anonymous().response("POST", loanApprovalCommand,
+                loanApprovalRequest);
+        assertEquals(401, rawResponse.status());
 
         ObjectMapper objectMapper = new ObjectMapper();
-        HashMap response = objectMapper.readValue(rawResponse, HashMap.class);
+        HashMap response = objectMapper.readValue(rawResponse.bodyAsString(), HashMap.class);
 
         assertEquals(401, (Integer) response.get("status"));
         assertEquals("Unauthorized", response.get("error"));
@@ -110,11 +109,7 @@ public class AuthenticationIntegrationTest {
 
     private void setupAuthenticatedRequestSpec() {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-    }
-
-    private void setupUnauthenticatedRequestSpec() {
-        this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
     }
 
     private String createLoanApprovalRequest() {

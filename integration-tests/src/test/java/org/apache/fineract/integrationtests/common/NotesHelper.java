@@ -43,7 +43,7 @@ public final class NotesHelper {
     public static Integer createClientNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer clientId,
             String request) {
         String createClientNoteURL = CLIENT_URL + "/" + clientId + "/notes?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, createClientNoteURL, request, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(createClientNoteURL, request, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -53,7 +53,7 @@ public final class NotesHelper {
     public static String getClientNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer clientId,
             Integer noteId) {
         String getClientNoteURL = CLIENT_URL + "/" + clientId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, getClientNoteURL, "note");
+        return Utils.feign(requestSpec, responseSpec).get(getClientNoteURL, "note");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -63,7 +63,7 @@ public final class NotesHelper {
     public static Integer updateClientNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer clientId,
             Integer noteId, String request) {
         String updateClientNoteURL = CLIENT_URL + "/" + clientId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, updateClientNoteURL, request, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).put(updateClientNoteURL, request, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -73,7 +73,7 @@ public final class NotesHelper {
     public static void deleteClientNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer clientId,
             Integer noteId) {
         String deleteClientNoteURL = CLIENT_URL + "/" + clientId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        Utils.performServerDelete(requestSpec, responseSpec, deleteClientNoteURL, "");
+        Utils.feign(requestSpec, responseSpec).delete(deleteClientNoteURL, "");
     }
 
     private static final String GROUP_URL = "/fineract-provider/api/v1/groups";
@@ -85,7 +85,7 @@ public final class NotesHelper {
     public static Integer createGroupNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer groupId,
             String request) {
         String createGroupNoteURL = GROUP_URL + "/" + groupId + "/notes?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, createGroupNoteURL, request, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(createGroupNoteURL, request, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -95,7 +95,7 @@ public final class NotesHelper {
     public static String getGroupNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer groupId,
             Integer noteId) {
         String getGroupNoteURL = GROUP_URL + "/" + groupId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, getGroupNoteURL, "note");
+        return Utils.feign(requestSpec, responseSpec).get(getGroupNoteURL, "note");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -105,7 +105,7 @@ public final class NotesHelper {
     public static Integer updateGroupNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer groupId,
             Integer noteId, String request) {
         String updateGroupNoteURL = GROUP_URL + "/" + groupId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, updateGroupNoteURL, request, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).put(updateGroupNoteURL, request, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -115,7 +115,7 @@ public final class NotesHelper {
     public static void deleteGroupNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer groupId,
             Integer noteId) {
         String deleteGroupNoteURL = GROUP_URL + "/" + groupId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        Utils.performServerDelete(requestSpec, responseSpec, deleteGroupNoteURL, "");
+        Utils.feign(requestSpec, responseSpec).delete(deleteGroupNoteURL, "");
     }
 
     private static final String LOAN_URL = "/fineract-provider/api/v1/loans";
@@ -127,7 +127,7 @@ public final class NotesHelper {
     public static Integer createLoanNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer loanId,
             String request) {
         String createLoanNoteURL = LOAN_URL + "/" + loanId + "/notes?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, createLoanNoteURL, request, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(createLoanNoteURL, request, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -136,7 +136,7 @@ public final class NotesHelper {
     @Deprecated(forRemoval = true)
     public static String getLoanNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer loanId, Integer noteId) {
         String getLoanNoteURL = LOAN_URL + "/" + loanId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, getLoanNoteURL, "note");
+        return Utils.feign(requestSpec, responseSpec).get(getLoanNoteURL, "note");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -146,7 +146,7 @@ public final class NotesHelper {
     public static Integer updateLoanNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer loanId,
             Integer noteId, String updateRequest) {
         String updateLoanNoteURL = LOAN_URL + "/" + loanId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, updateLoanNoteURL, updateRequest, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).put(updateLoanNoteURL, updateRequest, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -156,7 +156,7 @@ public final class NotesHelper {
     public static void deleteLoanNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer loanId,
             Integer noteId) {
         String deleteLoanNoteURL = LOAN_URL + "/" + loanId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        Utils.performServerDelete(requestSpec, responseSpec, deleteLoanNoteURL, "");
+        Utils.feign(requestSpec, responseSpec).delete(deleteLoanNoteURL, "");
     }
 
     private static final String LOAN_TRANSACTION_URL = "/fineract-provider/api/v1/loanTransactions";
@@ -168,7 +168,7 @@ public final class NotesHelper {
     public static Integer createLoanTransactionNote(RequestSpecification requestSpec, ResponseSpecification responseSpec,
             Integer loanTransactionId, String request) {
         String createLoanTransactionNoteURL = LOAN_TRANSACTION_URL + "/" + loanTransactionId + "/notes?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, createLoanTransactionNoteURL, request, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(createLoanTransactionNoteURL, request, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -179,7 +179,7 @@ public final class NotesHelper {
             Integer loanTransactionId, Integer noteId) {
         String getLoanTransactionNoteURL = LOAN_TRANSACTION_URL + "/" + loanTransactionId + "/notes/" + noteId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, getLoanTransactionNoteURL, "note");
+        return Utils.feign(requestSpec, responseSpec).get(getLoanTransactionNoteURL, "note");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -190,7 +190,7 @@ public final class NotesHelper {
             Integer loanTransactionId, Integer noteId, String updateRequest) {
         String updateLoanTransactionNoteURL = LOAN_TRANSACTION_URL + "/" + loanTransactionId + "/notes/" + noteId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, updateLoanTransactionNoteURL, updateRequest, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).put(updateLoanTransactionNoteURL, updateRequest, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -201,7 +201,7 @@ public final class NotesHelper {
             Integer loanTransactionId, Integer noteId) {
         String deleteLoanTransactionNoteURL = LOAN_TRANSACTION_URL + "/" + loanTransactionId + "/notes/" + noteId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        Utils.performServerDelete(requestSpec, responseSpec, deleteLoanTransactionNoteURL, "");
+        Utils.feign(requestSpec, responseSpec).delete(deleteLoanTransactionNoteURL, "");
     }
 
     private static final String SAVINGS_URL = "/fineract-provider/api/v1/savings";
@@ -213,14 +213,14 @@ public final class NotesHelper {
     public static NoteCreateResponse createSavingsNote(RequestSpecification requestSpec, ResponseSpecification responseSpec,
             Integer savingsId, String request) {
         final String noteURL = SAVINGS_URL + "/" + savingsId + "/notes?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerPost(requestSpec, responseSpec, noteURL, request);
+        final String response = Utils.feign(requestSpec, responseSpec).post(noteURL, request);
         return GSON.fromJson(response, NoteCreateResponse.class);
     }
 
     public static NoteData retrieveSavingsNote(RequestSpecification requestSpec, ResponseSpecification responseSpec, Integer savingsId,
             Integer noteId) {
         final String noteURL = SAVINGS_URL + "/" + savingsId + "/notes/" + noteId + "?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(requestSpec, responseSpec, noteURL);
+        final String response = Utils.feign(requestSpec, responseSpec).get(noteURL);
         return GSON.fromJson(response, NoteData.class);
     }
 

@@ -18,17 +18,20 @@
  */
 package org.apache.fineract.integrationtests;
 
-import static org.hamcrest.Matchers.hasItem;
-import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.CampaignsHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +51,7 @@ import org.mockserver.model.MediaType;
 @MockServerSettings(ports = { 9191 })
 public class SmsApiResourceIntegrationTest {
 
+    private static final String SMS_URL = "/fineract-provider/api/v1/sms";
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private CampaignsHelper campaignsHelper;
@@ -62,9 +66,8 @@ public class SmsApiResourceIntegrationTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.requestSpec.header("Fineract-Platform-TenantId", "default");
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.campaignsHelper = new CampaignsHelper(this.requestSpec, this.responseSpec);
@@ -86,19 +89,16 @@ public class SmsApiResourceIntegrationTest {
         String smsJson = String.format(
                 "{\"groupId\":null,\"clientId\":%d,\"staffId\":null,\"message\":\"Integration test message\",\"campaignId\":%d}", clientId,
                 campaignId);
-        io.restassured.RestAssured.given().spec(requestSpec).body(smsJson).when().post("/fineract-provider/api/v1/sms").then()
-                .statusCode(200).body("resourceId", notNullValue());
+        assertNotNull(FeignRawHttpHelper.post(SMS_URL, smsJson, "resourceId"));
 
-        io.restassured.response.Response allSmsResponse = io.restassured.RestAssured.given().spec(requestSpec).when()
-                .get("/fineract-provider/api/v1/sms");
-        java.util.List<java.util.Map<String, Object>> allSms = allSmsResponse.jsonPath().getList("");
+        List<Map<String, Object>> allSms = FeignRawHttpHelper.get(SMS_URL, "");
         Integer status = null;
-        for (java.util.Map<String, Object> sms : allSms) {
+        for (Map<String, Object> sms : allSms) {
             Object smsClientId = sms.get("clientId");
             Object smsCampaignName = sms.get("campaignName");
             if (smsClientId != null && smsCampaignName != null && smsClientId.equals(clientId)
                     && smsCampaignName.equals("Campaign_Name_" + Integer.toHexString(campaignId).toUpperCase(Locale.ROOT))) {
-                java.util.Map<String, Object> statusObj = (java.util.Map<String, Object>) sms.get("status");
+                Map<String, Object> statusObj = (Map<String, Object>) sms.get("status");
                 if (statusObj != null) {
                     status = ((Number) statusObj.get("id")).intValue();
                     break;
@@ -109,9 +109,11 @@ public class SmsApiResourceIntegrationTest {
             status = 100;
         }
         int limit = 10;
-        io.restassured.RestAssured.given().spec(requestSpec).queryParam("status", status).queryParam("limit", limit).when()
-                .get("/fineract-provider/api/v1/sms/" + campaignId + "/messageByStatus").then().spec(responseSpec)
-                .body("pageItems", notNullValue()).body("pageItems.clientId", hasItem(clientId));
+        Map<String, Object> page = FeignRawHttpHelper.get(messageByStatusUrl(campaignId, status, limit), "");
+        List<Map<String, Object>> pageItems = (List<Map<String, Object>>) page.get("pageItems");
+        assertNotNull(pageItems);
+        assertTrue(pageItems.stream().anyMatch(sms -> clientId.equals(sms.get("clientId"))),
+                "pageItems.clientId should contain " + clientId);
     }
 
     /**
@@ -127,8 +129,11 @@ public class SmsApiResourceIntegrationTest {
 
         int invalidStatus = 9999;
         int limit = 10;
-        io.restassured.RestAssured.given().spec(requestSpec).queryParam("status", invalidStatus).queryParam("limit", limit).when()
-                .get("/fineract-provider/api/v1/sms/" + campaignId + "/messageByStatus").then().spec(responseSpec)
-                .body("pageItems", notNullValue());
+        Map<String, Object> page = FeignRawHttpHelper.get(messageByStatusUrl(campaignId, invalidStatus, limit), "");
+        assertNotNull(page.get("pageItems"));
+    }
+
+    private static String messageByStatusUrl(Integer campaignId, int status, int limit) {
+        return SMS_URL + "/" + campaignId + "/messageByStatus?status=" + status + "&limit=" + limit;
     }
 }

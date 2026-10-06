@@ -18,11 +18,11 @@
  */
 package org.apache.fineract.integrationtests.common.organisation;
 
-import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.google.gson.Gson;
-import io.restassured.path.json.JsonPath;
+import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.time.format.DateTimeFormatter;
@@ -61,14 +61,14 @@ public class CampaignsHelper {
     public Integer createCampaign(String reportName, Integer triggerType) {
         log.info("---------------------------------CREATING A CAMPAIGN---------------------------------------------");
         final String CREATE_SMS_CAMPAIGNS_URL = SMS_CAMPAIGNS_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_SMS_CAMPAIGNS_URL, getCreateCampaignJSON(reportName, triggerType),
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_SMS_CAMPAIGNS_URL, getCreateCampaignJSON(reportName, triggerType),
                 "resourceId");
     }
 
     public Integer createCampaignWithName(String reportName, Integer triggerType, String campaignName) {
         log.info("---------------------------------CREATING A CAMPAIGN WITH NAME---------------------------------------------");
         final String CREATE_SMS_CAMPAIGNS_URL = SMS_CAMPAIGNS_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_SMS_CAMPAIGNS_URL,
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_SMS_CAMPAIGNS_URL,
                 getCreateCampaignJSONWithName(reportName, triggerType, campaignName), "resourceId");
     }
 
@@ -76,7 +76,7 @@ public class CampaignsHelper {
             Integer triggerType, String campaignName) {
         log.info("---------------------------------CREATING A CAMPAIGN WITH NAME (EXPECTING ERROR)---------------------");
         final String CREATE_SMS_CAMPAIGNS_URL = SMS_CAMPAIGNS_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, errorResponseSpec, CREATE_SMS_CAMPAIGNS_URL,
+        return Utils.feign(requestSpec, errorResponseSpec).post(CREATE_SMS_CAMPAIGNS_URL,
                 getCreateCampaignJSONWithName(reportName, triggerType, campaignName), "errors");
     }
 
@@ -88,7 +88,7 @@ public class CampaignsHelper {
             final Integer generatedCampaignId) {
         log.info("------------------------------CHECK CAMPAIGN DETAILS------------------------------------\n");
         final String RETRIEVE_SMS_CAMPAIGNS_URL = SMS_CAMPAIGNS_URL + "/" + generatedCampaignId + "?" + Utils.TENANT_IDENTIFIER;
-        final Integer responseCampaignId = Utils.performServerGet(requestSpec, responseSpec, RETRIEVE_SMS_CAMPAIGNS_URL, "id");
+        final Integer responseCampaignId = Utils.feign(requestSpec, responseSpec).get(RETRIEVE_SMS_CAMPAIGNS_URL, "id");
         assertEquals(generatedCampaignId, responseCampaignId, "ERROR IN CREATING THE CAMPAIGN");
     }
 
@@ -100,7 +100,7 @@ public class CampaignsHelper {
             final Integer generatedCampaignId, String reportName, Integer triggerType) {
         log.info("------------------------------UPDATE CAMPAIGN DETAILS------------------------------------\n");
         final String UPDATE_SMS_CAMPAIGNS_URL = SMS_CAMPAIGNS_URL + "/" + generatedCampaignId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, UPDATE_SMS_CAMPAIGNS_URL, getUpdateCampaignJSON(reportName, triggerType),
+        return Utils.feign(requestSpec, responseSpec).put(UPDATE_SMS_CAMPAIGNS_URL, getUpdateCampaignJSON(reportName, triggerType),
                 "resourceId");
     }
 
@@ -112,7 +112,7 @@ public class CampaignsHelper {
             final Integer generatedCampaignId) {
         log.info("------------------------------DELETE CAMPAIGN DETAILS------------------------------------\n");
         final String DELETE_SMS_CAMPAIGNS_URL = SMS_CAMPAIGNS_URL + "/" + generatedCampaignId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerDelete(requestSpec, responseSpec, DELETE_SMS_CAMPAIGNS_URL, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).delete(DELETE_SMS_CAMPAIGNS_URL, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -125,7 +125,7 @@ public class CampaignsHelper {
         final String SMS_CAMPAIGNS_ACTION_URL = SMS_CAMPAIGNS_URL + "/" + generatedCampaignId + "?command=" + command + "&"
                 + Utils.TENANT_IDENTIFIER;
         String actionDate = Utils.getLocalDateOfTenant().format(DateTimeFormatter.ofPattern(DATE_FORMAT));
-        return Utils.performServerPost(requestSpec, responseSpec, SMS_CAMPAIGNS_ACTION_URL, getJSONForCampaignAction(command, actionDate),
+        return Utils.feign(requestSpec, responseSpec).post(SMS_CAMPAIGNS_ACTION_URL, getJSONForCampaignAction(command, actionDate),
                 "resourceId");
     }
 
@@ -138,7 +138,7 @@ public class CampaignsHelper {
         log.info("--------------------------PERFORM ACTION ON CAMPAIGN DETAILS WITH FAILURE-------------------------------\n");
         final String SMS_CAMPAIGNS_ACTION_URL = SMS_CAMPAIGNS_URL + "/" + generatedCampaignId + "?command=" + command + "&"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, SMS_CAMPAIGNS_ACTION_URL,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(SMS_CAMPAIGNS_ACTION_URL,
                 getJSONForCampaignAction(command, actionDate), responseJsonAttribute);
     }
 
@@ -235,10 +235,10 @@ public class CampaignsHelper {
         log.info("--------------------------------- GET REPORTS OPTIONS -------------------------------");
         Assert.notNull(jsonAttributeToGetBack, "jsonAttributeToGetBack may not be null");
         final String templateUrl = SMS_CAMPAIGNS_URL + "/template?" + Utils.TENANT_IDENTIFIER;
-        final String json = given().spec(requestSpec).expect().spec(responseSpec).log().ifError().when().get(templateUrl).andReturn()
-                .asString();
+        final String json = Utils.feign(requestSpec, responseSpec).get(templateUrl);
         Assert.notNull(json, "json");
-        return JsonPath.from(json).getList(jsonAttributeToGetBack, ReportData.class);
+        return new Gson().fromJson(JsonParser.parseString(json).getAsJsonObject().get(jsonAttributeToGetBack),
+                new TypeToken<List<ReportData>>() {}.getType());
     }
 
     private Long getSelectedReportId(final String reportName) {

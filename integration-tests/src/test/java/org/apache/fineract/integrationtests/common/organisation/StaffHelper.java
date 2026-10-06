@@ -49,7 +49,7 @@ public final class StaffHelper {
     public static Integer transferStaffToGroup(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer groupId, final Integer staffToTransfer, final String note) {
         final String url = TRANSFER_STAFF_URL + "/" + groupId + "?command=transferStaff&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, url, transferStaffToGroupAsJSON(staffToTransfer, note), GROUP_ID);
+        return Utils.feign(requestSpec, responseSpec).post(url, transferStaffToGroupAsJSON(staffToTransfer, note), GROUP_ID);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -87,7 +87,7 @@ public final class StaffHelper {
     public static Map<String, Object> createStaffWithJson(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final String json) {
         final String url = CREATE_STAFF_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, url, json, "");
+        return Utils.feign(requestSpec, responseSpec).post(url, json, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -97,7 +97,7 @@ public final class StaffHelper {
     public static Map<String, Object> getStaff(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer staffId) {
         final String url = CREATE_STAFF_URL + "/" + staffId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+        return Utils.feign(requestSpec, responseSpec).get(url, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -106,7 +106,7 @@ public final class StaffHelper {
     @Deprecated(forRemoval = true)
     public static List<Map<String, Object>> getStaffList(final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         final String url = CREATE_STAFF_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+        return Utils.feign(requestSpec, responseSpec).get(url, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -116,7 +116,7 @@ public final class StaffHelper {
     public static List<Map<String, Object>> getStaffListWithState(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final String status) {
         final String url = CREATE_STAFF_URL + "?" + Utils.TENANT_IDENTIFIER + "&status=" + status;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+        return Utils.feign(requestSpec, responseSpec).get(url, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -126,7 +126,7 @@ public final class StaffHelper {
     public static List<Map<String, Object>> getStaffListWithLoanOfficerStatus(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final String loanOfficerStatus) {
         final String url = CREATE_STAFF_URL + "?" + Utils.TENANT_IDENTIFIER + "&loanOfficersOnly=" + loanOfficerStatus;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+        return Utils.feign(requestSpec, responseSpec).get(url, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -137,7 +137,7 @@ public final class StaffHelper {
             final Integer staffId, final Map<String, Object> changes) {
         final String url = CREATE_STAFF_URL + "/" + staffId + "?" + Utils.TENANT_IDENTIFIER;
         final String json = new Gson().toJson(changes);
-        return Utils.performServerPut(requestSpec, responseSpec, url, json, "");
+        return Utils.feign(requestSpec, responseSpec).put(url, json, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
