@@ -26,6 +26,8 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import org.apache.fineract.client.models.GetTellersTellerIdCashiersCashiersIdTransactionsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignTellerHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,32 +35,28 @@ import org.junit.jupiter.api.Test;
 
 public class CashierSummaryAndTransactionsTest {
 
-    private CashierTransactionsHelper cashierTransactionsHelper;
-
-    private ResponseSpecification responseSpecification;
-    private RequestSpecification requestSpecification;
+    private FeignTellerHelper tellerHelper;
+    private Long tellerId;
+    private Long cashierId;
 
     @BeforeEach
     public void setup() {
         Utils.initializeRESTAssured();
 
-        requestSpecification = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
+        final RequestSpecification requestSpecification = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         requestSpecification.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        responseSpecification = new ResponseSpecBuilder().expectStatusCode(200).build();
-        cashierTransactionsHelper = new CashierTransactionsHelper(requestSpecification, responseSpecification);
-        StaffHelper.createStaff(requestSpecification, responseSpecification);
-        cashierTransactionsHelper.createTeller(requestSpecification, responseSpecification);
-        cashierTransactionsHelper.createCashier(requestSpecification, responseSpecification);
+        final ResponseSpecification responseSpecification = new ResponseSpecBuilder().expectStatusCode(200).build();
 
+        tellerHelper = new FeignTellerHelper(FineractFeignClientHelper.getFineractFeignClient());
+        final Long staffId = Long.valueOf(StaffHelper.createStaff(requestSpecification, responseSpecification));
+        tellerId = tellerHelper.createTeller().getResourceId();
+        cashierId = tellerHelper.createCashier(tellerId, staffId).getSubResourceId();
     }
 
     @Test
     public void testGetCashierTransactions() {
-        Long tellerId = 1L;
-        Long cashierId = 1L;
-
-        final GetTellersTellerIdCashiersCashiersIdTransactionsResponse result = cashierTransactionsHelper
-                .getTellersTellerIdCashiersCashiersIdTransactionsResponse(tellerId, cashierId, "UGX", 0, 0, null, null);
+        final GetTellersTellerIdCashiersCashiersIdTransactionsResponse result = tellerHelper.retrieveCashierTransactions(tellerId,
+                cashierId, "UGX", 0, 0, null, null);
         assertNotNull(result);
     }
 
