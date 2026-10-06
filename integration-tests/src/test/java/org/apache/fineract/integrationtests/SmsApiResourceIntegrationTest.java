@@ -20,6 +20,7 @@ package org.apache.fineract.integrationtests;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
@@ -27,9 +28,10 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.Locale;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.organisation.CampaignsHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,9 +50,11 @@ import org.mockserver.model.MediaType;
 @MockServerSettings(ports = { 9191 })
 public class SmsApiResourceIntegrationTest {
 
+    private static final String REPORT_NAME = "Prospective Clients";
+
+    private final FeignSmsCampaignHelper campaignsHelper = new FeignSmsCampaignHelper(FineractFeignClientHelper.getFineractFeignClient());
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
-    private CampaignsHelper campaignsHelper;
     private final ClientAndServer client;
 
     public SmsApiResourceIntegrationTest(ClientAndServer client) {
@@ -67,7 +71,13 @@ public class SmsApiResourceIntegrationTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.requestSpec.header("Fineract-Platform-TenantId", "default");
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.campaignsHelper = new CampaignsHelper(this.requestSpec, this.responseSpec);
+    }
+
+    private Long createActiveCampaign() {
+        Long campaignId = campaignsHelper.createCampaign(REPORT_NAME, FeignSmsCampaignHelper.DIRECT_TRIGGER_TYPE);
+        assertEquals(campaignId, campaignsHelper.getCampaign(campaignId).getId());
+        campaignsHelper.performAction(campaignId, FeignSmsCampaignHelper.ACTIVATE_COMMAND);
+        return campaignId;
     }
 
     /**
@@ -75,11 +85,7 @@ public class SmsApiResourceIntegrationTest {
      */
     @Test
     public void testRetrieveAllSmsByStatus_validStatus() {
-        String reportName = "Prospective Clients";
-        int triggerType = 1;
-        Integer campaignId = campaignsHelper.createCampaign(reportName, triggerType);
-        campaignsHelper.verifyCampaignCreatedOnServer(requestSpec, responseSpec, campaignId);
-        campaignsHelper.performActionsOnCampaign(requestSpec, responseSpec, campaignId, "activate");
+        Long campaignId = createActiveCampaign();
 
         Integer clientId = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
 
@@ -97,7 +103,7 @@ public class SmsApiResourceIntegrationTest {
             Object smsClientId = sms.get("clientId");
             Object smsCampaignName = sms.get("campaignName");
             if (smsClientId != null && smsCampaignName != null && smsClientId.equals(clientId)
-                    && smsCampaignName.equals("Campaign_Name_" + Integer.toHexString(campaignId).toUpperCase(Locale.ROOT))) {
+                    && smsCampaignName.equals("Campaign_Name_" + Long.toHexString(campaignId).toUpperCase(Locale.ROOT))) {
                 java.util.Map<String, Object> statusObj = (java.util.Map<String, Object>) sms.get("status");
                 if (statusObj != null) {
                     status = ((Number) statusObj.get("id")).intValue();
@@ -119,11 +125,7 @@ public class SmsApiResourceIntegrationTest {
      */
     @Test
     public void testRetrieveAllSmsByStatus_invalidStatus() {
-        String reportName = "Prospective Clients";
-        int triggerType = 1;
-        Integer campaignId = campaignsHelper.createCampaign(reportName, triggerType);
-        campaignsHelper.verifyCampaignCreatedOnServer(requestSpec, responseSpec, campaignId);
-        campaignsHelper.performActionsOnCampaign(requestSpec, responseSpec, campaignId, "activate");
+        Long campaignId = createActiveCampaign();
 
         int invalidStatus = 9999;
         int limit = 10;
