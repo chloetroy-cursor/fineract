@@ -19,7 +19,6 @@
 package org.apache.fineract.integrationtests.interoperation;
 
 import static org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper.ACCOUNT_TYPE_INDIVIDUAL;
-import static org.apache.fineract.integrationtests.interoperation.InteropHelper.PARAM_ACCOUNT_BALANCE;
 
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
@@ -32,10 +31,23 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
+import org.apache.fineract.client.models.InteropIdentifierAccountResponseData;
+import org.apache.fineract.client.models.InteropIdentifierRequestData;
+import org.apache.fineract.client.models.InteropQuoteRequestData;
+import org.apache.fineract.client.models.InteropQuoteResponseData;
+import org.apache.fineract.client.models.InteropTransactionRequestData;
+import org.apache.fineract.client.models.InteropTransactionRequestResponseData;
+import org.apache.fineract.client.models.InteropTransactionTypeData;
+import org.apache.fineract.client.models.InteropTransferRequestData;
+import org.apache.fineract.client.models.InteropTransferResponseData;
+import org.apache.fineract.client.models.MoneyData;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignInteropHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.FeignErrors;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
@@ -43,10 +55,6 @@ import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
-import org.apache.fineract.interoperation.domain.InteropActionState;
-import org.apache.fineract.interoperation.domain.InteropIdentifierType;
-import org.apache.fineract.interoperation.domain.InteropTransactionRole;
-import org.apache.fineract.interoperation.util.InteropUtil;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
 import org.apache.fineract.portfolio.savings.SavingsApiConstants;
 import org.junit.jupiter.api.Assertions;
@@ -64,17 +72,21 @@ public class InteropTest {
     private static final String MIN_OPENING_BALANCE = "100000.0";
     private static final boolean ENFORCE_MIN_REQUIRED_BALANCE = false;
     private static final MathContext MATHCONTEXT = new MathContext(12, RoundingMode.HALF_EVEN);
+    private static final String PARAM_ACCOUNT_BALANCE = "accountBalance";
+    private static final String CURRENCY = "TZS";
+    private static final BigDecimal AMOUNT = BigDecimal.TEN;
+    private static final BigDecimal FEE = BigDecimal.ONE;
+    private static final String NOTE = "Integration test";
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
-    private ResponseSpecification responseClientErrorSpec;
-    private ResponseSpecification responseNotFoundErrorSpec;
-    private ResponseSpecification responseForbiddenErrorSpec;
 
     private AccountHelper accountHelper;
     private SavingsAccountHelper savingsAccountHelper;
-    private InteropHelper interopHelper;
+    private FeignInteropHelper interopHelper;
 
+    private String savingsExternalId;
+    private String transactionCode;
     private Integer clientId;
     private Integer savingsProductId;
     private Integer savingsId;
@@ -90,24 +102,28 @@ public class InteropTest {
         requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
 
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        responseClientErrorSpec = new ResponseSpecBuilder().expectStatusCode(400).build();
-        responseForbiddenErrorSpec = new ResponseSpecBuilder().expectStatusCode(403).build();
-        responseNotFoundErrorSpec = new ResponseSpecBuilder().expectStatusCode(404).build();
 
-        String savingsExternalId = UUID.randomUUID().toString();
-        String transactionCode = UUID.randomUUID().toString();
+        savingsExternalId = UUID.randomUUID().toString();
+        transactionCode = UUID.randomUUID().toString();
 
         accountHelper = new AccountHelper(this.requestSpec, this.responseSpec);
         savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
-        interopHelper = new InteropHelper(requestSpec, responseSpec, savingsExternalId, transactionCode);
+        interopHelper = new FeignInteropHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
     public void testValidateAction() {
-        interopHelper.setResponseSpec(responseClientErrorSpec);
-        interopHelper.postTransferMissingAction(UUID.randomUUID().toString(), InteropTransactionRole.PAYER);
-        interopHelper.postTransfer(UUID.randomUUID().toString(), null, InteropTransactionRole.PAYER);
-        interopHelper.setResponseSpec(responseSpec);
+        InteropTransferRequestData request = transferRequest(UUID.randomUUID().toString(),
+                InteropTransferRequestData.TransactionRoleEnum.PAYER);
+
+        CallFailedRuntimeException missingAction = interopHelper.performTransferExpectingError(null, request);
+        Assertions.assertEquals(400, missingAction.getStatus());
+        Assertions.assertEquals("validation.msg.InteropApi.action.cannot.be.blank", FeignErrors.errorGlobalisationCode(missingAction));
+
+        CallFailedRuntimeException unknownAction = interopHelper.performTransferExpectingError("UNKNOWN", request);
+        Assertions.assertEquals(400, unknownAction.getStatus());
+        Assertions.assertEquals("validation.msg.InteropApi.action.is.not.one.of.expected.enumerations",
+                FeignErrors.errorGlobalisationCode(unknownAction));
     }
 
     @Test
@@ -135,11 +151,10 @@ public class InteropTest {
                 accountHelper.createExpenseAccount(), accountHelper.createLiabilityAccount() };
 
         SavingsProductHelper savingsProductHelper = new SavingsProductHelper();
-        final String savingsProductJSON = savingsProductHelper.withCurrencyCode(interopHelper.getCurrency())
-                .withNominalAnnualInterestRate(BigDecimal.ZERO).withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsMonthly().withInterestCalculationPeriodTypeAsDailyBalance()
-                .withMinBalanceForInterestCalculation(MIN_INTEREST_CALCULATON_BALANCE).withMinRequiredBalance(MIN_REQUIRED_BALANCE)
-                .withEnforceMinRequiredBalance(Boolean.toString(ENFORCE_MIN_REQUIRED_BALANCE))
+        final String savingsProductJSON = savingsProductHelper.withCurrencyCode(CURRENCY).withNominalAnnualInterestRate(BigDecimal.ZERO)
+                .withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsMonthly()
+                .withInterestCalculationPeriodTypeAsDailyBalance().withMinBalanceForInterestCalculation(MIN_INTEREST_CALCULATON_BALANCE)
+                .withMinRequiredBalance(MIN_REQUIRED_BALANCE).withEnforceMinRequiredBalance(Boolean.toString(ENFORCE_MIN_REQUIRED_BALANCE))
                 .withMinimumOpenningBalance(MIN_OPENING_BALANCE).withAccountingRuleAsCashBased(accounts).build();
         savingsProductId = SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
         Assertions.assertNotNull(savingsProductId);
@@ -148,15 +163,15 @@ public class InteropTest {
     }
 
     private void createCharge() {
-        chargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper.getSavingsJSON(interopHelper.getFee().toString(),
-                interopHelper.getCurrency(), ChargeTimeType.WITHDRAWAL_FEE));
+        chargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
+                ChargesHelper.getSavingsJSON(FEE.toString(), CURRENCY, ChargeTimeType.WITHDRAWAL_FEE));
         Assertions.assertNotNull(chargeId);
     }
 
     private void openSavingsAccount() {
         LOG.debug("------------------------------ Create Interoperable Saving Account ---------------------------------------");
         savingsId = savingsAccountHelper.applyForSavingsApplicationWithExternalId(clientId, savingsProductId, ACCOUNT_TYPE_INDIVIDUAL,
-                interopHelper.getAccountExternalId(), true);
+                savingsExternalId, true);
         Assertions.assertNotNull(savingsId);
 
         HashMap savingsStatusHashMap = SavingsStatusChecker.getStatusOfSavings(requestSpec, responseSpec, savingsId);
@@ -169,7 +184,7 @@ public class InteropTest {
         SavingsStatusChecker.verifySavingsIsActive(savingsStatusHashMap);
 
         if (chargeId != null) {
-            savingsAccountHelper.addChargesForSavings(savingsId, chargeId, false, interopHelper.getFee());
+            savingsAccountHelper.addChargesForSavings(savingsId, chargeId, false, FEE);
         }
 
         LOG.debug("Sucessfully created Interoperable Saving Account (id: {})", savingsId);
@@ -177,63 +192,64 @@ public class InteropTest {
 
     private void testParties() {
         String idValue = UUID.randomUUID().toString();
-        String accountId = interopHelper.postParty(InteropIdentifierType.MSISDN, idValue);
-        Assertions.assertEquals(interopHelper.getAccountExternalId(), accountId);
+        InteropIdentifierAccountResponseData party = interopHelper.registerAccountIdentifier(InteropIdentifierRequestData.IdTypeEnum.MSISDN,
+                idValue, savingsExternalId);
+        Assertions.assertEquals(savingsExternalId, party.getAccountId());
 
-        interopHelper.setResponseSpec(responseForbiddenErrorSpec);
-        accountId = interopHelper.postParty(InteropIdentifierType.MSISDN, idValue);
-        Assertions.assertNull(accountId);
-        interopHelper.setResponseSpec(responseSpec);
+        CallFailedRuntimeException duplicate = interopHelper
+                .registerAccountIdentifierExpectingError(InteropIdentifierRequestData.IdTypeEnum.MSISDN, idValue, savingsExternalId);
+        Assertions.assertEquals(403, duplicate.getStatus());
+        Assertions.assertEquals("error.msg.interop.duplicate.account.identifier", FeignErrors.errorGlobalisationCode(duplicate));
 
-        accountId = interopHelper.getParty(InteropIdentifierType.MSISDN, idValue);
-        Assertions.assertEquals(interopHelper.getAccountExternalId(), accountId);
+        party = interopHelper.getAccountByIdentifier(InteropIdentifierRequestData.IdTypeEnum.MSISDN, idValue);
+        Assertions.assertEquals(savingsExternalId, party.getAccountId());
 
-        accountId = interopHelper.deleteParty(InteropIdentifierType.MSISDN, idValue);
-        Assertions.assertEquals(interopHelper.getAccountExternalId(), accountId);
+        party = interopHelper.deleteAccountIdentifier(InteropIdentifierRequestData.IdTypeEnum.MSISDN, idValue, savingsExternalId);
+        Assertions.assertEquals(savingsExternalId, party.getAccountId());
 
-        interopHelper.setResponseSpec(responseNotFoundErrorSpec);
-        accountId = interopHelper.getParty(InteropIdentifierType.MSISDN, idValue);
-        Assertions.assertNull(accountId);
-        interopHelper.setResponseSpec(responseSpec);
+        CallFailedRuntimeException deleted = interopHelper
+                .getAccountByIdentifierExpectingError(InteropIdentifierRequestData.IdTypeEnum.MSISDN, idValue);
+        Assertions.assertEquals(404, deleted.getStatus());
+        Assertions.assertEquals("error.msg.interop.account.not.found", FeignErrors.errorGlobalisationCode(deleted));
     }
 
     private void testRequests() {
         requestCode = UUID.randomUUID().toString();
-        String response = interopHelper.postTransactionRequest(requestCode, InteropTransactionRole.PAYER);
-        JsonPath json = JsonPath.from(response);
-        Assertions.assertEquals(requestCode, json.getString(InteropUtil.PARAM_REQUEST_CODE));
-        Assertions.assertEquals(InteropActionState.ACCEPTED.toString(), json.getString(InteropHelper.PARAM_ACTION_STATE));
+        InteropTransactionRequestResponseData response = interopHelper
+                .createTransactionRequest(transactionRequest(requestCode, InteropTransactionRequestData.TransactionRoleEnum.PAYER));
+        Assertions.assertEquals(requestCode, response.getRequestCode());
+        Assertions.assertEquals(InteropTransactionRequestResponseData.StateEnum.ACCEPTED, response.getState());
 
-        interopHelper.setResponseSpec(responseClientErrorSpec);
-        interopHelper.postTransactionRequest(requestCode, InteropTransactionRole.PAYEE);
-        interopHelper.setResponseSpec(responseSpec);
+        // PAYEE role is not valid for a transaction request
+        CallFailedRuntimeException payeeRequest = interopHelper.createTransactionRequestExpectingError(
+                transactionRequest(requestCode, InteropTransactionRequestData.TransactionRoleEnum.PAYEE));
+        Assertions.assertEquals(400, payeeRequest.getStatus());
+        Assertions.assertEquals("validation.msg.interoperation.request.transactionRole.is.not.one.of.expected.values",
+                FeignErrors.errorGlobalisationCode(payeeRequest));
     }
 
     private void testQuotes() {
         // payer
         quoteCode = UUID.randomUUID().toString();
-        String response = interopHelper.postQuote(quoteCode, InteropTransactionRole.PAYER);
-        JsonPath json = JsonPath.from(response);
-        Assertions.assertEquals(quoteCode, json.getString(InteropUtil.PARAM_QUOTE_CODE));
-        Assertions.assertEquals(InteropActionState.ACCEPTED.toString(), json.getString(InteropHelper.PARAM_ACTION_STATE));
+        InteropQuoteResponseData response = interopHelper
+                .createQuote(quoteRequest(quoteCode, InteropQuoteRequestData.TransactionRoleEnum.PAYER));
+        Assertions.assertEquals(quoteCode, response.getQuoteCode());
+        Assertions.assertEquals(InteropQuoteResponseData.StateEnum.ACCEPTED, response.getState());
 
-        Map<Object, Object> fee = json.getMap(InteropUtil.PARAM_FSP_FEE);
+        MoneyData fee = response.getFspFee();
         Assertions.assertNotNull(fee);
-        BigDecimal feeAmount = ObjectConverter.convertObjectTo(fee.get(InteropUtil.PARAM_AMOUNT), BigDecimal.class);
-        Assertions.assertTrue(MathUtil.isEqualTo(interopHelper.getFee(), feeAmount),
-                "Quote fee expected: " + interopHelper.getFee() + ", actual: " + feeAmount);
-        Assertions.assertEquals(interopHelper.getCurrency(), fee.get(InteropUtil.PARAM_CURRENCY));
+        Assertions.assertTrue(MathUtil.isEqualTo(FEE, fee.getAmount()), "Quote fee expected: " + FEE + ", actual: " + fee.getAmount());
+        Assertions.assertEquals(CURRENCY, fee.getCurrency());
 
         // payee
-        response = interopHelper.postQuote(quoteCode, InteropTransactionRole.PAYEE);
-        json = JsonPath.from(response);
-        Assertions.assertEquals(quoteCode, json.getString(InteropUtil.PARAM_QUOTE_CODE));
-        Assertions.assertEquals(InteropActionState.ACCEPTED.toString(), json.getString(InteropHelper.PARAM_ACTION_STATE));
+        response = interopHelper.createQuote(quoteRequest(quoteCode, InteropQuoteRequestData.TransactionRoleEnum.PAYEE));
+        Assertions.assertEquals(quoteCode, response.getQuoteCode());
+        Assertions.assertEquals(InteropQuoteResponseData.StateEnum.ACCEPTED, response.getState());
 
-        fee = json.getMap(InteropUtil.PARAM_FSP_FEE);
+        fee = response.getFspFee();
         if (fee != null) {
-            feeAmount = ObjectConverter.convertObjectTo(fee.get(InteropUtil.PARAM_AMOUNT), BigDecimal.class);
-            Assertions.assertTrue(MathUtil.isZero(feeAmount), "PAYEE Quote fee expected: " + BigDecimal.ZERO + ", actual: " + feeAmount);
+            Assertions.assertTrue(MathUtil.isZero(fee.getAmount()),
+                    "PAYEE Quote fee expected: " + BigDecimal.ZERO + ", actual: " + fee.getAmount());
         }
     }
 
@@ -244,10 +260,10 @@ public class InteropTest {
         BigDecimal balance = ObjectConverter.convertObjectTo(savingsJson.get(PARAM_ACCOUNT_BALANCE), BigDecimal.class);
 
         transferCode = UUID.randomUUID().toString();
-        String response = interopHelper.prepareTransfer(transferCode);
-        JsonPath json = JsonPath.from(response);
-        Assertions.assertEquals(transferCode, json.getString(InteropUtil.PARAM_TRANSFER_CODE));
-        Assertions.assertEquals(InteropActionState.ACCEPTED.toString(), json.getString(InteropHelper.PARAM_ACTION_STATE));
+        InteropTransferResponseData response = interopHelper
+                .prepareTransfer(transferRequest(transferCode, InteropTransferRequestData.TransactionRoleEnum.PAYER));
+        Assertions.assertEquals(transferCode, response.getTransferCode());
+        Assertions.assertEquals(InteropTransferResponseData.StateEnum.ACCEPTED, response.getState());
 
         // prepare
         savings = (String) savingsAccountHelper.getSavingsAccountDetail(savingsId, null);
@@ -256,7 +272,7 @@ public class InteropTest {
         BigDecimal onHold2 = ObjectConverter.convertObjectTo(savingsJson.get(SavingsApiConstants.savingsAmountOnHold), BigDecimal.class);
         BigDecimal balance2 = ObjectConverter.convertObjectTo(savingsJson.get(PARAM_ACCOUNT_BALANCE), BigDecimal.class);
 
-        BigDecimal transferAmount = interopHelper.getTransferAmount();
+        BigDecimal transferAmount = AMOUNT.add(FEE);
         BigDecimal expectedHold = MathUtil.add(onHold, transferAmount, MATHCONTEXT);
         Assertions.assertTrue(MathUtil.isEqualTo(expectedHold, onHold2),
                 "On hold amount expected: " + expectedHold + ", actual: " + onHold2);
@@ -265,10 +281,9 @@ public class InteropTest {
                 "Balance amount expected: " + expectedBalance + ", actual: " + balance2);
 
         // payer
-        response = interopHelper.createTransfer(transferCode, InteropTransactionRole.PAYER);
-        json = JsonPath.from(response);
-        Assertions.assertEquals(transferCode, json.getString(InteropUtil.PARAM_TRANSFER_CODE));
-        Assertions.assertEquals(InteropActionState.ACCEPTED.toString(), json.getString(InteropHelper.PARAM_ACTION_STATE));
+        response = interopHelper.createTransfer(transferRequest(transferCode, InteropTransferRequestData.TransactionRoleEnum.PAYER));
+        Assertions.assertEquals(transferCode, response.getTransferCode());
+        Assertions.assertEquals(InteropTransferResponseData.StateEnum.ACCEPTED, response.getState());
 
         savings = (String) savingsAccountHelper.getSavingsAccountDetail(savingsId, null);
         LOG.debug("Response Interoperable GET Saving: {}", savings);
@@ -280,19 +295,49 @@ public class InteropTest {
                 "Balance amount expected: " + expectedBalance + ", actual: " + balance3);
 
         // payee
-        response = interopHelper.createTransfer(transferCode, InteropTransactionRole.PAYEE);
-        json = JsonPath.from(response);
-        Assertions.assertEquals(transferCode, json.getString(InteropUtil.PARAM_TRANSFER_CODE));
-        Assertions.assertEquals(InteropActionState.ACCEPTED.toString(), json.getString(InteropHelper.PARAM_ACTION_STATE));
+        response = interopHelper.createTransfer(transferRequest(transferCode, InteropTransferRequestData.TransactionRoleEnum.PAYEE));
+        Assertions.assertEquals(transferCode, response.getTransferCode());
+        Assertions.assertEquals(InteropTransferResponseData.StateEnum.ACCEPTED, response.getState());
 
         savings = (String) savingsAccountHelper.getSavingsAccountDetail(savingsId, null);
         LOG.debug("Response Interoperable GET Saving: {}", savings);
         savingsJson = JsonPath.from(savings);
         BigDecimal onHold4 = ObjectConverter.convertObjectTo(savingsJson.get(SavingsApiConstants.savingsAmountOnHold), BigDecimal.class);
         BigDecimal balance4 = ObjectConverter.convertObjectTo(savingsJson.get(PARAM_ACCOUNT_BALANCE), BigDecimal.class);
-        expectedBalance = MathUtil.subtract(balance, interopHelper.getFee(), MATHCONTEXT);
+        expectedBalance = MathUtil.subtract(balance, FEE, MATHCONTEXT);
         Assertions.assertTrue(MathUtil.isEqualTo(onHold, onHold4), "On hold amount expected: " + onHold + ", actual: " + onHold4);
         Assertions.assertTrue(MathUtil.isEqualTo(balance, balance4),
                 "Balance amount expected: " + expectedBalance + ", actual: " + balance4);
+    }
+
+    private InteropTransactionRequestData transactionRequest(String requestCode, InteropTransactionRequestData.TransactionRoleEnum role) {
+        return new InteropTransactionRequestData().transactionCode(transactionCode).requestCode(requestCode).accountId(savingsExternalId)
+                .transactionRole(role).amount(money(AMOUNT)).transactionType(paymentBy(InteropTransactionTypeData.InitiatorEnum.PAYEE));
+    }
+
+    private InteropQuoteRequestData quoteRequest(String quoteCode, InteropQuoteRequestData.TransactionRoleEnum role) {
+        return new InteropQuoteRequestData().transactionCode(transactionCode).quoteCode(quoteCode).accountId(savingsExternalId)
+                .transactionRole(role).amountType(InteropQuoteRequestData.AmountTypeEnum.RECEIVE).note(NOTE).amount(money(AMOUNT))
+                .transactionType(paymentBy(InteropTransactionTypeData.InitiatorEnum.PAYER));
+    }
+
+    private InteropTransferRequestData transferRequest(String transferCode, InteropTransferRequestData.TransactionRoleEnum role) {
+        InteropTransferRequestData request = new InteropTransferRequestData().transactionCode(transactionCode).transferCode(transferCode)
+                .accountId(savingsExternalId).transactionRole(role).note(NOTE).amount(money(AMOUNT))
+                .transactionType(paymentBy(InteropTransactionTypeData.InitiatorEnum.PAYER));
+        // the payer side is a withdrawal, which carries the FSP fee
+        if (role == InteropTransferRequestData.TransactionRoleEnum.PAYER) {
+            request.fspFee(money(FEE));
+        }
+        return request;
+    }
+
+    private static MoneyData money(BigDecimal amount) {
+        return new MoneyData().amount(amount).currency(CURRENCY);
+    }
+
+    private static InteropTransactionTypeData paymentBy(InteropTransactionTypeData.InitiatorEnum initiator) {
+        return new InteropTransactionTypeData().scenario(InteropTransactionTypeData.ScenarioEnum.PAYMENT).initiator(initiator)
+                .initiatorType(InteropTransactionTypeData.InitiatorTypeEnum.CONSUMER);
     }
 }
