@@ -33,8 +33,9 @@ import java.util.List;
 import java.util.Locale;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
@@ -47,6 +48,8 @@ import org.junit.jupiter.api.Test;
  */
 @SuppressWarnings({ "rawtypes", "unchecked" })
 public class DisallowBackdatedTransactionsIntegrationTest {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final String ACCOUNT_TYPE_INDIVIDUAL = "INDIVIDUAL";
 
@@ -76,7 +79,7 @@ public class DisallowBackdatedTransactionsIntegrationTest {
         // job replays the whole life of every active account, so a decade old account slows down unrelated tests
         final String openedOnDate = dateFormatter.format(today.minusMonths(6));
 
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         final String savingsProductJSON = new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
                 .withInterestPostingPeriodTypeAsQuarterly().withInterestCalculationPeriodTypeAsDailyBalance()
                 .withMinimumOpenningBalance("100").build();

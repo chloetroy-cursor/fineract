@@ -33,9 +33,11 @@ import java.util.Map;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutPermissionsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.ClientRequestBuilders;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.commands.MakercheckersHelper;
@@ -53,8 +55,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 @SuppressWarnings({ "unused" })
 public class MakercheckerTest {
 
+    private static final String USER_PASSWORD = "A1b2c3d4e5f$";
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
+    private FeignClientHelper clientHelper;
     private MakercheckersHelper makercheckersHelper;
     private RolesHelper rolesHelper;
     private SavingsProductHelper savingsProductHelper;
@@ -69,6 +73,7 @@ public class MakercheckerTest {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        this.clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.makercheckersHelper = new MakercheckersHelper(this.requestSpec, this.responseSpec);
         this.rolesHelper = new RolesHelper();
         this.savingsProductHelper = new SavingsProductHelper();
@@ -107,14 +112,14 @@ public class MakercheckerTest {
             // create maker user
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
             final Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,
-                    "A1b2c3d4e5f$", "resourceId");
+                    USER_PASSWORD, "resourceId");
 
             // create client - maker-checker disabled
             RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
-            Integer clientId = ClientHelper.createClient(makerRequestSpec, this.responseSpec);
+                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, USER_PASSWORD));
+            Integer clientId = createClientAs(maker);
             assertNotNull(clientId);
-            ClientHelper.verifyClientCreatedOnServer(requestSpec, this.responseSpec, clientId);
+            verifyClientCreatedOnServer(clientId);
 
             final Integer savingsId = createApproveActivateSavingsAccountDailyPosting(clientId, START_DATE_STRING);
             assertNotNull(savingsId);
@@ -129,7 +134,7 @@ public class MakercheckerTest {
             rolesHelper.updatePermissions(putPermissionsRequest);
 
             // create client - maker-checker enabled
-            clientId = ClientHelper.createClient(makerRequestSpec, this.responseSpec);
+            clientId = createClientAs(maker);
             assertNull(clientId, "Client is created on the server");
 
             List<Map<String, Object>> auditDetails = makercheckersHelper
@@ -156,16 +161,16 @@ public class MakercheckerTest {
             // create checker user
             String checker = Utils.uniqueRandomStringGenerator("user", 8);
             final Integer checkerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, checker,
-                    "A1b2c3d4e5f$", "resourceId");
+                    USER_PASSWORD, "resourceId");
             RequestSpecification checkerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(checker, "A1b2c3d4e5f$"));
+                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(checker, USER_PASSWORD));
 
             // check by another checker user should succeed
             HashMap<?, ?> response = MakercheckersHelper.approveMakerCheckerEntry(checkerRequestSpec, responseSpec, clientCommandId);
             assertNotNull(response);
             clientId = (Integer) response.get("clientId");
             assertNotNull(clientId);
-            ClientHelper.verifyClientCreatedOnServer(requestSpec, responseSpec, clientId);
+            verifyClientCreatedOnServer(clientId);
 
             response = MakercheckersHelper.approveMakerCheckerEntry(checkerRequestSpec, responseSpec, savingCommandId);
             assertNotNull(response);
@@ -175,9 +180,9 @@ public class MakercheckerTest {
             // add checker superuser permission - actions are performed in one step
             permissionMap = Map.of("CHECKER_SUPER_USER", true);
             RolesHelper.addPermissionsToRole(requestSpec, responseSpec, roleId, permissionMap);
-            clientId = ClientHelper.createClient(makerRequestSpec, this.responseSpec);
+            clientId = createClientAs(maker);
             assertNotNull(clientId);
-            ClientHelper.verifyClientCreatedOnServer(requestSpec, this.responseSpec, clientId);
+            verifyClientCreatedOnServer(clientId);
 
             withdrawalId = (Integer) makerSavingsHelper.withdrawalFromSavingsAccount(savingsId, "100", TRANSACTION_DATE_STRING,
                     CommonConstants.RESPONSE_RESOURCE_ID);
@@ -222,14 +227,14 @@ public class MakercheckerTest {
             Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
             Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,
-                    "A1b2c3d4e5f$", "resourceId");
+                    USER_PASSWORD, "resourceId");
 
             // create checker user
             String checker = Utils.uniqueRandomStringGenerator("user", 8);
-            UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, checker, "A1b2c3d4e5f$", "resourceId");
+            UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, checker, USER_PASSWORD, "resourceId");
 
             RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
+                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, USER_PASSWORD));
 
             // maker creates datatable with maker-checker enabled, this creates the physical table but queues for
             // approval
@@ -246,7 +251,7 @@ public class MakercheckerTest {
             Long commandId = ((Double) auditDetails.get(0).get("id")).longValue();
 
             // checker rejects the command which should drop the orphaned table
-            MakercheckersHelper.rejectMakerCheckerEntry(FineractClientHelper.createNewFineractClient(checker, "A1b2c3d4e5f$"), commandId);
+            MakercheckersHelper.rejectMakerCheckerEntry(FineractClientHelper.createNewFineractClient(checker, USER_PASSWORD), commandId);
 
             // verify the datatable no longer exists by trying to create it again
             // verify without maker checker, so transaction rollback in postgres doesn't break the test
@@ -288,16 +293,11 @@ public class MakercheckerTest {
 
             String maker1 = Utils.uniqueRandomStringGenerator("user", 8);
             String maker2 = Utils.uniqueRandomStringGenerator("user", 8);
-            UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker1, "A1b2c3d4e5f$", "resourceId");
-            UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker2, "A1b2c3d4e5f$", "resourceId");
+            UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker1, USER_PASSWORD, "resourceId");
+            UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker2, USER_PASSWORD, "resourceId");
 
-            RequestSpecification maker1RequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker1, "A1b2c3d4e5f$"));
-            RequestSpecification maker2RequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker2, "A1b2c3d4e5f$"));
-
-            ClientHelper.createClient(maker1RequestSpec, this.responseSpec);
-            ClientHelper.createClient(maker2RequestSpec, this.responseSpec);
+            createClientAs(maker1);
+            createClientAs(maker2);
 
             List<Map<String, Object>> maker1Results = makercheckersHelper
                     .getMakerCheckerList(Map.of("username", maker1, "actionName", "CREATE", "entityName", "CLIENT"));
@@ -339,11 +339,8 @@ public class MakercheckerTest {
 
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
             final Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,
-                    "A1b2c3d4e5f$", "resourceId");
-            RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
-
-            ClientHelper.createClient(makerRequestSpec, this.responseSpec);
+                    USER_PASSWORD, "resourceId");
+            createClientAs(maker);
 
             // "dd MMMM yyyy" format without dateFormat/locale — previously caused 500 error
             List<Map<String, Object>> fromOnly = makercheckersHelper
@@ -365,6 +362,21 @@ public class MakercheckerTest {
             PutPermissionsRequest putPermissionsRequest = new PutPermissionsRequest().putPermissionsItem("CREATE_CLIENT", false);
             rolesHelper.updatePermissions(putPermissionsRequest);
         }
+    }
+
+    /**
+     * Creates a client as the given user. Returns {@code null} when maker-checker queued the command instead of
+     * creating the client.
+     */
+    private Integer createClientAs(final String username) {
+        FeignClientHelper userClientHelper = new FeignClientHelper(
+                FineractFeignClientHelper.createNewFineractFeignClient(username, USER_PASSWORD));
+        Long clientId = userClientHelper.createClient(ClientRequestBuilders.defaultClient()).getClientId();
+        return clientId == null ? null : clientId.intValue();
+    }
+
+    private void verifyClientCreatedOnServer(final Integer clientId) {
+        assertEquals(clientId.longValue(), clientHelper.getClient(clientId.longValue()).getId());
     }
 
     private Integer createSavingsProductDailyPosting() {

@@ -35,7 +35,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
@@ -56,6 +57,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class InteropTest {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final Logger LOG = LoggerFactory.getLogger(InteropTest.class);
 
@@ -124,7 +127,7 @@ public class InteropTest {
     }
 
     private void createClient() {
-        clientId = ClientHelper.createClient(requestSpec, responseSpec);
+        clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
     }
 

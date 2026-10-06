@@ -30,7 +30,8 @@ import io.restassured.specification.ResponseSpecification;
 import java.util.Collections;
 import java.util.HashMap;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
@@ -46,6 +47,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 @Slf4j
 @ExtendWith(LoanTestLifecycleExtension.class)
 public class AuthenticationIntegrationTest {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final String LOAN_DATE = "11 July 2022";
     private static final String APPROVE_COMMAND = "approve";
@@ -65,7 +68,7 @@ public class AuthenticationIntegrationTest {
         Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
         String username = Utils.uniqueRandomStringGenerator("user", 8);
         UserHelper.createUser(this.requestSpec, this.responseSpec, 1, staffId, username, "A1b2c3d4e5f$", "resourceId");
-        Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        Integer clientID = clientHelper.createClient().intValue();
 
         Integer loanProductID = setupLoanProduct(accountHelper);
         this.loanID = loanTransactionHelper.applyForLoanApplicationWithPaymentStrategyAndPastMonth(clientID, loanProductID,

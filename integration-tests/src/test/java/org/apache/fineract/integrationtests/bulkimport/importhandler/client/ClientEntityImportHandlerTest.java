@@ -38,7 +38,8 @@ import org.apache.fineract.infrastructure.bulkimport.constants.ClientEntityConst
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
 import org.apache.fineract.infrastructure.bulkimport.data.GlobalEntityType;
 import org.apache.fineract.integrationtests.bulkimport.importhandler.BulkImportOutputTemplateHelper;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
@@ -55,6 +56,7 @@ import org.slf4j.LoggerFactory;
 public class ClientEntityImportHandlerTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientEntityImportHandlerTest.class);
+    private static final String DATE_FORMAT = "dd MMMM yyyy";
 
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
@@ -96,8 +98,8 @@ public class ClientEntityImportHandlerTest {
         // create Main business line
         CodeHelper.retrieveOrCreateCodeValue(25, requestSpec, responseSpec);
 
-        ClientHelper clientHelper = new ClientHelper(requestSpec, responseSpec);
-        Workbook workbook = clientHelper.getClientEntityWorkbook(GlobalEntityType.CLIENTS_ENTITY, "dd MMMM yyyy");
+        FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
+        Workbook workbook = clientHelper.getClientTemplateWorkbook(GlobalEntityType.CLIENTS_ENTITY.toString(), DATE_FORMAT);
 
         // insert dummy data into client entity sheet
         Sheet clientEntitySheet = workbook.getSheet(TemplatePopulateImportConstants.CLIENT_ENTITY_SHEET_NAME);
@@ -106,7 +108,7 @@ public class ClientEntityImportHandlerTest {
         Sheet staffSheet = workbook.getSheet(TemplatePopulateImportConstants.STAFF_SHEET_NAME);
         firstClientRow.createCell(ClientEntityConstants.OFFICE_NAME_COL).setCellValue(staffSheet.getRow(1).getCell(0).getStringCellValue());
         firstClientRow.createCell(ClientEntityConstants.STAFF_NAME_COL).setCellValue(staffSheet.getRow(1).getCell(1).getStringCellValue());
-        SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd MMMM yyyy", Locale.US);
+        SimpleDateFormat simpleDateFormat = new SimpleDateFormat(DATE_FORMAT, Locale.US);
         Date incoporationDate = simpleDateFormat.parse("14 May 2001");
         firstClientRow.createCell(ClientEntityConstants.INCOPORATION_DATE_COL).setCellValue(incoporationDate);
         Date validTill = simpleDateFormat.parse("14 May 2019");
@@ -128,12 +130,12 @@ public class ClientEntityImportHandlerTest {
 
         Path filePath = Files.createTempFile("ClientEntity-", ".xls");
         File file = filePath.toFile();
-        String importDocumentId;
+        Long importDocumentId;
         try {
             try (OutputStream outputStream = Files.newOutputStream(filePath)) {
                 workbook.write(outputStream);
             }
-            importDocumentId = clientHelper.importClientEntityTemplate(file);
+            importDocumentId = clientHelper.importClientTemplate(GlobalEntityType.CLIENTS_ENTITY.toString(), file, "en", DATE_FORMAT);
         } finally {
             Files.deleteIfExists(filePath);
         }
@@ -141,8 +143,8 @@ public class ClientEntityImportHandlerTest {
 
         // check status column of output excel
         try (Workbook outputWorkbook = BulkImportOutputTemplateHelper.waitForWorkbook(
-                () -> clientHelper.downloadOutputTemplate(importDocumentId), TemplatePopulateImportConstants.CLIENT_ENTITY_SHEET_NAME, 1,
-                ClientEntityConstants.STATUS_COL)) {
+                () -> clientHelper.downloadImportOutputTemplate(importDocumentId), TemplatePopulateImportConstants.CLIENT_ENTITY_SHEET_NAME,
+                1, ClientEntityConstants.STATUS_COL)) {
             Sheet outputClientEntitySheet = outputWorkbook.getSheet(TemplatePopulateImportConstants.CLIENT_ENTITY_SHEET_NAME);
             Row row = outputClientEntitySheet.getRow(1);
             String status = row.getCell(ClientEntityConstants.STATUS_COL).getStringCellValue();
