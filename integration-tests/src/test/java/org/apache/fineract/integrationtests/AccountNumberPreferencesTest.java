@@ -29,11 +29,12 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCollateralHelper;
 import org.apache.fineract.integrationtests.common.CenterDomain;
 import org.apache.fineract.integrationtests.common.CenterHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -76,6 +77,7 @@ public class AccountNumberPreferencesTest {
     private LoanTransactionHelper loanTransactionHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private AccountNumberPreferencesHelper accountNumberPreferencesHelper;
+    private final FeignCollateralHelper collateralHelper = new FeignCollateralHelper(FineractFeignClientHelper.getFineractFeignClient());
     private Integer clientAccountNumberPreferenceId;
     private Integer loanAccountNumberPreferenceId;
     private Integer savingsAccountNumberPreferenceId;
@@ -402,11 +404,11 @@ public class AccountNumberPreferencesTest {
         LOG.info("Successfully created loan product  (ID: {} )", this.loanProductId);
     }
 
-    private void addCollaterals(List<HashMap> collaterals, Integer collateralId, BigDecimal quantity) {
+    private void addCollaterals(List<HashMap> collaterals, Long collateralId, BigDecimal quantity) {
         collaterals.add(collaterals(collateralId, quantity));
     }
 
-    private HashMap<String, String> collaterals(Integer collateralId, BigDecimal quantity) {
+    private HashMap<String, String> collaterals(Long collateralId, BigDecimal quantity) {
         HashMap<String, String> collateral = new HashMap<String, String>(2);
         collateral.put("clientCollateralId", collateralId.toString());
         collateral.put("quantity", quantity.toString());
@@ -418,10 +420,9 @@ public class AccountNumberPreferencesTest {
 
         LOG.info("---------------------------------NEW LOAN APPLICATION------------------------------------------");
         List<HashMap> collaterals = new ArrayList<>();
-        final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
+        final Long collateralId = collateralHelper.createCollateralProduct().getResourceId();
         Assertions.assertNotNull(collateralId);
-        final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec,
-                this.clientId.toString(), collateralId);
+        final Long clientCollateralId = collateralHelper.createClientCollateral(this.clientId.longValue(), collateralId).getResourceId();
         Assertions.assertNotNull(clientCollateralId);
         addCollaterals(collaterals, clientCollateralId, BigDecimal.valueOf(1));
         final String loanApplicationJSON = new LoanApplicationTestBuilder().withPrincipal(loanPrincipalAmount)
