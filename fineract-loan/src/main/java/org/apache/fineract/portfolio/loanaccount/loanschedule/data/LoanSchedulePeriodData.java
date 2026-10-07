@@ -41,6 +41,7 @@ public final class LoanSchedulePeriodData {
     private final LocalDate obligationsMetOnDate;
     private final Boolean complete;
     private final Integer daysInPeriod;
+    private final Integer daysOverdue;
     private final BigDecimal principalDisbursed;
     private final BigDecimal principalOriginalDue;
     private final BigDecimal principalDue;
@@ -156,7 +157,7 @@ public final class LoanSchedulePeriodData {
             final BigDecimal penaltyChargesPaid, final BigDecimal penaltyChargesWaived, final BigDecimal penaltyChargesWrittenOff,
             final BigDecimal penaltyChargesOutstanding, final BigDecimal totalPaid, final BigDecimal totalPaidInAdvanceForPeriod,
             final BigDecimal totalPaidLateForPeriod, final BigDecimal totalWaived, final BigDecimal totalWrittenOff,
-            final BigDecimal totalCredits, final boolean isDownPayment, final BigDecimal totalAccruedInterest) {
+            final BigDecimal totalCredits, final boolean isDownPayment, final BigDecimal totalAccruedInterest, final int daysOverdue) {
 
         final MathContext mc = MoneyHelper.getMathContext();
 
@@ -208,6 +209,7 @@ public final class LoanSchedulePeriodData {
                 .totalCredits(totalCredits) //
                 .downPaymentPeriod(isDownPayment) //
                 .totalAccruedInterest(totalAccruedInterest) //
+                .daysOverdue(daysOverdue) //
                 .build();
     }
 
@@ -259,6 +261,7 @@ public final class LoanSchedulePeriodData {
                 .totalCredits(loanSchedulePeriodData.totalCredits) //
                 .downPaymentPeriod(loanSchedulePeriodData.isDownPaymentPeriod()) //
                 .totalAccruedInterest(loanSchedulePeriodData.totalAccruedInterest) //
+                .daysOverdue(loanSchedulePeriodData.daysOverdue) //
                 .build();
     }
 

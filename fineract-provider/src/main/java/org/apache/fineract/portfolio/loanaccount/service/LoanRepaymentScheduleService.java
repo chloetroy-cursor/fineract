@@ -124,6 +124,7 @@ public class LoanRepaymentScheduleService {
 
         Integer loanTermInDays = 0;
         Set<Long> disbursementPeriodIds = new HashSet<>();
+        final LocalDate businessDate = DateUtils.getBusinessLocalDate();
 
         for (LoanRepaymentScheduleInstallment installment : installments) {
             final Integer period = installment.getInstallmentNumber();
@@ -263,7 +264,7 @@ public class LoanRepaymentScheduleService {
                     feeChargesWaived, feeChargesWrittenOff, feeChargesOutstanding, penaltyChargesExpectedDue, penaltyChargesPaid,
                     penaltyChargesWaived, penaltyChargesWrittenOff, penaltyChargesOutstanding, totalPaidForPeriod,
                     totalPaidInAdvanceForPeriod, totalPaidLateForPeriod, totalWaivedForPeriod, totalWrittenOffForPeriod, credits,
-                    isDownPayment, accrualInterest);
+                    isDownPayment, accrualInterest, installment.getDaysOverdueOn(businessDate));
 
             periods.add(periodData);
         }
