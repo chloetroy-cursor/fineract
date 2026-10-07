@@ -24,11 +24,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.organisation.holiday.domain.Holiday;
 import org.apache.fineract.organisation.workingdays.domain.RepaymentRescheduleType;
 import org.apache.fineract.organisation.workingdays.domain.WorkingDays;
 import org.apache.fineract.portfolio.loanaccount.exception.LoanApplicationDateException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -55,6 +60,17 @@ class LoanTransactionValidatorImplTest {
 
     @InjectMocks
     private LoanTransactionValidatorImpl underTest;
+
+    @BeforeEach
+    void setTenant() {
+        // Working-day recurrence is evaluated in the tenant zone.
+        ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "default", "Default", ZoneId.systemDefault().getId(), null));
+    }
+
+    @AfterEach
+    void clearTenant() {
+        ThreadLocalContextUtil.reset();
+    }
 
     @Test
     void rejectsRepaymentOnHolidayWhenTransactionsAreNotAllowed() {
