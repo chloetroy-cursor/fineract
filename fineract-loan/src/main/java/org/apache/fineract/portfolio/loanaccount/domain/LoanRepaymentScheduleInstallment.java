@@ -782,6 +782,13 @@ public class LoanRepaymentScheduleInstallment extends AbstractAuditableWithUTCDa
         return DateUtils.isAfter(date, getDueDate());
     }
 
+    public int getDaysOverdueOn(final LocalDate asOf) {
+        if (isObligationsMet() || !isOverdueOn(asOf)) {
+            return 0;
+        }
+        return DateUtils.getExactDifferenceInDays(getDueDate(), asOf);
+    }
+
     public void updateChargePortion(final Money feeChargesDue, final Money feeChargesWaived, final Money feeChargesWrittenOff,
             final Money penaltyChargesDue, final Money penaltyChargesWaived, final Money penaltyChargesWrittenOff) {
         setFeeChargesCharged(feeChargesDue.getAmount());

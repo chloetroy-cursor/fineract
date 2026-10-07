@@ -180,6 +180,24 @@ class LoanRepaymentScheduleInstallmentTest {
     }
 
     @Test
+    void daysOverdueCountsFromDueDateWhenUnpaid() {
+        final LoanRepaymentScheduleInstallment unpaid = installmentDueOn(LocalDate.of(2026, 3, 1));
+
+        assertEquals(19, unpaid.getDaysOverdueOn(LocalDate.of(2026, 3, 20)));
+        assertEquals(1, unpaid.getDaysOverdueOn(LocalDate.of(2026, 3, 2)));
+        assertEquals(0, unpaid.getDaysOverdueOn(LocalDate.of(2026, 3, 1)));
+        assertEquals(0, unpaid.getDaysOverdueOn(LocalDate.of(2026, 2, 24)));
+    }
+
+    @Test
+    void daysOverdueIsZeroOnceObligationsAreMet() {
+        final LoanRepaymentScheduleInstallment met = installmentDueOn(LocalDate.of(2026, 3, 1));
+        met.updateObligationMet(true);
+
+        assertEquals(0, met.getDaysOverdueOn(LocalDate.of(2026, 3, 20)));
+    }
+
+    @Test
     void testPrecisionAndScale() {
         final BigDecimal value = new BigDecimal("123456789.123456789");
 
@@ -190,6 +208,13 @@ class LoanRepaymentScheduleInstallmentTest {
         // Test that value is properly rounded
         final BigDecimal expected = new BigDecimal("123456789.123457");
         assertEquals(expected, installment.getPrincipal());
+    }
+
+    private LoanRepaymentScheduleInstallment installmentDueOn(final LocalDate dueDate) {
+        final Loan loan = mock(Loan.class);
+        return new LoanRepaymentScheduleInstallment(loan, 1, dueDate.minusMonths(1), dueDate, BigDecimal.valueOf(1000),
+                BigDecimal.valueOf(100), BigDecimal.valueOf(50), BigDecimal.valueOf(25), BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO, false, false, false);
     }
 
     private void testBigDecimalSetter(final Consumer<BigDecimal> setter, final Supplier<BigDecimal> getter) {
