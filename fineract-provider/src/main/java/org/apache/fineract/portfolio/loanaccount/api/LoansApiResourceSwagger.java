@@ -361,6 +361,8 @@ final class LoansApiResourceSwagger {
             public Boolean complete;
             @Schema(example = "30")
             public Long daysInPeriod;
+            @Schema(example = "12", description = "Days past due date while unpaid, as of the business date. 0 if not yet due or obligations met. Absent on disbursement periods.")
+            public Integer daysOverdue;
             @Schema(example = "200.000000")
             public BigDecimal principalOriginalDue;
             @Schema(example = "200.000000")
