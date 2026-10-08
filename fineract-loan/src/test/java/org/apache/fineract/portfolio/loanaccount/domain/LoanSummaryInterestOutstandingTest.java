@@ -63,10 +63,12 @@ class LoanSummaryInterestOutstandingTest {
         summary.updateSummary(currency, Money.of(currency, BigDecimal.valueOf(12000)), List.of(installment), null, Money.zero(currency),
                 Money.zero(currency));
 
-        assertEquals(0, new BigDecimal("120.00").compareTo(summary.getTotalInterestWaived()));
-        assertEquals(0, new BigDecimal("1320.00").compareTo(summary.getTotalInterestOutstanding()),
-                "waived interest must reduce interest outstanding");
-        assertEquals(0, new BigDecimal("13320.00").compareTo(summary.getTotalOutstanding()),
-                "waived interest must reduce total outstanding");
+        assertMoney("interest waived", "120.00", summary.getTotalInterestWaived());
+        assertMoney("interest outstanding", "1320.00", summary.getTotalInterestOutstanding());
+        assertMoney("total outstanding", "13320.00", summary.getTotalOutstanding());
+    }
+
+    private static void assertMoney(final String label, final String expected, final BigDecimal actual) {
+        assertEquals(0, new BigDecimal(expected).compareTo(actual), () -> label + " expected " + expected + " but was " + actual);
     }
 }
