@@ -37,6 +37,7 @@ import org.apache.fineract.client.models.PostLoansLoanIdTransactionsRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsResponse;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignSearchHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
@@ -63,6 +64,7 @@ public class SearchResourcesTest {
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
     private FeignSearchHelper searchHelper;
+    private FeignClientHelper clientHelper;
 
     @BeforeEach
     public void setup() {
@@ -71,6 +73,7 @@ public class SearchResourcesTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.searchHelper = new FeignSearchHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -100,7 +103,7 @@ public class SearchResourcesTest {
         final PostClientsResponse clientResponse = ClientHelper.addClientAsPerson(ClientHelper.DEFAULT_OFFICE_ID,
                 ClientHelper.LEGALFORM_ID_PERSON, null);
         final Long clientId = clientResponse.getClientId();
-        final GetClientsClientIdResponse getClientResponse = ClientHelper.getClient(requestSpec, responseSpec, clientId.intValue());
+        final GetClientsClientIdResponse getClientResponse = clientHelper.getClient(clientId);
         final String query = getClientResponse.getAccountNo();
 
         final List<GetSearchResponse> searchResponse = searchHelper.search(query, resources, Boolean.FALSE);

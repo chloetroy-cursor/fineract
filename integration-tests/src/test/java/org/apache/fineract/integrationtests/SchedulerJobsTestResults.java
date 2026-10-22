@@ -64,10 +64,12 @@ import org.apache.fineract.client.models.PutJobsJobIDRequest;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.BusinessStepHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.HolidayHelper;
 import org.apache.fineract.integrationtests.common.SchedulerJobHelper;
@@ -124,7 +126,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     private LoanTransactionHelper loanTransactionHelper;
     private AccountHelper accountHelper;
     private JournalEntryHelper journalEntryHelper;
-    private ClientHelper clientHelper;
+    private FeignClientHelper clientHelper;
     private TimeZone systemTimeZone;
     private DateTimeFormatter dateFormatter = new DateTimeFormatterBuilder().appendPattern("dd MMMM yyyy").toFormatter();
     private BusinessDateHelper businessDateHelper;
@@ -149,7 +151,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.accountHelper = new AccountHelper(requestSpec, responseSpec);
         this.journalEntryHelper = new JournalEntryHelper(requestSpec, responseSpec);
-        clientHelper = new ClientHelper(requestSpec, responseSpec);
+        clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.businessDateHelper = new BusinessDateHelper();
         this.systemTimeZone = TimeZone.getTimeZone(Utils.TENANT_TIME_ZONE);
         globalConfigurationHelper = new GlobalConfigurationHelper();
@@ -173,7 +175,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             BusinessDateHelper.updateBusinessDate(BusinessDateType.BUSINESS_DATE, submittedDate);
             this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
 
-            final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+            final Integer clientID = clientHelper.createClient().intValue();
             Assertions.assertNotNull(clientID);
 
             final Integer savingsProductID = createSavingsProduct(requestSpec, responseSpec, MINIMUM_OPENING_BALANCE);
@@ -225,7 +227,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     public void testInterestPostingForSavingsJobOutcome() throws InterruptedException {
         this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         final Integer savingsProductID = createSavingsProduct(requestSpec, responseSpec, MINIMUM_OPENING_BALANCE);
@@ -259,7 +261,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         final Integer savingsProductID = createSavingsProduct(requestSpec, responseSpec, MINIMUM_OPENING_BALANCE);
@@ -322,7 +324,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     public void testApplyHolidaysToLoansJobOutcome() throws InterruptedException {
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         Long holidayId = HolidayHelper.createHolidays();
@@ -422,7 +424,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     public void testApplyType1HolidaysToLoansJobOutcome() throws InterruptedException {
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         Long holidayId = HolidayHelper.createTyoe1Holidays();
@@ -544,7 +546,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     public void testApplyDueFeeChargesForSavingsJobOutcome() throws InterruptedException {
         this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         final Integer savingsProductID = createSavingsProduct(requestSpec, responseSpec, MINIMUM_OPENING_BALANCE);
@@ -601,7 +603,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         final Integer savingsProductID = createSavingsProduct(MINIMUM_OPENING_BALANCE, assetAccount, incomeAccount, expenseAccount,
                 liabilityAccount);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec, DATE_OF_JOINING);
+        final Integer clientID = clientHelper.createClient(DATE_OF_JOINING).intValue();
         final Integer savingsID = this.savingsAccountHelper.applyForSavingsApplication(clientID, savingsProductID, ACCOUNT_TYPE_INDIVIDUAL);
 
         HashMap savingsStatusHashMap = SavingsStatusChecker.getStatusOfSavings(requestSpec, responseSpec, savingsID);
@@ -634,7 +636,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     public void testUpdateLoanArrearsAgingJobOutcome() {
         loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         final Integer loanProductID = createLoanProduct(null);
@@ -685,7 +687,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         currentDate = currentDate.plus(1, ChronoUnit.YEARS);
         final String VALID_TO = dateFormat.format(currentDate);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         final Integer savingsProductID = createSavingsProduct(requestSpec, responseSpec, MINIMUM_OPENING_BALANCE);
@@ -761,7 +763,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper.getLoanOverdueFeeJSON());
@@ -807,7 +809,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper.getLoanOverdueFeeJSON());
@@ -852,7 +854,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
             this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-            final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+            final Integer clientID = clientHelper.createClient().intValue();
             Assertions.assertNotNull(clientID);
 
             Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
@@ -923,7 +925,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
             this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-            final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+            final Integer clientID = clientHelper.createClient().intValue();
             Assertions.assertNotNull(clientID);
 
             Integer fee = ChargesHelper.createCharges(requestSpec, responseSpec,
@@ -989,7 +991,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
 
             loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-            final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+            final Integer clientID = clientHelper.createClient().intValue();
             Assertions.assertNotNull(clientID);
 
             Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
@@ -1049,7 +1051,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
                     new PutGlobalConfigurationsRequest().value(0L));
             this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-            final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+            final Integer clientID = clientHelper.createClient().intValue();
             Assertions.assertNotNull(clientID);
 
             Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
@@ -1109,7 +1111,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
                     new PutGlobalConfigurationsRequest().value(0L));
             this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-            final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+            final Integer clientID = clientHelper.createClient().intValue();
             Assertions.assertNotNull(clientID);
 
             Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
@@ -1165,7 +1167,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         Integer overdueFeeChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
@@ -1221,7 +1223,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     public void testUpdateOverdueDaysForNPA() throws InterruptedException {
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
 
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientID);
 
         final Integer loanProductID = createLoanProduct(null);
@@ -1269,7 +1271,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         todaysDate.add(Calendar.MONTH, 1);
         final String WHOLE_TERM = "1";
 
-        Integer clientId = ClientHelper.createClient(requestSpec, responseSpec);
+        Integer clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(clientId);
         Float balance = Float.parseFloat(MINIMUM_OPENING_BALANCE) + Float.parseFloat(FixedDepositAccountHelper.DEPOSIT_AMOUNT);
         final Integer savingsProductID = createSavingsProduct(requestSpec, responseSpec, String.valueOf(balance));

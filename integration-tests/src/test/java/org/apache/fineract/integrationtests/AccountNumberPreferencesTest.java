@@ -29,11 +29,13 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.client.models.GetClientsClientIdResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
 import org.apache.fineract.integrationtests.common.CenterDomain;
 import org.apache.fineract.integrationtests.common.CenterHelper;
-import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -76,6 +78,7 @@ public class AccountNumberPreferencesTest {
     private LoanTransactionHelper loanTransactionHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private AccountNumberPreferencesHelper accountNumberPreferencesHelper;
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
     private Integer clientAccountNumberPreferenceId;
     private Integer loanAccountNumberPreferenceId;
     private Integer savingsAccountNumberPreferenceId;
@@ -335,10 +338,18 @@ public class AccountNumberPreferencesTest {
     }
 
     private void createAndValidateClientWithoutAccountPreference() {
-        this.clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+        this.clientId = clientHelper.createClient().intValue();
         Assertions.assertNotNull(this.clientId);
-        String clientAccountNo = (String) ClientHelper.getClient(requestSpec, responseSpec, this.clientId.toString(), "accountNo");
+        String clientAccountNo = getClient().getAccountNo();
         validateAccountNumberLengthAndStartsWithPrefix(clientAccountNo, null);
+    }
+
+    private GetClientsClientIdResponse getClient() {
+        return clientHelper.getClient(this.clientId.longValue());
+    }
+
+    private void verifyClientCreatedOnServer() {
+        Assertions.assertEquals(this.clientId.longValue(), getClient().getId(), "ERROR IN CREATING THE CLIENT");
     }
 
     private void createAndValidateClientBasedOnAccountPreference() {
@@ -360,22 +371,17 @@ public class AccountNumberPreferencesTest {
             this.clientCodeValueId = (Integer) codeValue.get("id");
 
             /* Create Client with Client Type */
-            this.clientId = ClientHelper.createClientForAccountPreference(this.requestSpec, this.responseSpec, this.clientCodeValueId,
-                    "clientId");
-            ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, this.clientId);
+            this.clientId = clientHelper.createClientWithClientType(this.clientCodeValueId.longValue()).getClientId().intValue();
+            verifyClientCreatedOnServer();
 
-            // Assertions.assertNotNull(clientId);
-
-            clientAccountNo = (String) ClientHelper.getClient(this.requestSpec, this.responseSpec, this.clientId.toString(), "accountNo");
+            clientAccountNo = getClient().getAccountNo();
             this.validateAccountNumberLengthAndStartsWithPrefix(clientAccountNo, this.clientCodeValueName);
 
         } else if (clientPrefixName.equals(this.officeName)) {
-            this.clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
-            ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, this.clientId);
-            // Assertions.assertNotNull(clientId);
-            clientAccountNo = (String) ClientHelper.getClient(requestSpec, responseSpec, this.clientId.toString(), "accountNo");
-            String officeName = (String) ClientHelper.getClient(requestSpec, responseSpec, this.clientId.toString(), "officeName");
-            this.validateAccountNumberLengthAndStartsWithPrefix(clientAccountNo, officeName);
+            this.clientId = clientHelper.createClient().intValue();
+            verifyClientCreatedOnServer();
+            GetClientsClientIdResponse client = getClient();
+            this.validateAccountNumberLengthAndStartsWithPrefix(client.getAccountNo(), client.getOfficeName());
         }
     }
 
@@ -441,8 +447,7 @@ public class AccountNumberPreferencesTest {
             String loanPrefixName = (String) this.accountNumberPreferencesHelper
                     .getAccountNumberPreference(this.loanAccountNumberPreferenceId, "prefixType.value");
             if (loanPrefixName.equals(this.officeName)) {
-                String loanOfficeName = (String) ClientHelper.getClient(requestSpec, responseSpec, this.clientId.toString(), "officeName");
-                this.validateAccountNumberLengthAndStartsWithPrefix(loanAccountNo, loanOfficeName);
+                this.validateAccountNumberLengthAndStartsWithPrefix(loanAccountNo, getClient().getOfficeName());
             } else if (loanPrefixName.equals(this.loanShortName)) {
                 String loanShortName = (String) this.loanTransactionHelper.getLoanProductDetail(this.requestSpec, this.responseSpec,
                         this.loanProductId, "shortName");
@@ -494,9 +499,7 @@ public class AccountNumberPreferencesTest {
                     .getAccountNumberPreference(this.savingsAccountNumberPreferenceId, "prefixType.value");
 
             if (savingsPrefixName.equals(this.officeName)) {
-                String savingsOfficeName = (String) ClientHelper.getClient(requestSpec, responseSpec, this.clientId.toString(),
-                        "officeName");
-                this.validateAccountNumberLengthAndStartsWithPrefix(savingsAccountNo, savingsOfficeName);
+                this.validateAccountNumberLengthAndStartsWithPrefix(savingsAccountNo, getClient().getOfficeName());
             } else if (savingsPrefixName.equals(this.savingsShortName)) {
                 String loanShortName = (String) this.savingsAccountHelper.getSavingsAccountDetail(this.savingsId, "shortName");
                 this.validateAccountNumberLengthAndStartsWithPrefix(savingsAccountNo, loanShortName);

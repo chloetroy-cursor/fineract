@@ -25,6 +25,8 @@ import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.math.BigDecimal;
 import java.util.HashMap;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.junit.jupiter.api.Assertions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -166,8 +168,9 @@ public class CollateralManagementHelper {
     @Deprecated(forRemoval = true)
     public static HashMap updateClientCollateral(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer collateralId) {
-        final Integer clientID = ClientHelper.createClient(requestSpec, responseSpec);
-        ClientHelper.verifyClientCreatedOnServer(requestSpec, responseSpec, clientID);
+        final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
+        final Long clientID = clientHelper.createClient();
+        Assertions.assertEquals(clientID, clientHelper.getClient(clientID).getId(), "ERROR IN CREATING THE CLIENT");
         LOG.info("---------------------------------UPDATING A CLIENT COLLATERAL---------------------------------------------");
         final String CLIENT_COLLATERAL_URL = "/fineract-provider/api/v1/clients/" + clientID + "/collaterals/" + collateralId + "?"
                 + Utils.TENANT_IDENTIFIER;

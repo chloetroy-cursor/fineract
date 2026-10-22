@@ -31,12 +31,20 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.GetEntityDatatableChecksResponse;
+import org.apache.fineract.client.models.PostClientsDatatable;
+import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.client.models.PostEntityDatatableChecksTemplateResponse;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.ClientRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.ClientTestData;
+import org.apache.fineract.integrationtests.client.feign.modules.FeignErrors;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
@@ -66,6 +74,7 @@ public class EntityDatatableChecksIntegrationTest {
     private SavingsAccountHelper savingsAccountHelper;
     private LoanTransactionHelper loanTransactionHelper;
     private LoanTransactionHelper validationErrorHelper;
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final String CLIENT_APP_TABLE_NAME = "m_client";
     private static final String GROUP_APP_TABLE_NAME = "m_group";
@@ -84,6 +93,10 @@ public class EntityDatatableChecksIntegrationTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.datatableHelper = new DatatableHelper(this.requestSpec, this.responseSpec);
+    }
+
+    private void verifyClientCreatedOnServer(final Integer clientId) {
+        assertEquals(clientId.longValue(), clientHelper.getClient(clientId.longValue()).getId(), "ERROR IN CREATING THE CLIENT");
     }
 
     @Test
@@ -146,8 +159,17 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN CREATING THE ENTITY DATATABLE CHECK");
 
         // creating client with datatables
-        final Integer clientID = ClientHelper.createClientPendingWithDatatable(requestSpec, responseSpec, registeredTableName);
-        ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, clientID);
+        final Map<String, Object> datatableEntry = new HashMap<>();
+        datatableEntry.put("locale", "en");
+        datatableEntry.put("Spouse Name", Utils.randomStringGenerator("Spouse_name", 4));
+        datatableEntry.put("Number of Dependents", 5);
+        datatableEntry.put("Time of Visit", "01 December 2016 04:03");
+        datatableEntry.put("dateFormat", Utils.DATE_TIME_FORMAT);
+        datatableEntry.put("Date of Approval", "02 December 2016 00:00");
+        final PostClientsRequest clientRequest = ClientRequestBuilders.createPendingClient(ClientTestData.DEFAULT_SUBMITTED_ON_DATE)
+                .addDatatablesItem(new PostClientsDatatable().registeredTableName(registeredTableName).data(datatableEntry));
+        final Integer clientID = clientHelper.createClientPending(clientRequest).getClientId().intValue();
+        verifyClientCreatedOnServer(clientID);
 
         // deleting entity datatable check
         EntityDatatableChecksHelper.deleteEntityDatatableCheck(entityDatatableCheckId);
@@ -162,13 +184,8 @@ public class EntityDatatableChecksIntegrationTest {
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void validateCreateClientWithEntityDatatableCheckWithFailure() {
-        // building error response with status code 403
-        final ResponseSpecification errorResponse = new ResponseSpecBuilder().expectStatusCode(403).build();
-        final ClientHelper validationErrorHelper = new ClientHelper(this.requestSpec, errorResponse);
-
         // creating datatable
         String registeredTableName = this.datatableHelper.createDatatable(CLIENT_APP_TABLE_NAME, false);
         DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
@@ -178,11 +195,12 @@ public class EntityDatatableChecksIntegrationTest {
                 .createEntityDatatableCheck(CLIENT_APP_TABLE_NAME, registeredTableName, 100L, null).getResourceId();
         assertNotNull(entityDatatableCheckId, "ERROR IN CREATING THE ENTITY DATATABLE CHECK");
 
-        // creating client with datatables with error
-        ArrayList<HashMap<Object, Object>> clientErrorData = (ArrayList<HashMap<Object, Object>>) validationErrorHelper
-                .createClientPendingWithError(CommonConstants.RESPONSE_ERROR);
+        // creating client without the datatable entry the check demands
+        CallFailedRuntimeException clientError = clientHelper
+                .createClientExpectingError(ClientRequestBuilders.createPendingClient(ClientTestData.DEFAULT_SUBMITTED_ON_DATE));
+        assertEquals(403, clientError.getStatus());
         assertEquals("error.msg.entry.required.in.datatable.[" + registeredTableName + "]",
-                clientErrorData.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
+                FeignErrors.errorGlobalisationCode(clientError));
 
         // deleting entity datatable check
         EntityDatatableChecksHelper.deleteEntityDatatableCheck(entityDatatableCheckId);
@@ -272,8 +290,8 @@ public class EntityDatatableChecksIntegrationTest {
                 .createEntityDatatableCheck(SAVINGS_APP_TABLE_NAME, registeredTableName, 100L, null).getResourceId();
         assertNotNull(entityDatatableCheckId, "ERROR IN CREATING THE ENTITY DATATABLE CHECK");
 
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
-        ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, clientID);
+        final Integer clientID = clientHelper.createClient().intValue();
+        verifyClientCreatedOnServer(clientID);
 
         final Integer savingsProductID = createSavingsProduct(this.requestSpec, this.responseSpec, MINIMUM_OPENING_BALANCE,
                 minBalanceForInterestCalculation, minRequiredBalance, enforceMinRequiredBalance, allowOverdraft);
@@ -318,8 +336,8 @@ public class EntityDatatableChecksIntegrationTest {
                 .createEntityDatatableCheck(SAVINGS_APP_TABLE_NAME, registeredTableName, 100L, null).getResourceId();
         assertNotNull(entityDatatableCheckId, "ERROR IN CREATING THE ENTITY DATATABLE CHECK");
 
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
-        ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, clientID);
+        final Integer clientID = clientHelper.createClient().intValue();
+        verifyClientCreatedOnServer(clientID);
 
         final Integer savingsProductID = createSavingsProduct(this.requestSpec, this.responseSpec, MINIMUM_OPENING_BALANCE,
                 minBalanceForInterestCalculation, minRequiredBalance, enforceMinRequiredBalance, allowOverdraft);
@@ -346,8 +364,8 @@ public class EntityDatatableChecksIntegrationTest {
         this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
 
         // creating client
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
-        ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, clientID);
+        final Integer clientID = clientHelper.createClient().intValue();
+        verifyClientCreatedOnServer(clientID);
 
         // creating loan product
         final Integer loanProductID = createLoanProduct("100", "0", LoanProductTestBuilder.DEFAULT_STRATEGY);
@@ -389,8 +407,8 @@ public class EntityDatatableChecksIntegrationTest {
         this.validationErrorHelper = new LoanTransactionHelper(this.requestSpec, errorResponse);
 
         // creating client
-        final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
-        ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, clientID);
+        final Integer clientID = clientHelper.createClient().intValue();
+        verifyClientCreatedOnServer(clientID);
 
         // creating loan product
         final Integer loanProductID = createLoanProduct("100", "0", LoanProductTestBuilder.DEFAULT_STRATEGY);
@@ -610,15 +628,12 @@ public class EntityDatatableChecksIntegrationTest {
         datatableEntryMap.put(itsAString, Utils.randomStringGenerator("", 8));
         datatableEntryMap.put("locale", "en");
 
-        final HashMap<String, Object> datatablesMap = new HashMap<>();
-        datatablesMap.put("registeredTableName", datatableNamePerson);
-        datatablesMap.put("data", datatableEntryMap);
+        final PostClientsRequest personClientRequest = ClientRequestBuilders
+                .createActivePersonClient(ClientTestData.DEFAULT_ACTIVATION_DATE)
+                .addDatatablesItem(new PostClientsDatatable().registeredTableName(datatableNamePerson).data(datatableEntryMap));
+        LOG.info("request : {}", personClientRequest);
 
-        String datatablesJsonString = new Gson().toJson(datatablesMap);
-        LOG.info("map : {}", datatablesJsonString);
-
-        PostClientsResponse postClientsResponse = ClientHelper.createClientAsPersonWithDatatable(requestSpec, responseSpec, "04 March 2011",
-                "1", datatablesMap);
+        PostClientsResponse postClientsResponse = clientHelper.createClient(personClientRequest);
         assertNotNull(postClientsResponse);
         assertNotNull(postClientsResponse.getResourceId());
 

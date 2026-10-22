@@ -32,9 +32,10 @@ import org.apache.fineract.batch.domain.BatchRequest;
 import org.apache.fineract.batch.domain.BatchResponse;
 import org.apache.fineract.batch.domain.Header;
 import org.apache.fineract.infrastructure.core.exception.AbstractIdempotentCommandException;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
 import org.apache.fineract.integrationtests.common.BatchHelper;
-import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
@@ -52,6 +53,8 @@ import org.slf4j.LoggerFactory;
  * @author Rishabh Shukla
  */
 public class BatchRequestsIntegrationTest {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final Logger LOG = LoggerFactory.getLogger(BatchRequestsIntegrationTest.class);
     private ResponseSpecification responseSpec;
@@ -93,7 +96,7 @@ public class BatchRequestsIntegrationTest {
 
         // Create new clients and add those to this group
         for (Integer i = 0; i < clientsCount; i++) {
-            clientIDs[i] = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+            clientIDs[i] = clientHelper.createClient().intValue();
             groupID = GroupHelper.associateClient(this.requestSpec, this.responseSpec, groupID.toString(), clientIDs[i].toString());
             LOG.info("client {} has been added to the group {}", clientIDs[i], groupID);
         }
@@ -163,7 +166,7 @@ public class BatchRequestsIntegrationTest {
 
         // Create new clients and add those to this group
         for (Integer i = 0; i < clientsCount; i++) {
-            clientIDs[i] = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+            clientIDs[i] = clientHelper.createClient().intValue();
             groupID = GroupHelper.associateClient(this.requestSpec, this.responseSpec, groupID.toString(), clientIDs[i].toString());
             LOG.info("client {} has been added to the group {}", clientIDs[i], groupID);
         }

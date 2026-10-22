@@ -32,7 +32,8 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.junit.jupiter.api.Assertions;
@@ -40,6 +41,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class DividendsIntegrationTests {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private final String[] dates = { "01 Jan 2015", "01 Apr 2015", "01 Oct 2015", "01 Dec 2015", "01 Mar 2016" };
     private final String[] shares = { "100", "200", "300", "100", "500" };
@@ -62,7 +65,7 @@ public class DividendsIntegrationTests {
         final Integer productId = createShareProduct();
         ArrayList<Integer> shareAccounts = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
-            final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
+            final Integer clientId = clientHelper.createClient().intValue();
             Assertions.assertNotNull(clientId);
             Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
             Assertions.assertNotNull(savingsAccountId);

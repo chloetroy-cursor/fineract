@@ -27,7 +27,8 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.Locale;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.CampaignsHelper;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +48,8 @@ import org.mockserver.model.MediaType;
 @ExtendWith(MockServerExtension.class)
 @MockServerSettings(ports = { 9191 })
 public class SmsApiResourceIntegrationTest {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
@@ -81,7 +84,7 @@ public class SmsApiResourceIntegrationTest {
         campaignsHelper.verifyCampaignCreatedOnServer(requestSpec, responseSpec, campaignId);
         campaignsHelper.performActionsOnCampaign(requestSpec, responseSpec, campaignId, "activate");
 
-        Integer clientId = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
+        Integer clientId = clientHelper.createClient().intValue();
 
         String smsJson = String.format(
                 "{\"groupId\":null,\"clientId\":%d,\"staffId\":null,\"message\":\"Integration test message\",\"campaignId\":%d}", clientId,

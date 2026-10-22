@@ -52,7 +52,8 @@ import org.apache.fineract.client.models.PutDataTablesResponse;
 import org.apache.fineract.client.models.ResultsetColumnHeaderData;
 import org.apache.fineract.client.util.Calls;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
-import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
@@ -68,6 +69,8 @@ import org.slf4j.LoggerFactory;
 
 @ExtendWith(LoanTestLifecycleExtension.class)
 public class DatatableIntegrationTest extends IntegrationTest {
+
+    private final FeignClientHelper clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final Logger LOG = LoggerFactory.getLogger(DatatableIntegrationTest.class);
 
@@ -197,7 +200,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
         assertEquals("validation.msg.validation.errors.exist", ((Map) errorResponse).get("userMessageGlobalisationCode"));
 
         // creating client with datatables
-        final Integer clientID = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
 
         // creating new client datatable entry
         final boolean genericResultSet = true;
@@ -389,7 +392,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
         DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, datatableName);
 
         // creating client with datatables
-        final Integer clientID = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
 
         // creating new client datatable entry
         final boolean genericResultSet = true;
@@ -499,7 +502,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
         assertEquals("validation.msg.validation.errors.exist", ((Map) response).get("userMessageGlobalisationCode"));
 
         // creating client with datatables
-        final Integer clientID = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         final Integer loanProductID = createLoanProductWithPeriodicAccrualAccountingEnabled();
         final Integer loanID = applyForLoanApplication(clientID, loanProductID);
 
@@ -593,7 +596,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
     @Test
     public void validateCreateAndEditDatatable() {
         // Creating client
-        final Integer clientId = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
         final Integer randomNumber = Utils.randomNumberGenerator(3);
 
         // Creating datatable for Client Person
@@ -763,7 +766,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
         assertEquals("validation.msg.validation.errors.exist", ((Map) response).get("userMessageGlobalisationCode"));
 
         // creating client with datatables
-        final Integer clientID = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
         final Integer loanProductID = createLoanProductWithPeriodicAccrualAccountingEnabled();
         final Integer loanID = applyForLoanApplication(clientID, loanProductID);
 
@@ -990,7 +993,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
         DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, datatableName);
 
         // Create a client
-        final Integer clientId = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
+        final Integer clientId = clientHelper.createClient().intValue();
 
         // Create a datatable entry with data in one column and NULL in the other
         final HashMap<String, Object> datatableEntryMap = new HashMap<>();
@@ -1074,7 +1077,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
         String assignedDatatableName = (String) datatableResponse.get("resourceIdentifier");
         assertEquals(datatableName, assignedDatatableName);
 
-        final Integer clientID = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
 
         final HashMap<String, Object> entryMap = new HashMap<>();
         entryMap.put(plainColumn, Utils.randomNumberGenerator(3));
@@ -1134,7 +1137,7 @@ public class DatatableIntegrationTest extends IntegrationTest {
         HashMap<String, Object> datatableResponse = this.datatableHelper.createDatatable(new Gson().toJson(columnMap), "");
         assertEquals(datatableName, datatableResponse.get("resourceIdentifier"));
 
-        final Integer clientID = ClientHelper.createClientAsPerson(requestSpec, responseSpec);
+        final Integer clientID = clientHelper.createClient().intValue();
 
         final HashMap<String, Object> entryMap = new HashMap<>();
         entryMap.put(plainColumn, Utils.randomNumberGenerator(3));

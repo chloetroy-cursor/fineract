@@ -21,34 +21,22 @@ package org.apache.fineract.integrationtests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.builder.ResponseSpecBuilder;
-import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
 import java.util.List;
 import org.apache.fineract.client.models.AuditData;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignClientHelper;
 import org.apache.fineract.integrationtests.common.AuditHelper;
-import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class IpTrackingIntegrationTest {
 
     private static final String EXPECTED_LOCAL_IP = "127.0.0.1";
-    private RequestSpecification requestSpec;
-    private ResponseSpecification responseSpec;
-    private ResponseSpecification responseSpecForSearch;
+    private FeignClientHelper clientHelper;
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
-        this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Fineract-Platform-TenantId", "default");
-        this.requestSpec.auth().basic("mifos", "password");
-        this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.responseSpecForSearch = new ResponseSpecBuilder().expectStatusCode(200).build();
+        this.clientHelper = new FeignClientHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -57,9 +45,9 @@ public class IpTrackingIntegrationTest {
                 "Saltando test porque el tracking de IP está deshabilitado");
 
         // given
-        final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
-        ClientHelper.verifyClientCreatedOnServer(this.requestSpec, this.responseSpec, clientId);
-        List<AuditData> auditsRecieved = AuditHelper.getAuditDetails(clientId, "CREATE", "CLIENT");
+        final Long clientId = clientHelper.createClient();
+        assertEquals(clientId, clientHelper.getClient(clientId).getId());
+        List<AuditData> auditsRecieved = AuditHelper.getAuditDetails(clientId.intValue(), "CREATE", "CLIENT");
 
         // when
         String ip = auditsRecieved.get(0).getIp();
