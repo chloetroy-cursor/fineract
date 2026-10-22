@@ -31,9 +31,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.client.models.StaffCreateRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignStaffHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -113,14 +115,11 @@ public class EmailTest {
         // derives the recipient address from it (no address => data integrity exception,
         // which the platform maps to a 403 -- Postgres enforces the NOT NULL constraint
         // on email_address strictly, unlike MySQL/MariaDB in non-strict mode).
-        Map<String, Object> staffRequest = StaffHelper.getMapWithJoiningDate();
-        staffRequest.put("officeId", 1);
-        staffRequest.put("firstname", Utils.uniqueRandomStringGenerator("staff_", 5));
-        staffRequest.put("lastname", Utils.uniqueRandomStringGenerator("Doe_", 4));
-        staffRequest.put("isLoanOfficer", true);
-        staffRequest.put("emailAddress", Utils.randomStringGenerator("staff_email_", 6) + "@example.com");
+        StaffCreateRequest staffRequest = FeignStaffHelper.defaultStaffCreateRequest()//
+                .firstname(Utils.uniqueRandomStringGenerator("staff_", 5))//
+                .emailAddress(Utils.randomStringGenerator("staff_email_", 6) + "@example.com");
 
-        Integer staffId = (Integer) StaffHelper.createStaffWithJson(requestSpec, responseSpec, GSON.toJson(staffRequest)).get("resourceId");
+        Long staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff(staffRequest).getResourceId();
 
         Map<String, Object> createRequest = new LinkedHashMap<>();
         createRequest.put("staffId", staffId);
@@ -131,7 +130,7 @@ public class EmailTest {
         Long emailId = ((Number) Utils.performServerPost(requestSpec, responseSpec, emailUrl(), GSON.toJson(createRequest), "resourceId"))
                 .longValue();
 
-        assertThat(retrieveEmail(emailId).getLong("staffId")).isEqualTo(staffId.longValue());
+        assertThat(retrieveEmail(emailId).getLong("staffId")).isEqualTo(staffId);
     }
 
     @Test

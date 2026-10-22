@@ -29,11 +29,12 @@ import io.restassured.specification.ResponseSpecification;
 import java.util.Map;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.client.models.PostFinancialActivityAccountsRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignStaffHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.accounting.FinancialActivityAccountHelper;
-import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -90,10 +91,9 @@ public class AllocateCashToCashierValidationTest {
         requestSpecification.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         responseSpecification = new ResponseSpecBuilder().expectStatusCode(200).build();
 
-        final Integer staffId = StaffHelper.createStaff(requestSpecification, responseSpecification);
+        final Long staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId();
         tellerId = Long.valueOf(CashierTransactionsHelper.createTeller(requestSpecification, responseSpecification));
-        cashierId = Long.valueOf(
-                CashierTransactionsHelper.createCashier(requestSpecification, responseSpecification, tellerId, staffId.longValue()));
+        cashierId = Long.valueOf(CashierTransactionsHelper.createCashier(requestSpecification, responseSpecification, tellerId, staffId));
     }
 
     @Test
