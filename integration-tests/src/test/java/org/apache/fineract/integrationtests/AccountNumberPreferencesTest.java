@@ -29,11 +29,15 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsProductHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
 import org.apache.fineract.integrationtests.common.CenterDomain;
 import org.apache.fineract.integrationtests.common.CenterHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -41,7 +45,6 @@ import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuil
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.AccountNumberPreferencesHelper;
 import org.apache.fineract.integrationtests.common.system.CodeHelper;
@@ -74,7 +77,8 @@ public class AccountNumberPreferencesTest {
     private final String minRequiredBalance = null;
     private final String enforceMinRequiredBalance = "false";
     private LoanTransactionHelper loanTransactionHelper;
-    private SavingsAccountHelper savingsAccountHelper;
+    private FeignSavingsHelper savingsHelper;
+    private FeignSavingsProductHelper feignSavingsProductHelper;
     private AccountNumberPreferencesHelper accountNumberPreferencesHelper;
     private Integer clientAccountNumberPreferenceId;
     private Integer loanAccountNumberPreferenceId;
@@ -82,7 +86,6 @@ public class AccountNumberPreferencesTest {
     private Integer groupsAccountNumberPreferenceId;
     private Integer centerAccountNumberPreferenceId;
     private static final String MINIMUM_OPENING_BALANCE = "1000.0";
-    private static final String ACCOUNT_TYPE_INDIVIDUAL = "INDIVIDUAL";
     private Boolean isAccountPreferenceSetUp = false;
     private Integer clientTypeCodeId;
     private String clientCodeValueName;
@@ -106,6 +109,8 @@ public class AccountNumberPreferencesTest {
         this.responseForbiddenError = new ResponseSpecBuilder().expectStatusCode(403).build();
         this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
         this.accountNumberPreferencesHelper = new AccountNumberPreferencesHelper(this.requestSpec, this.responseSpec);
+        this.savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.feignSavingsProductHelper = new FeignSavingsProductHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     }
 
@@ -482,12 +487,11 @@ public class AccountNumberPreferencesTest {
     private void createAndValidateSavingsEntity(Boolean isAccountPreferenceSetUp) {
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
 
-        this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
+        this.savingsId = this.savingsHelper
+                .submitApplication(this.clientId.longValue(), this.savingsProductId.longValue(), SavingsTestData.CREATED_DATE)
+                .getSavingsId().intValue();
 
-        this.savingsId = this.savingsAccountHelper.applyForSavingsApplication(this.clientId, this.savingsProductId,
-                ACCOUNT_TYPE_INDIVIDUAL);
-
-        String savingsAccountNo = (String) this.savingsAccountHelper.getSavingsAccountDetail(this.savingsId, "accountNo");
+        String savingsAccountNo = this.savingsHelper.getSavingsDetails(this.savingsId.longValue()).getAccountNo();
 
         if (isAccountPreferenceSetUp) {
             String savingsPrefixName = (String) this.accountNumberPreferencesHelper
@@ -498,8 +502,9 @@ public class AccountNumberPreferencesTest {
                         "officeName");
                 this.validateAccountNumberLengthAndStartsWithPrefix(savingsAccountNo, savingsOfficeName);
             } else if (savingsPrefixName.equals(this.savingsShortName)) {
-                String loanShortName = (String) this.savingsAccountHelper.getSavingsAccountDetail(this.savingsId, "shortName");
-                this.validateAccountNumberLengthAndStartsWithPrefix(savingsAccountNo, loanShortName);
+                String savingsProductShortName = this.feignSavingsProductHelper.getSavingsProduct(this.savingsProductId.longValue())
+                        .getShortName();
+                this.validateAccountNumberLengthAndStartsWithPrefix(savingsAccountNo, savingsProductShortName);
             }
             LOG.info("SUCCESSFULLY CREATED SAVINGS APPLICATION BASED ON ACCOUNT PREFERENCES (ID:  {} )", this.loanId);
         } else {

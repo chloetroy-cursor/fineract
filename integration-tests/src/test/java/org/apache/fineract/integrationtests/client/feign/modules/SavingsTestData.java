@@ -27,6 +27,11 @@ public final class SavingsTestData {
     public static final Double DEFAULT_CHARGE_AMOUNT = 100.0;
     public static final String FEE_ON_MONTH_DAY = "04 March";
 
+    /** The dates the legacy {@code SavingsAccountHelper} submitted, approved and activated accounts on. */
+    public static final String CREATED_DATE = "08 January 2013";
+    public static final String CREATED_DATE_PLUS_ONE = "09 January 2013";
+    public static final String TRANSACTION_DATE = "01 March 2013";
+
     private SavingsTestData() {}
 
     public static final class ChargeAppliesTo {

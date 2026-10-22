@@ -37,6 +37,7 @@ import org.apache.fineract.client.models.PostLoansLoanIdTransactionsRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsResponse;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignSearchHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
@@ -63,6 +64,7 @@ public class SearchResourcesTest {
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
     private FeignSearchHelper searchHelper;
+    private FeignSavingsHelper savingsHelper;
 
     @BeforeEach
     public void setup() {
@@ -71,6 +73,7 @@ public class SearchResourcesTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.searchHelper = new FeignSearchHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -127,9 +130,8 @@ public class SearchResourcesTest {
                 ClientHelper.LEGALFORM_ID_PERSON, null);
         final Long clientId = clientResponse.getClientId();
 
-        final Integer savingsId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId.intValue(), "1000");
-        final SavingsAccountHelper savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
-        final String query = (String) savingsAccountHelper.getSavingsAccountDetail(savingsId, "accountNo");
+        final Integer savingsId = savingsHelper.openSavingsAccount(clientId, "1000").intValue();
+        final String query = savingsHelper.getSavingsDetails(savingsId.longValue()).getAccountNo();
 
         final List<GetSearchResponse> searchResponse = searchHelper.search(query, resources, Boolean.FALSE);
 
@@ -156,7 +158,7 @@ public class SearchResourcesTest {
         final ShareProductHelper shareProductHelper = new ShareProductHelper();
         final Integer productId = ShareProductTransactionHelper.createShareProduct(shareProductHelper.build(), requestSpec, responseSpec);
 
-        final Integer savingsId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId.intValue(), "1000");
+        final Integer savingsId = savingsHelper.openSavingsAccount(clientId, "1000").intValue();
 
         final String shareJson = new ShareAccountHelper().withClientId(String.valueOf(clientId)).withProductId(String.valueOf(productId))
                 .withSavingsAccountId(String.valueOf(savingsId)).withSubmittedDate("01 January 2026").withApplicationDate("01 January 2026")
@@ -251,8 +253,7 @@ public class SearchResourcesTest {
         final String resources = "savingsTransactions";
         final Long clientId = ClientHelper.addClientAsPerson(ClientHelper.DEFAULT_OFFICE_ID, ClientHelper.LEGALFORM_ID_PERSON, null)
                 .getClientId();
-        final Integer savingsId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId.intValue(), "1000");
-        final SavingsAccountHelper savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
+        final Integer savingsId = savingsHelper.openSavingsAccount(clientId, "1000").intValue();
         final String externalId = "savings-deposit-" + UUID.randomUUID();
         final String checkNumber = "sd-check-" + UUID.randomUUID();
         final String routingCode = "sd-route-" + UUID.randomUUID();
@@ -292,8 +293,8 @@ public class SearchResourcesTest {
         final String resources = "savingsTransactions";
         final Long clientId = ClientHelper.addClientAsPerson(ClientHelper.DEFAULT_OFFICE_ID, ClientHelper.LEGALFORM_ID_PERSON, null)
                 .getClientId();
-        final Integer savingsId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId.intValue(), "1000");
-        final SavingsAccountHelper savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
+        final Integer savingsId = savingsHelper.openSavingsAccount(clientId, "1000").intValue();
+        final SavingsAccountHelper savingsAccountHelper = new SavingsAccountHelper();
         executeSavingsTransaction(savingsAccountHelper.depositIntoSavingsAccount(savingsId.longValue(),
                 new PostSavingsAccountTransactionsRequest().transactionDate("02 March 2013").dateFormat("dd MMMM yyyy").locale("en")
                         .transactionAmount(BigDecimal.valueOf(200)).paymentTypeId(1).externalId("savings-deposit-" + UUID.randomUUID())));
@@ -340,9 +341,9 @@ public class SearchResourcesTest {
                 .getClientId();
         final Long toClientId = ClientHelper.addClientAsPerson(ClientHelper.DEFAULT_OFFICE_ID, ClientHelper.LEGALFORM_ID_PERSON, null)
                 .getClientId();
-        final Integer fromSavingsId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, fromClientId.intValue(), "1000");
-        final Integer toSavingsId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, toClientId.intValue(), "1000");
-        final SavingsAccountHelper savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
+        final Integer fromSavingsId = savingsHelper.openSavingsAccount(fromClientId, "1000").intValue();
+        final Integer toSavingsId = savingsHelper.openSavingsAccount(toClientId, "1000").intValue();
+        final SavingsAccountHelper savingsAccountHelper = new SavingsAccountHelper();
         executeSavingsTransaction(savingsAccountHelper.depositIntoSavingsAccount(fromSavingsId.longValue(),
                 new PostSavingsAccountTransactionsRequest().transactionDate("02 March 2013").dateFormat("dd MMMM yyyy").locale("en")
                         .transactionAmount(BigDecimal.valueOf(200)).paymentTypeId(1).externalId("transfer-seed-" + UUID.randomUUID())));

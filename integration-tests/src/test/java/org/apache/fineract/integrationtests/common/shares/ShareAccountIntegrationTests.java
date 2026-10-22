@@ -33,10 +33,11 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,7 @@ public class ShareAccountIntegrationTests {
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private ShareProductHelper shareProductHelper;
+    private FeignSavingsHelper savingsHelper;
 
     @BeforeEach
     public void setup() {
@@ -57,6 +59,7 @@ public class ShareAccountIntegrationTests {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.requestSpec.header("Fineract-Platform-TenantId", "default");
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        this.savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -106,7 +109,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
         final Integer shareAccountId = createShareAccount(clientId, productId, savingsAccountId);
         Assertions.assertNotNull(shareAccountId);
@@ -145,7 +148,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
         String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
         Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
@@ -214,7 +217,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
         String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
         Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
@@ -282,7 +285,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
         String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
         Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
@@ -363,7 +366,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
         String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
         Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
@@ -992,7 +995,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016
@@ -1039,7 +1042,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016
@@ -1098,7 +1101,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016
@@ -1148,7 +1151,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016
@@ -1213,7 +1216,7 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(productId);
         final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(clientId);
-        Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+        Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016

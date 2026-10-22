@@ -31,19 +31,22 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.GetEntityDatatableChecksResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.client.models.PostEntityDatatableChecksTemplateResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestValidators;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.junit.jupiter.api.Assertions;
@@ -63,7 +66,7 @@ public class EntityDatatableChecksIntegrationTest {
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private DatatableHelper datatableHelper;
-    private SavingsAccountHelper savingsAccountHelper;
+    private FeignSavingsHelper savingsHelper;
     private LoanTransactionHelper loanTransactionHelper;
     private LoanTransactionHelper validationErrorHelper;
 
@@ -73,7 +76,6 @@ public class EntityDatatableChecksIntegrationTest {
     private static final String LOAN_APP_TABLE_NAME = "m_loan";
 
     public static final String MINIMUM_OPENING_BALANCE = "1000.0";
-    public static final String ACCOUNT_TYPE_INDIVIDUAL = "INDIVIDUAL";
 
     public static final String DATE_TIME_FORMAT = "dd MMMM yyyy HH:mm";
 
@@ -256,7 +258,7 @@ public class EntityDatatableChecksIntegrationTest {
     @Test
     public void validateCreateSavingsWithEntityDatatableCheck() {
 
-        this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
+        this.savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
 
         final String minBalanceForInterestCalculation = null;
         final String minRequiredBalance = null;
@@ -280,8 +282,9 @@ public class EntityDatatableChecksIntegrationTest {
         Assertions.assertNotNull(savingsProductID);
 
         // creating savings with datatables
-        final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplicationWithDatatables(clientID, savingsProductID,
-                ACCOUNT_TYPE_INDIVIDUAL, "01 December 2016", registeredTableName);
+        final Integer savingsId = this.savingsHelper
+                .submitApplicationWithDatatable(clientID.longValue(), savingsProductID.longValue(), "01 December 2016", registeredTableName)
+                .getSavingsId().intValue();
         Assertions.assertNotNull(savingsId);
 
         // deleting entity datatable check
@@ -297,12 +300,9 @@ public class EntityDatatableChecksIntegrationTest {
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void validateCreateSavingsWithEntityDatatableCheckWithFailure() {
-        // building error response with status code 403
-        final ResponseSpecification errorResponse = new ResponseSpecBuilder().expectStatusCode(403).build();
-        final SavingsAccountHelper validationErrorHelper = new SavingsAccountHelper(this.requestSpec, errorResponse);
+        this.savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
 
         final String minBalanceForInterestCalculation = null;
         final String minRequiredBalance = null;
@@ -326,11 +326,10 @@ public class EntityDatatableChecksIntegrationTest {
         Assertions.assertNotNull(savingsProductID);
 
         // creating savings with datatables with error
-        ArrayList<HashMap<Object, Object>> groupErrorData = (ArrayList<HashMap<Object, Object>>) validationErrorHelper
-                .applyForSavingsApplicationWithFailure(clientID, savingsProductID, ACCOUNT_TYPE_INDIVIDUAL, "01 December 2016",
-                        CommonConstants.RESPONSE_ERROR);
-        assertEquals("error.msg.entry.required.in.datatable.[" + registeredTableName + "]",
-                groupErrorData.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
+        final CallFailedRuntimeException savingsError = this.savingsHelper.submitApplicationExpectingError(clientID.longValue(),
+                savingsProductID.longValue(), "01 December 2016");
+        assertEquals(403, savingsError.getStatus());
+        SavingsTestValidators.verifyFirstErrorCode("error.msg.entry.required.in.datatable.[" + registeredTableName + "]", savingsError);
 
         // deleting entity datatable check
         EntityDatatableChecksHelper.deleteEntityDatatableCheck(entityDatatableCheckId);

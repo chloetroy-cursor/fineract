@@ -28,16 +28,18 @@ import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Locale;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsTransactionHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestValidators;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,15 +47,13 @@ import org.junit.jupiter.api.Test;
 /**
  * Integration tests for the {@code disallow-backdated-transactions} global configuration (FINERACT-1950).
  */
-@SuppressWarnings({ "rawtypes", "unchecked" })
 public class DisallowBackdatedTransactionsIntegrationTest {
-
-    private static final String ACCOUNT_TYPE_INDIVIDUAL = "INDIVIDUAL";
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private GlobalConfigurationHelper globalConfigurationHelper;
-    private SavingsAccountHelper savingsAccountHelper;
+    private FeignSavingsHelper savingsHelper;
+    private FeignSavingsTransactionHelper savingsTransactionHelper;
 
     @BeforeEach
     public void setup() {
@@ -62,7 +62,8 @@ public class DisallowBackdatedTransactionsIntegrationTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.globalConfigurationHelper = new GlobalConfigurationHelper();
-        this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
+        this.savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.savingsTransactionHelper = new FeignSavingsTransactionHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -81,36 +82,32 @@ public class DisallowBackdatedTransactionsIntegrationTest {
                 .withInterestPostingPeriodTypeAsQuarterly().withInterestCalculationPeriodTypeAsDailyBalance()
                 .withMinimumOpenningBalance("100").build();
         final Integer savingsProductID = SavingsProductHelper.createSavingsProduct(savingsProductJSON, this.requestSpec, this.responseSpec);
-        final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplicationOnDate(clientID, savingsProductID,
-                ACCOUNT_TYPE_INDIVIDUAL, openedOnDate);
-        this.savingsAccountHelper.approveSavingsOnDate(savingsId, openedOnDate);
-        this.savingsAccountHelper.activateSavings(savingsId, openedOnDate);
+        final Long savingsId = this.savingsHelper.createApproveActivateSavings(clientID.longValue(), savingsProductID.longValue(),
+                openedOnDate);
 
         this.globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.DISALLOW_BACKDATED_TRANSACTIONS,
                 new PutGlobalConfigurationsRequest().enabled(true));
         try {
             // backdated deposit is rejected while the configuration is enabled
-            final ResponseSpecification domainRuleErrorSpec = new ResponseSpecBuilder().expectStatusCode(403).build();
-            final SavingsAccountHelper rejectedHelper = new SavingsAccountHelper(this.requestSpec, domainRuleErrorSpec);
-            final List<HashMap> error = (List<HashMap>) rejectedHelper.depositToSavingsAccount(savingsId, "100", backdatedDate,
-                    CommonConstants.RESPONSE_ERROR);
-            assertEquals("error.msg.transaction.backdated.not.allowed", error.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
+            final CallFailedRuntimeException error = this.savingsTransactionHelper.depositExpectingError(savingsId, "100", backdatedDate);
+            assertEquals(403, error.getStatus());
+            SavingsTestValidators.verifyFirstErrorCode("error.msg.transaction.backdated.not.allowed", error);
 
             // current-date deposit is still allowed
-            assertNotNull(this.savingsAccountHelper.depositToSavingsAccount(savingsId, "100", currentDate, "resourceId"));
+            assertNotNull(this.savingsTransactionHelper.deposit(savingsId, "100", currentDate).getResourceId());
 
             // a tolerance window (in days) allows backdating within it
             this.globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.DISALLOW_BACKDATED_TRANSACTIONS,
                     new PutGlobalConfigurationsRequest().enabled(true).value(90L));
-            assertNotNull(this.savingsAccountHelper.depositToSavingsAccount(savingsId, "100", backdatedDate, "resourceId"));
+            assertNotNull(this.savingsTransactionHelper.deposit(savingsId, "100", backdatedDate).getResourceId());
         } finally {
             this.globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.DISALLOW_BACKDATED_TRANSACTIONS,
                     new PutGlobalConfigurationsRequest().enabled(false).value(0L));
         }
 
         // with the configuration disabled again, backdated deposits pass
-        assertNotNull(this.savingsAccountHelper.depositToSavingsAccount(savingsId, "100", backdatedDate, "resourceId"));
+        assertNotNull(this.savingsTransactionHelper.deposit(savingsId, "100", backdatedDate).getResourceId());
 
-        this.savingsAccountHelper.closeSavingsAccountOnDate(savingsId, "true", currentDate);
+        this.savingsHelper.closeSavings(savingsId, currentDate, true);
     }
 }

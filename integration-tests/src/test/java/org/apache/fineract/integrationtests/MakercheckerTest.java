@@ -33,14 +33,15 @@ import java.util.Map;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutPermissionsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsTransactionHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.commands.MakercheckersHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
@@ -58,7 +59,8 @@ public class MakercheckerTest {
     private MakercheckersHelper makercheckersHelper;
     private RolesHelper rolesHelper;
     private SavingsProductHelper savingsProductHelper;
-    private SavingsAccountHelper savingsAccountHelper;
+    private FeignSavingsHelper savingsHelper;
+    private FeignSavingsTransactionHelper savingsTransactionHelper;
     private static final String START_DATE_STRING = "03 June 2023";
     private static final String TRANSACTION_DATE_STRING = "05 June 2023";
     private GlobalConfigurationHelper globalConfigurationHelper;
@@ -72,7 +74,8 @@ public class MakercheckerTest {
         this.makercheckersHelper = new MakercheckersHelper(this.requestSpec, this.responseSpec);
         this.rolesHelper = new RolesHelper();
         this.savingsProductHelper = new SavingsProductHelper();
-        this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
+        this.savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.savingsTransactionHelper = new FeignSavingsTransactionHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.globalConfigurationHelper = new GlobalConfigurationHelper();
     }
 
@@ -116,10 +119,9 @@ public class MakercheckerTest {
             assertNotNull(clientId);
             ClientHelper.verifyClientCreatedOnServer(requestSpec, this.responseSpec, clientId);
 
-            final Integer savingsId = createApproveActivateSavingsAccountDailyPosting(clientId, START_DATE_STRING);
+            final Long savingsId = createApproveActivateSavingsAccountDailyPosting(clientId, START_DATE_STRING);
             assertNotNull(savingsId);
-            Integer transactionId = (Integer) savingsAccountHelper.depositToSavingsAccount(savingsId, "1000", TRANSACTION_DATE_STRING,
-                    CommonConstants.RESPONSE_RESOURCE_ID);
+            Long transactionId = savingsTransactionHelper.deposit(savingsId, "1000", TRANSACTION_DATE_STRING).getResourceId();
             assertNotNull(transactionId);
 
             // client and saving permission - maker-checker enabled
@@ -138,9 +140,9 @@ public class MakercheckerTest {
             Long clientCommandId = ((Double) auditDetails.get(0).get("id")).longValue();
 
             // savings withdrawal - maker-checker enabled
-            SavingsAccountHelper makerSavingsHelper = new SavingsAccountHelper(makerRequestSpec, this.responseSpec);
-            Integer withdrawalId = (Integer) makerSavingsHelper.withdrawalFromSavingsAccount(savingsId, "100", TRANSACTION_DATE_STRING,
-                    CommonConstants.RESPONSE_RESOURCE_ID);
+            FeignSavingsTransactionHelper makerSavingsTransactionHelper = new FeignSavingsTransactionHelper(
+                    FineractFeignClientHelper.createNewFineractFeignClient(maker, "A1b2c3d4e5f$"));
+            Long withdrawalId = makerSavingsTransactionHelper.withdraw(savingsId, "100", TRANSACTION_DATE_STRING).getResourceId();
             assertNull(withdrawalId, "Withdrawal performed on the server");
 
             auditDetails = makercheckersHelper.getMakerCheckerList(
@@ -169,8 +171,7 @@ public class MakercheckerTest {
 
             response = MakercheckersHelper.approveMakerCheckerEntry(checkerRequestSpec, responseSpec, savingCommandId);
             assertNotNull(response);
-            withdrawalId = (Integer) response.get("resourceId");
-            assertNotNull(withdrawalId);
+            assertNotNull(response.get("resourceId"));
 
             // add checker superuser permission - actions are performed in one step
             permissionMap = Map.of("CHECKER_SUPER_USER", true);
@@ -179,8 +180,7 @@ public class MakercheckerTest {
             assertNotNull(clientId);
             ClientHelper.verifyClientCreatedOnServer(requestSpec, this.responseSpec, clientId);
 
-            withdrawalId = (Integer) makerSavingsHelper.withdrawalFromSavingsAccount(savingsId, "100", TRANSACTION_DATE_STRING,
-                    CommonConstants.RESPONSE_RESOURCE_ID);
+            withdrawalId = makerSavingsTransactionHelper.withdraw(savingsId, "100", TRANSACTION_DATE_STRING).getResourceId();
             assertNotNull(withdrawalId);
         } finally {
 
@@ -373,9 +373,9 @@ public class MakercheckerTest {
         return SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
     }
 
-    private Integer createApproveActivateSavingsAccountDailyPosting(final Integer clientID, final String startDate) {
+    private Long createApproveActivateSavingsAccountDailyPosting(final Integer clientID, final String startDate) {
         final Integer savingsProductID = createSavingsProductDailyPosting();
         assertNotNull(savingsProductID);
-        return savingsAccountHelper.createApproveActivateSavingsAccount(clientID, savingsProductID, startDate);
+        return savingsHelper.createApproveActivateSavings(clientID.longValue(), savingsProductID.longValue(), startDate);
     }
 }

@@ -32,9 +32,10 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ public class DividendsIntegrationTests {
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
+    private FeignSavingsHelper savingsHelper;
 
     @BeforeEach
     public void setup() {
@@ -53,6 +55,7 @@ public class DividendsIntegrationTests {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        this.savingsHelper = new FeignSavingsHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @SuppressWarnings("unchecked")
@@ -64,7 +67,7 @@ public class DividendsIntegrationTests {
         for (int i = 0; i < 5; i++) {
             final Integer clientId = ClientHelper.createClient(this.requestSpec, this.responseSpec);
             Assertions.assertNotNull(clientId);
-            Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
+            Integer savingsAccountId = savingsHelper.openSavingsAccount(clientId.longValue(), "1000").intValue();
             Assertions.assertNotNull(savingsAccountId);
             final Integer shareAccountId = createShareAccount(clientId, productId, savingsAccountId, dates[i], shares[i]);
             shareAccounts.add(shareAccountId);

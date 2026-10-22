@@ -21,9 +21,21 @@ package org.apache.fineract.integrationtests.client.feign.helpers;
 import static org.apache.fineract.client.feign.util.FeignCalls.fail;
 import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import feign.Response;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.fineract.client.feign.FineractFeignClient;
+import org.apache.fineract.client.feign.FineractMultipartEncoder;
+import org.apache.fineract.client.feign.ObjectMapperFactory;
 import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.DeleteSavingsAccountsAccountIdResponse;
 import org.apache.fineract.client.models.DepositAccountOnHoldTransactionData;
@@ -35,6 +47,7 @@ import org.apache.fineract.client.models.PostSavingsAccountsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountsResponse;
 import org.apache.fineract.client.models.PostSavingsAccountsSavingsAccountIdChargesRequest;
 import org.apache.fineract.client.models.PostSavingsAccountsSavingsAccountIdChargesResponse;
+import org.apache.fineract.client.models.PostSavingsProductsRequest;
 import org.apache.fineract.client.models.PutSavingsAccountsAccountIdRequest;
 import org.apache.fineract.client.models.PutSavingsAccountsAccountIdResponse;
 import org.apache.fineract.client.models.SavingsAccountChargeData;
@@ -44,9 +57,16 @@ import org.apache.fineract.client.models.SavingsAccountSubStatusEnumData;
 import org.apache.fineract.client.models.SavingsAccountSummaryData;
 import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
 import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestValidators;
 import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.apache.poi.ss.usermodel.Workbook;
 
 public class FeignSavingsHelper {
+
+    private static final String DATATABLE_DATE_TIME_FORMAT = "dd MMMM yyyy HH:mm";
+    private static final String IMPORT_LOCALE = "en";
+    private static final String IMPORT_DATE_FORMAT = "dd MMMM yyyy";
 
     private final FineractFeignClient fineractClient;
 
@@ -60,6 +80,104 @@ public class FeignSavingsHelper {
 
     public PostSavingsAccountsResponse submitApplication(Long clientId, Long productId, String submittedOnDate) {
         return submitApplication(SavingsRequestBuilders.submitSavingsApplication(clientId, productId, submittedOnDate));
+    }
+
+    public CallFailedRuntimeException submitApplicationExpectingError(Long clientId, Long productId, String submittedOnDate) {
+        PostSavingsAccountsRequest request = SavingsRequestBuilders.submitSavingsApplication(clientId, productId, submittedOnDate);
+        return fail(() -> fineractClient.savingsAccount().submitSavingsApplication(request));
+    }
+
+    /**
+     * Submits the application together with one entry for the named datatable, as an entity datatable check demands.
+     */
+    public PostSavingsAccountsResponse submitApplicationWithDatatable(Long clientId, Long productId, String submittedOnDate,
+            String registeredTableName) {
+        Map<String, Object> application = ObjectMapperFactory.getShared().convertValue(
+                SavingsRequestBuilders.submitSavingsApplication(clientId, productId, submittedOnDate), new TypeReference<>() {});
+        application.put("datatables", List.of(datatableEntry(registeredTableName)));
+        SavingsApplicationWithDatatablesApi api = fineractClient.create(SavingsApplicationWithDatatablesApi.class);
+        return ok(() -> api.submitSavingsApplication(application));
+    }
+
+    private static Map<String, Object> datatableEntry(String registeredTableName) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("locale", SavingsTestData.LOCALE);
+        data.put("Spouse Name", Utils.randomStringGenerator("Spouse_name", 4));
+        data.put("Number of Dependents", 5);
+        data.put("Time of Visit", "01 December 2016 04:03");
+        data.put("dateFormat", DATATABLE_DATE_TIME_FORMAT);
+        data.put("Date of Approval", "02 December 2016 00:00");
+        Map<String, Object> entry = new HashMap<>();
+        entry.put("registeredTableName", registeredTableName);
+        entry.put("data", data);
+        return entry;
+    }
+
+    /**
+     * Creates a daily-compounding, monthly-posting product with the given minimum opening balance and takes a new
+     * account on it through submit, approve and activate on the legacy helper's fixed dates.
+     */
+    public Long openSavingsAccount(Long clientId, String minimumOpeningBalance) {
+        PostSavingsProductsRequest product = SavingsRequestBuilders
+                .savingsProduct(SavingsTestData.InterestCompoundingPeriodType.DAILY, SavingsTestData.InterestPostingPeriodType.MONTHLY,
+                        SavingsTestData.InterestCalculationType.DAILY_BALANCE)
+                .minRequiredOpeningBalance(new BigDecimal(minimumOpeningBalance));
+        Long productId = ok(() -> fineractClient.savingsProduct().createSavingsProduct(product)).getResourceId();
+        return openSavingsOnLegacyDates(clientId, productId);
+    }
+
+    /**
+     * Submits, approves and activates an account on the fixed 2013 dates the legacy helper used, checking status at
+     * each step.
+     */
+    public Long openSavingsOnLegacyDates(Long clientId, Long productId) {
+        Long savingsId = submitApplication(clientId, productId, SavingsTestData.CREATED_DATE).getSavingsId();
+        SavingsTestValidators.verifySavingsIsPending(getSavingsStatus(savingsId));
+        approveSavings(savingsId, SavingsTestData.CREATED_DATE_PLUS_ONE);
+        SavingsTestValidators.verifySavingsIsApproved(getSavingsStatus(savingsId));
+        activateSavings(savingsId, SavingsTestData.TRANSACTION_DATE);
+        SavingsTestValidators.verifySavingsIsActive(getSavingsStatus(savingsId));
+        return savingsId;
+    }
+
+    public Workbook getSavingsWorkbook(String dateFormat) {
+        return workbook(fineractClient.create(SavingsBulkImportApi.class).downloadTemplate(dateFormat));
+    }
+
+    /** Returns the id of the import document the server tracks the upload under. */
+    public String importSavingsTemplate(File file) {
+        try {
+            FineractMultipartEncoder.MultipartData multipartData = new FineractMultipartEncoder.MultipartData()
+                    .addFile("file", file.getName(), Files.readAllBytes(file.toPath()), "application/vnd.ms-excel")
+                    .addText("locale", IMPORT_LOCALE).addText("dateFormat", IMPORT_DATE_FORMAT);
+            return ok(() -> fineractClient.create(SavingsBulkImportApi.class).uploadTemplate(multipartData));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read " + file, e);
+        }
+    }
+
+    public byte[] downloadOutputTemplate(String importDocumentId) {
+        return bytes(fineractClient.create(SavingsBulkImportApi.class).downloadOutputTemplate(importDocumentId));
+    }
+
+    private static Workbook workbook(Response response) {
+        try {
+            return new HSSFWorkbook(new ByteArrayInputStream(bytes(response)));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read the workbook", e);
+        }
+    }
+
+    /** A raw {@link Response} bypasses the error decoder, so the status has to be checked by hand. */
+    private static byte[] bytes(Response response) {
+        if (response.status() < 200 || response.status() >= 300) {
+            throw new IllegalStateException("HTTP " + response.status() + " from " + response.request().url());
+        }
+        try (InputStream inputStream = response.body().asInputStream()) {
+            return inputStream.readAllBytes();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to read the response body", e);
+        }
     }
 
     public PostSavingsAccountsResponse submitGroupApplication(Long groupId, Long productId, String submittedOnDate) {
