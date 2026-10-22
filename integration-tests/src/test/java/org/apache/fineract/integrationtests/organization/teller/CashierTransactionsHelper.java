@@ -78,7 +78,7 @@ public class CashierTransactionsHelper {
             final String json) {
 
         final String url = CREATE_TELLER_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, url, json, "");
+        return Utils.feign(requestSpec, responseSpec).post(url, json, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -132,7 +132,7 @@ public class CashierTransactionsHelper {
     public static Map<String, Object> createCashierWithJson(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final Long tellerId, final String json) {
         final String url = String.format(CREATE_CASHIER_URL, tellerId) + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, url, json, "");
+        return Utils.feign(requestSpec, responseSpec).post(url, json, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -181,7 +181,7 @@ public class CashierTransactionsHelper {
     public static String allocateCashToCashierRaw(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Long tellerId, final Long cashierId, final String json) {
         final String url = String.format(ALLOCATE_CASH_TO_CASHIER_URL, tellerId, cashierId) + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, url, json);
+        return Utils.feign(requestSpec, responseSpec).post(url, json);
     }
 
 }

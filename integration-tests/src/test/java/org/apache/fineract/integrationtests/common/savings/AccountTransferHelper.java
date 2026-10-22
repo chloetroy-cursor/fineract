@@ -109,7 +109,7 @@ public class AccountTransferHelper {
                 .withTransferOnDate(ACCOUNT_TRANSFER_DATE) //
                 .build(fromAccountId.toString(), fromClientId.toString(), toAccountId.toString(), toClientId.toString(), fromAccountType,
                         toAccountType, transferAmount);
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
                 accountTransferJSON, "savingsId");
     }
 
@@ -122,8 +122,8 @@ public class AccountTransferHelper {
                 .withTransferOnDate(ACCOUNT_TRANSFER_DATE) //
                 .build(fromAccountId.toString(), fromClientId.toString(), toAccountId.toString(), toClientId.toString(), fromAccountType,
                         toAccountType, transferAmount, paymentDetails);
-        final Integer resourceId = Utils.performServerPost(this.requestSpec, this.responseSpec,
-                ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER, accountTransferJSON, "resourceId");
+        final Integer resourceId = Utils.feign(this.requestSpec, this.responseSpec)
+                .post(ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER, accountTransferJSON, "resourceId");
         return resourceId.longValue();
     }
 
@@ -134,14 +134,14 @@ public class AccountTransferHelper {
         final String accountTransferJSON = new AccountTransferHelper(this.requestSpec, this.responseSpec) //
                 .withTransferOnDate(ACCOUNT_TRANSFER_DATE) //
                 .build("1", "1", "2", "1", "2", "2", "100.0", paymentDetails);
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
                 accountTransferJSON, "");
     }
 
     @Deprecated(forRemoval = true)
     public ArrayList<HashMap> retrieveTransfersByAccountDetailId(final Long accountDetailId) {
-        return Utils.performServerGet(this.requestSpec, this.responseSpec,
-                ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER + "&accountDetailId=" + accountDetailId, "pageItems");
+        return Utils.feign(this.requestSpec, this.responseSpec)
+                .get(ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER + "&accountDetailId=" + accountDetailId, "pageItems");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -157,7 +157,7 @@ public class AccountTransferHelper {
                 .build(fromAccountId.toString(), fromClientId.toString(), toAccountId.toString(), toClientId.toString(), fromAccountType,
                         toAccountType, transferAmount);
 
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
                 accountTransferJSON, "savingsId");
     }
 
@@ -174,7 +174,7 @@ public class AccountTransferHelper {
                 .build(fromAccountId.toString(), fromClientId.toString(), toAccountId.toString(), toClientId.toString(), fromAccountType,
                         toAccountType, transferAmount);
 
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
                 accountTransferJSON, "savingsId");
     }
 
@@ -191,7 +191,7 @@ public class AccountTransferHelper {
                 .build(fromAccountId.toString(), fromClientId.toString(), toAccountId.toString(), toClientId.toString(), fromAccountType,
                         toAccountType, transferAmount);
 
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
                 accountTransferJSON, "savingsId");
     }
 
@@ -206,7 +206,7 @@ public class AccountTransferHelper {
                 .withTransferOnDate(ACCOUNT_TRANSFER_INVALID_DATE) //
                 .build(fromAccountId.toString(), fromClientId.toString(), toAccountId.toString(), toClientId.toString(), fromAccountType,
                         toAccountType, transferAmount);
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(ACCOUNT_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
                 accountTransferJSON, "savingsId");
     }
 
@@ -222,7 +222,7 @@ public class AccountTransferHelper {
                 .withTransferOnDate(date) //
                 .build(fromAccountId.toString(), fromClientId.toString(), toAccountId.toString(), toClientId.toString(), fromAccountType,
                         toAccountType, transferAmount);
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, LOAN_REFUND_BY_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(LOAN_REFUND_BY_TRANSFER_URL + "?" + Utils.TENANT_IDENTIFIER,
                 accountTransferJSON, "savingsId");
     }
 }

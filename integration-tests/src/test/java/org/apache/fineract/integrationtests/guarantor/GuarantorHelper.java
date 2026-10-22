@@ -47,7 +47,7 @@ public class GuarantorHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public Integer createGuarantor(final Integer loanId, final String guarantorJSON) {
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, LOAN_URL + loanId + GUARANTOR_API_URL + TENANT, guarantorJSON,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(LOAN_URL + loanId + GUARANTOR_API_URL + TENANT, guarantorJSON,
                 CommonConstants.RESPONSE_RESOURCE_ID);
     }
 
@@ -57,7 +57,7 @@ public class GuarantorHelper {
     @Deprecated(forRemoval = true)
     public Object createGuarantorWithError(final Integer loanId, final String guarantorJSON, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
-        return Utils.performServerPost(requestSpec, responseSpec, LOAN_URL + loanId + GUARANTOR_API_URL + TENANT, guarantorJSON,
+        return Utils.feign(requestSpec, responseSpec).post(LOAN_URL + loanId + GUARANTOR_API_URL + TENANT, guarantorJSON,
                 CommonConstants.RESPONSE_ERROR);
     }
 
@@ -66,8 +66,8 @@ public class GuarantorHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public java.util.ArrayList<HashMap> getGuarantorList(final Integer loanId) {
-        return (java.util.ArrayList<HashMap>) Utils.performServerGet(this.requestSpec, this.responseSpec,
-                LOAN_URL + loanId + GUARANTOR_API_URL + TENANT, "");
+        return (java.util.ArrayList<HashMap>) Utils.feign(this.requestSpec, this.responseSpec)
+                .get(LOAN_URL + loanId + GUARANTOR_API_URL + TENANT, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -75,7 +75,7 @@ public class GuarantorHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public HashMap updateGuarantor(final Integer guarantorId, final Integer loanId, final String guarantorJSON) {
-        return Utils.performServerPut(this.requestSpec, this.responseSpec, LOAN_URL + loanId + GUARANTOR_API_URL + guarantorId + TENANT,
+        return Utils.feign(this.requestSpec, this.responseSpec).put(LOAN_URL + loanId + GUARANTOR_API_URL + guarantorId + TENANT,
                 guarantorJSON, CommonConstants.RESPONSE_CHANGES);
     }
 
@@ -84,8 +84,8 @@ public class GuarantorHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public HashMap deleteGuarantor(final Integer guarantorId, final Integer fundId, final Integer loanId) {
-        return Utils.performServerDelete(this.requestSpec, this.responseSpec,
-                LOAN_URL + loanId + GUARANTOR_API_URL + guarantorId + TENANT + "&guarantorFundingId=" + fundId, "");
+        return Utils.feign(this.requestSpec, this.responseSpec)
+                .delete(LOAN_URL + loanId + GUARANTOR_API_URL + guarantorId + TENANT + "&guarantorFundingId=" + fundId, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -93,8 +93,7 @@ public class GuarantorHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public HashMap deleteGuarantor(final Integer guarantorId, final Integer loanId) {
-        return Utils.performServerDelete(this.requestSpec, this.responseSpec, LOAN_URL + loanId + GUARANTOR_API_URL + guarantorId + TENANT,
-                "");
+        return Utils.feign(this.requestSpec, this.responseSpec).delete(LOAN_URL + loanId + GUARANTOR_API_URL + guarantorId + TENANT, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -102,7 +101,7 @@ public class GuarantorHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public Object getGuarantor(final Integer guarantorId, final Integer loanId, final String jsonToGetBack) {
-        return Utils.performServerGet(this.requestSpec, this.responseSpec, LOAN_URL + loanId + GUARANTOR_API_URL + guarantorId + TENANT,
+        return Utils.feign(this.requestSpec, this.responseSpec).get(LOAN_URL + loanId + GUARANTOR_API_URL + guarantorId + TENANT,
                 jsonToGetBack);
     }
 
@@ -111,7 +110,7 @@ public class GuarantorHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public List getAllGuarantor(final Integer loanId) {
-        return Utils.performServerGet(this.requestSpec, this.responseSpec, LOAN_URL + loanId + GUARANTOR_API_URL + TENANT, "");
+        return Utils.feign(this.requestSpec, this.responseSpec).get(LOAN_URL + loanId + GUARANTOR_API_URL + TENANT, "");
     }
 
 }

@@ -18,7 +18,6 @@
  */
 package org.apache.fineract.integrationtests.datatable;
 
-import static org.apache.fineract.integrationtests.common.Utils.initializeRESTAssured;
 import static org.apache.fineract.integrationtests.datatable.DatatableEntity.LOAN;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,7 +46,6 @@ public class DatatableUniqueAndIndexColumnTest {
 
     @BeforeEach
     public void setup() {
-        initializeRESTAssured();
         this.datatableHelper = new DatatableHelper();
     }
 

@@ -458,14 +458,14 @@ public class SavingsProductHelper {
     @Deprecated(forRemoval = true)
     public static Integer createSavingsProduct(final String savingsProductJSON, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_SAVINGS_PRODUCT_URL, savingsProductJSON, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_SAVINGS_PRODUCT_URL, savingsProductJSON, "resourceId");
     }
 
     @Deprecated(forRemoval = true)
     public static Integer updateSavingsProduct(final String savingsProductJSON, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, Integer productId) {
-        return Utils.performServerPut(requestSpec, responseSpec, urlSavingsUpdate(productId) + "?" + Utils.TENANT_IDENTIFIER,
-                savingsProductJSON, "resourceId");
+        return Utils.feign(requestSpec, responseSpec).put(urlSavingsUpdate(productId) + "?" + Utils.TENANT_IDENTIFIER, savingsProductJSON,
+                "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -476,7 +476,7 @@ public class SavingsProductHelper {
             final Integer generatedProductID) {
         LOG.info("------------------------------CHECK CLIENT DETAILS------------------------------------\n");
         final String GET_SAVINGS_PRODUCT_URL = SAVINGS_PRODUCT_URL + "/" + generatedProductID + "?" + Utils.TENANT_IDENTIFIER;
-        final Integer responseSavingsProductID = Utils.performServerGet(requestSpec, responseSpec, GET_SAVINGS_PRODUCT_URL, "id");
+        final Integer responseSavingsProductID = Utils.feign(requestSpec, responseSpec).get(GET_SAVINGS_PRODUCT_URL, "id");
         assertEquals(generatedProductID, responseSavingsProductID, "ERROR IN CREATING THE Savings Product");
     }
 
@@ -491,7 +491,7 @@ public class SavingsProductHelper {
     @Deprecated(forRemoval = true)
     public static String retrieveAllSavingsProducts(final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         LOG.info("-------------------- RETRIEVING ALL SAVINGS PRODUCTS --------------------------");
-        return Utils.performServerGet(requestSpec, responseSpec, CREATE_SAVINGS_PRODUCT_URL);
+        return Utils.feign(requestSpec, responseSpec).get(CREATE_SAVINGS_PRODUCT_URL);
     }
 
 }

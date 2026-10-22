@@ -188,7 +188,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public Integer applyForSavingsApplicationOnDate(String savingsApplicationJson) {
         LOG.info("--------------------------------APPLYING FOR SAVINGS APPLICATION--------------------------------");
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, SAVINGS_ACCOUNT_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(SAVINGS_ACCOUNT_URL + "?" + Utils.TENANT_IDENTIFIER,
                 savingsApplicationJson, "savingsId");
     }
 
@@ -203,7 +203,7 @@ public class SavingsAccountHelper {
                 .withSubmittedOnDate(submittedOnDate) //
                 .withDatatables(getTestDatatableAsJson(datatableName)) //
                 .build(id.toString(), savingsProductID.toString(), accountType);
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, SAVINGS_ACCOUNT_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(SAVINGS_ACCOUNT_URL + "?" + Utils.TENANT_IDENTIFIER,
                 savingsApplicationJSON, "savingsId");
     }
 
@@ -217,7 +217,7 @@ public class SavingsAccountHelper {
         final String savingsApplicationJSON = new SavingsApplicationTestBuilder() //
                 .withSubmittedOnDate(submittedOnDate) //
                 .build(id.toString(), savingsProductID.toString(), accountType);
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, SAVINGS_ACCOUNT_URL + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(this.requestSpec, this.responseSpec).post(SAVINGS_ACCOUNT_URL + "?" + Utils.TENANT_IDENTIFIER,
                 savingsApplicationJSON, responseAttribute);
     }
 
@@ -245,9 +245,8 @@ public class SavingsAccountHelper {
                 .withSubmittedOnDate(CREATED_DATE_PLUS_ONE) //
                 .build(id.toString(), savingsProductID.toString(), accountType);
 
-        return Utils.performServerPut(this.requestSpec, this.responseSpec,
-                SAVINGS_ACCOUNT_URL + "/" + savingsId + "?" + Utils.TENANT_IDENTIFIER, savingsApplicationJSON,
-                CommonConstants.RESPONSE_CHANGES);
+        return Utils.feign(this.requestSpec, this.responseSpec).put(SAVINGS_ACCOUNT_URL + "/" + savingsId + "?" + Utils.TENANT_IDENTIFIER,
+                savingsApplicationJSON, CommonConstants.RESPONSE_CHANGES);
     }
 
     // GLIM_GSIM_TESTING
@@ -269,8 +268,8 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public static Integer applyForGsimApplication(final String clientArrays, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
-        return Utils.performServerPost(requestSpec, responseSpec, SAVINGS_ACCOUNT_URL + GSIM_SAVINGS + "?" + Utils.TENANT_IDENTIFIER,
-                clientArrays, "gsimId");
+        return Utils.feign(requestSpec, responseSpec).post(SAVINGS_ACCOUNT_URL + GSIM_SAVINGS + "?" + Utils.TENANT_IDENTIFIER, clientArrays,
+                "gsimId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -282,7 +281,7 @@ public class SavingsAccountHelper {
         map.put("withHoldTax", value);
         String json = new Gson().toJson(map);
 
-        return Utils.performServerPut(this.requestSpec, this.responseSpec,
+        return Utils.feign(this.requestSpec, this.responseSpec).put(
                 SAVINGS_ACCOUNT_URL + "/" + savingsId + "?command=" + UPDATE_WITHHOLD_TAX_STATUS + "&" + Utils.TENANT_IDENTIFIER, json,
                 CommonConstants.RESPONSE_CHANGES);
     }
@@ -398,8 +397,8 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public Object deleteSavingsApplication(final Integer savingsId, final String jsonAttributeToGetBack) {
         LOG.info("---------------------------------- DELETE SAVINGS APPLICATION ----------------------------------");
-        return Utils.performServerDelete(this.requestSpec, this.responseSpec,
-                SAVINGS_ACCOUNT_URL + "/" + savingsId + "?" + Utils.TENANT_IDENTIFIER, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, this.responseSpec)
+                .delete(SAVINGS_ACCOUNT_URL + "/" + savingsId + "?" + Utils.TENANT_IDENTIFIER, jsonAttributeToGetBack);
 
     }
 
@@ -616,7 +615,7 @@ public class SavingsAccountHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public HashMap updateCharges(final Integer chargeId, final Integer savingsId) {
-        return Utils.performServerPut(this.requestSpec, this.responseSpec,
+        return Utils.feign(this.requestSpec, this.responseSpec).put(
                 SAVINGS_ACCOUNT_URL + "/" + savingsId + "/charges/" + chargeId + "?" + Utils.TENANT_IDENTIFIER, getModifyChargeJSON(),
                 CommonConstants.RESPONSE_CHANGES);
     }
@@ -626,7 +625,7 @@ public class SavingsAccountHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public Integer deleteCharge(final Integer chargeId, final Integer savingsId) {
-        return Utils.performServerDelete(this.requestSpec, this.responseSpec,
+        return Utils.feign(this.requestSpec, this.responseSpec).delete(
                 SAVINGS_ACCOUNT_URL + "/" + savingsId + "/charges/" + chargeId + "?" + Utils.TENANT_IDENTIFIER,
                 CommonConstants.RESPONSE_RESOURCE_ID);
     }
@@ -1024,7 +1023,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public ArrayList getSavingsCollectionAttribute(final Integer savingsID, final String jSONAttribute) {
         final String URL = SAVINGS_ACCOUNT_URL + "/" + savingsID + "?associations=all&" + Utils.TENANT_IDENTIFIER;
-        final ArrayList<HashMap> response = Utils.performServerGet(requestSpec, responseSpec, URL, jSONAttribute);
+        final ArrayList<HashMap> response = Utils.feign(requestSpec, responseSpec).get(URL, jSONAttribute);
         return response;
     }
 
@@ -1034,7 +1033,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public Object getSavingsAccountDetail(final Integer savingsID, final String jsonAttribute) {
         final String URL = SAVINGS_ACCOUNT_URL + "/" + savingsID + "?associations=all&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, URL, jsonAttribute);
+        return Utils.feign(requestSpec, responseSpec).get(URL, jsonAttribute);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1043,7 +1042,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public ArrayList getSavingsCharges(final Integer savingsID) {
         final String URL = SAVINGS_ACCOUNT_URL + "/" + savingsID + "/charges?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, URL, "");
+        return Utils.feign(requestSpec, responseSpec).get(URL, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1052,7 +1051,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public HashMap getSavingsTransaction(final Integer savingsID, final Integer savingsTransactionId) {
         final String URL = SAVINGS_ACCOUNT_URL + "/" + savingsID + "/transactions/" + savingsTransactionId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, URL, "");
+        return Utils.feign(requestSpec, responseSpec).get(URL, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1063,7 +1062,7 @@ public class SavingsAccountHelper {
         final String url = SAVINGS_ACCOUNT_URL + "/" + savingsId + "/transactions/search";
         queryParams.put(TENANT_PARAM_NAME, DEFAULT_TENANT);
         requestSpec.queryParams(queryParams);
-        String response = Utils.performServerGet(this.requestSpec, this.responseSpec, url);
+        String response = Utils.feign(this.requestSpec, this.responseSpec).get(url);
         return GSON.fromJson(response, SavingsAccountTransactionsSearchResponse.class);
     }
 
@@ -1089,7 +1088,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public Object getSavingsInterest(final Integer savingsID) {
         final String URL = SAVINGS_ACCOUNT_URL + "/" + savingsID + "?associations=summary&" + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, URL, "summary");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(URL, "summary");
         return response.get("totalInterestEarned");
     }
 
@@ -1099,7 +1098,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public HashMap getSavingsSummary(final Integer savingsID) {
         final String URL = SAVINGS_ACCOUNT_URL + "/" + savingsID + "?associations=summary&" + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, URL, "summary");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(URL, "summary");
         return response;
     }
 
@@ -1109,7 +1108,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public HashMap getSavingsDetails(final Integer savingsID) {
         final String URL = SAVINGS_ACCOUNT_URL + "/" + savingsID + "?associations=all&" + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, URL, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(URL, "");
         return response;
     }
 
@@ -1119,7 +1118,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public Object getSavingsDetails(final Integer savingsID, final String returnAttribute) {
         final String URL = SAVINGS_ACCOUNT_URL + "/" + savingsID + "?associations=all&" + Utils.TENANT_IDENTIFIER;
-        final Object response = Utils.performServerGet(requestSpec, responseSpec, URL, returnAttribute);
+        final Object response = Utils.feign(requestSpec, responseSpec).get(URL, returnAttribute);
         return response;
     }
 
@@ -1130,7 +1129,7 @@ public class SavingsAccountHelper {
     private HashMap performSavingApplicationActions(final String postURLForSavingsTransaction, final String jsonToBeSent,
             final Boolean isBlock) {
         HashMap status = null;
-        final HashMap response = Utils.performServerPost(this.requestSpec, this.responseSpec, postURLForSavingsTransaction, jsonToBeSent,
+        final HashMap response = Utils.feign(this.requestSpec, this.responseSpec).post(postURLForSavingsTransaction, jsonToBeSent,
                 CommonConstants.RESPONSE_CHANGES);
         if (response != null) {
             status = (HashMap) response.get("status");
@@ -1147,8 +1146,7 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     private Object performSavingActions(final String postURLForSavingsTransaction, final String jsonToBeSent,
             final String jsonAttributeToGetBack) {
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, postURLForSavingsTransaction, jsonToBeSent,
-                jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, this.responseSpec).post(postURLForSavingsTransaction, jsonToBeSent, jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1335,8 +1333,8 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public Workbook getSavingsWorkbook(String dateFormat) throws IOException {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, "application/vnd.ms-excel");
-        byte[] byteArray = Utils.performGetBinaryResponse(requestSpec, responseSpec,
-                SAVINGS_ACCOUNT_URL + "/downloadtemplate" + "?" + Utils.TENANT_IDENTIFIER + "&dateFormat=" + dateFormat);
+        byte[] byteArray = Utils.feign(requestSpec, responseSpec)
+                .getBytes(SAVINGS_ACCOUNT_URL + "/downloadtemplate" + "?" + Utils.TENANT_IDENTIFIER + "&dateFormat=" + dateFormat);
         InputStream inputStream = new ByteArrayInputStream(byteArray);
         Workbook workbook = new HSSFWorkbook(inputStream);
         return workbook;
@@ -1351,8 +1349,8 @@ public class SavingsAccountHelper {
         String dateFormat = "dd MMMM yyyy";
         String legalFormType = null;
         requestSpec.header(HttpHeaders.CONTENT_TYPE, MediaType.MULTIPART_FORM_DATA);
-        return Utils.performServerTemplatePost(requestSpec, responseSpec,
-                SAVINGS_ACCOUNT_URL + "/uploadtemplate" + "?" + Utils.TENANT_IDENTIFIER, legalFormType, file, locale, dateFormat);
+        return Utils.feign(requestSpec, responseSpec).postTemplate(SAVINGS_ACCOUNT_URL + "/uploadtemplate" + "?" + Utils.TENANT_IDENTIFIER,
+                legalFormType, file, locale, dateFormat);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1361,14 +1359,14 @@ public class SavingsAccountHelper {
     @Deprecated(forRemoval = true)
     public String getOutputTemplateLocation(final String importDocumentId) {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN);
-        return Utils.performServerOutputTemplateLocationGet(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).getOutputTemplateLocation(
                 "/fineract-provider/api/v1/imports/getOutputTemplateLocation" + "?" + Utils.TENANT_IDENTIFIER, importDocumentId);
     }
 
     @Deprecated(forRemoval = true)
     public byte[] downloadOutputTemplate(final String importDocumentId) {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, "application/vnd.ms-excel");
-        return Utils.performServerOutputTemplateDownloadGet(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).getOutputTemplate(
                 "/fineract-provider/api/v1/imports/downloadOutputTemplate" + "?" + Utils.TENANT_IDENTIFIER, importDocumentId);
     }
 
@@ -1450,7 +1448,7 @@ public class SavingsAccountHelper {
         final String depositGsimURL = SAVINGS_ACCOUNT_URL + "/" + savingsID + "/transactions" + "?" + "command="
                 + GSIM_DEPOSIT_SAVINGS_COMMAND + "&" + Utils.TENANT_IDENTIFIER;
         LOG.info("depositGsimURL : {} ", depositGsimURL);
-        return Utils.performServerPost(requestSpec, responseSpec, depositGsimURL, savingsArrays, CommonConstants.RESPONSE_RESOURCE_ID);
+        return Utils.feign(requestSpec, responseSpec).post(depositGsimURL, savingsArrays, CommonConstants.RESPONSE_RESOURCE_ID);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1491,7 +1489,7 @@ public class SavingsAccountHelper {
     public HashMap updateGsimApplication(final Integer gsimID, final Integer clientID, final Integer groupID, final Integer productID) {
         LOG.info("--------------------------------- UPDATE GSIM SAVINGS APPLICATION -------------------------------");
         final String GSIM_URL = "/fineract-provider/api/v1/savingsaccounts/gsim/" + gsimID + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, GSIM_URL,
+        return Utils.feign(requestSpec, responseSpec).put(GSIM_URL,
                 updateGsimJSON(clientID.toString(), groupID.toString(), productID.toString()), "");
     }
 
@@ -1503,7 +1501,7 @@ public class SavingsAccountHelper {
         LOG.info("--------------------------------- GET savings transaction details -------------------------------");
         final String url = "/fineract-provider/api/v1/savingsaccounts/" + savingsId + "/transactions/" + transactionId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+        return Utils.feign(requestSpec, responseSpec).get(url, "");
     }
 
     public Integer createSavingsProductWithAccrualAccounting(final Account assetAccount, final Account liabilityAccount,

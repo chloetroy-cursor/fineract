@@ -52,7 +52,7 @@ public class CollateralManagementHelper {
         LOG.info("---------------------------------CREATING A CLIENT_COLLATERAL---------------------------------------------");
         final String CLIENT_COLLATERAL_URL = "/fineract-provider/api/v1/clients/" + clientId + "/collaterals" + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, CLIENT_COLLATERAL_URL,
+        return Utils.feign(requestSpec, responseSpec).post(CLIENT_COLLATERAL_URL,
                 clientCollateralAsJson(collateralId, BigDecimal.valueOf(100)), "resourceId");
     }
 
@@ -64,7 +64,7 @@ public class CollateralManagementHelper {
             final Integer collateralId, final String clientId) {
         final String CLIENT_COLLATERAL_URL = "/fineract-provider/api/v1/clients" + clientId + "/collaterals/" + collateralId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, CLIENT_COLLATERAL_URL, "quantity");
+        return Utils.feign(requestSpec, responseSpec).get(CLIENT_COLLATERAL_URL, "quantity");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -87,7 +87,7 @@ public class CollateralManagementHelper {
     public static Integer createCollateralProduct(final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
         LOG.info("---------------------------------CREATING A COLLATERAL_PRODUCT---------------------------------------------");
         final String COLLATERAL_PRODUCT_URL = "/fineract-provider/api/v1/collateral-management" + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, COLLATERAL_PRODUCT_URL,
+        return Utils.feign(requestSpec, responseSpec).post(COLLATERAL_PRODUCT_URL,
                 collateralProductAsJson(Utils.randomStringGenerator("COLLATERAL_PRODUCT", 5), "USD", "acre", "agriculture",
                         BigDecimal.valueOf(40), BigDecimal.valueOf(100000000), "en"),
                 "resourceId");
@@ -120,7 +120,7 @@ public class CollateralManagementHelper {
         LOG.info("---------------------------------UPDATING A COLLATERAL_PRODUCT---------------------------------------------");
         final String COLLATERAL_PRODUCT_URL = "/fineract-provider/api/v1/collateral-management/" + collateralId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, COLLATERAL_PRODUCT_URL,
+        return Utils.feign(requestSpec, responseSpec).put(COLLATERAL_PRODUCT_URL,
                 updateCollateralProductAsJson(Utils.randomStringGenerator("COLLATERAL_PRODUCT", 5), "USD", "acre", "agriculture",
                         BigDecimal.valueOf(30), BigDecimal.valueOf(100000), "en"),
                 "resourceId");
@@ -171,7 +171,7 @@ public class CollateralManagementHelper {
         LOG.info("---------------------------------UPDATING A CLIENT COLLATERAL---------------------------------------------");
         final String CLIENT_COLLATERAL_URL = "/fineract-provider/api/v1/clients/" + clientID + "/collaterals/" + collateralId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, CLIENT_COLLATERAL_URL, updateClientCollateralAsJson(BigDecimal.valueOf(1)),
+        return Utils.feign(requestSpec, responseSpec).put(CLIENT_COLLATERAL_URL, updateClientCollateralAsJson(BigDecimal.valueOf(1)),
                 "changes");
     }
 

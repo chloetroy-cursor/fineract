@@ -507,7 +507,7 @@ public class FixedDepositProductHelper {
     public static Integer createFixedDepositProduct(final String fixedDepositProductCreateJson, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
         LOG.info("--------------------- CREATING FIXED DEPOSIT PRODUCT ------------------------");
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_FIXED_DEPOSIT_PRODUCT_URL, fixedDepositProductCreateJson,
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_FIXED_DEPOSIT_PRODUCT_URL, fixedDepositProductCreateJson,
                 CommonConstants.RESPONSE_RESOURCE_ID);
     }
 
@@ -518,8 +518,8 @@ public class FixedDepositProductHelper {
     public static ArrayList retrieveAllFixedDepositProducts(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
         LOG.info("-------------------- RETRIEVING ALL FIXED DEPOSIT PRODUCTS ---------------------");
-        final ArrayList response = Utils.performServerGet(requestSpec, responseSpec,
-                FIXED_DEPOSIT_PRODUCT_URL + "?" + Utils.TENANT_IDENTIFIER, "");
+        final ArrayList response = Utils.feign(requestSpec, responseSpec).get(FIXED_DEPOSIT_PRODUCT_URL + "?" + Utils.TENANT_IDENTIFIER,
+                "");
         return response;
     }
 
@@ -531,7 +531,7 @@ public class FixedDepositProductHelper {
             final String productId) {
         LOG.info("------------------------ RETRIEVING FIXED DEPOSIT PRODUCT BY ID ------------------------");
         final String GET_FD_PRODUCT_BY_ID_URL = FIXED_DEPOSIT_PRODUCT_URL + "/" + productId + "?" + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, GET_FD_PRODUCT_BY_ID_URL, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(GET_FD_PRODUCT_BY_ID_URL, "");
         return response;
     }
 
@@ -542,8 +542,7 @@ public class FixedDepositProductHelper {
     public static ArrayList getInterestRateChartSlabsByProductId(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final Integer productId) {
         LOG.info("-------------------- RETRIEVE INTEREST CHART BY PRODUCT ID ---------------------");
-        final ArrayList response = Utils.performServerGet(requestSpec, responseSpec, INTEREST_CHART_URL + "?productId=" + productId,
-                "chartSlabs");
+        final ArrayList response = Utils.feign(requestSpec, responseSpec).get(INTEREST_CHART_URL + "?productId=" + productId, "chartSlabs");
         return response;
     }
 

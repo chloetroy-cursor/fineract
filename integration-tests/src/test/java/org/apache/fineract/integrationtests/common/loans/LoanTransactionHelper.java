@@ -165,7 +165,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public GetLoanProductsProductIdResponse getLoanProduct(final Integer loanProductId) {
         final String GET_LOANPRODUCT_URL = "/fineract-provider/api/v1/loanproducts/" + loanProductId + "?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(this.requestSpec, this.responseSpec, GET_LOANPRODUCT_URL);
+        final String response = Utils.feign(this.requestSpec, this.responseSpec).get(GET_LOANPRODUCT_URL);
         return GSON.fromJson(response, GetLoanProductsProductIdResponse.class);
     }
 
@@ -175,7 +175,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public GetLoanProductsResponse[] listAllLoanProducts() {
         final String GET_LOANPRODUCT_URL = "/fineract-provider/api/v1/loanproducts?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(this.requestSpec, this.responseSpec, GET_LOANPRODUCT_URL);
+        final String response = Utils.feign(this.requestSpec, this.responseSpec).get(GET_LOANPRODUCT_URL);
         return GSON.fromJson(response, GetLoanProductsResponse[].class);
     }
 
@@ -184,7 +184,7 @@ public class LoanTransactionHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public Integer getLoanProductId(final String loanProductJSON) {
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, CREATE_LOAN_PRODUCT_URL, loanProductJSON, "resourceId");
+        return Utils.feign(this.requestSpec, this.responseSpec).post(CREATE_LOAN_PRODUCT_URL, loanProductJSON, "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -192,8 +192,7 @@ public class LoanTransactionHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public <T> T getLoanProductError(final String loanProductJSON, final String jsonAttributeToGetBack) {
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, CREATE_LOAN_PRODUCT_URL, loanProductJSON,
-                jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, this.responseSpec).post(CREATE_LOAN_PRODUCT_URL, loanProductJSON, jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -218,7 +217,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public Object getLoanId(final String loanApplicationJSON, final String responseAttribute, RequestSpecification requestSpec,
             ResponseSpecification responseSpec) {
-        return Utils.performServerPost(requestSpec, responseSpec, APPLY_LOAN_URL, loanApplicationJSON, responseAttribute);
+        return Utils.feign(requestSpec, responseSpec).post(APPLY_LOAN_URL, loanApplicationJSON, responseAttribute);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -234,7 +233,7 @@ public class LoanTransactionHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public HashMap<String, Integer> getGlimId(final String loanApplicationJSON) {
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, APPLY_LOAN_URL, loanApplicationJSON, "");
+        return Utils.feign(this.requestSpec, this.responseSpec).post(APPLY_LOAN_URL, loanApplicationJSON, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -243,7 +242,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public Object getGlimLoanId(final String glimId) {
         final String GET_LOAN_URL = "/fineract-provider/api/v1/loans/glimAccount/" + glimId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(this.requestSpec, this.responseSpec, GET_LOAN_URL, "childLoanId");
+        return Utils.feign(this.requestSpec, this.responseSpec).get(GET_LOAN_URL, "childLoanId");
 
     }
 
@@ -252,7 +251,7 @@ public class LoanTransactionHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public Object getLoanError(final String loanApplicationJSON, final String responseAttribute) {
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, APPLY_LOAN_URL, loanApplicationJSON, responseAttribute);
+        return Utils.feign(this.requestSpec, this.responseSpec).post(APPLY_LOAN_URL, loanApplicationJSON, responseAttribute);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -261,7 +260,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public Integer getLoanOfficerId(final String loanId) {
         final String GET_LOAN_URL = "/fineract-provider/api/v1/loans/" + loanId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(this.requestSpec, this.responseSpec, GET_LOAN_URL, "loanOfficerId");
+        return Utils.feign(this.requestSpec, this.responseSpec).get(GET_LOAN_URL, "loanOfficerId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -269,7 +268,7 @@ public class LoanTransactionHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public Object createLoanAccount(final String loanApplicationJSON, final String responseAttribute) {
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, APPLY_LOAN_URL, loanApplicationJSON, responseAttribute);
+        return Utils.feign(this.requestSpec, this.responseSpec).post(APPLY_LOAN_URL, loanApplicationJSON, responseAttribute);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -277,8 +276,8 @@ public class LoanTransactionHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public Integer updateLoan(final Integer id, final String loanApplicationJSON) {
-        return Utils.performServerPut(this.requestSpec, this.responseSpec,
-                "/fineract-provider/api/v1/loans/" + id + "?" + Utils.TENANT_IDENTIFIER, loanApplicationJSON, "loanId");
+        return Utils.feign(this.requestSpec, this.responseSpec).put("/fineract-provider/api/v1/loans/" + id + "?" + Utils.TENANT_IDENTIFIER,
+                loanApplicationJSON, "loanId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -286,8 +285,8 @@ public class LoanTransactionHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public PutLoansLoanIdResponse modifyLoanApplication(final Integer id, final String loanApplicationJSON) {
-        final String response = Utils.performServerPut(this.requestSpec, this.responseSpec,
-                "/fineract-provider/api/v1/loans/" + id + "?" + Utils.TENANT_IDENTIFIER, loanApplicationJSON, null);
+        final String response = Utils.feign(this.requestSpec, this.responseSpec)
+                .put("/fineract-provider/api/v1/loans/" + id + "?" + Utils.TENANT_IDENTIFIER, loanApplicationJSON, null);
         return GSON.fromJson(response, PutLoansLoanIdResponse.class);
     }
 
@@ -298,7 +297,7 @@ public class LoanTransactionHelper {
     public PutLoansLoanIdResponse modifyLoanCommand(final Integer loanId, final String command, final String payload,
             ResponseSpecification responseSpec) {
         final String url = "/fineract-provider/api/v1/loans/" + loanId + "?" + Utils.TENANT_IDENTIFIER + "&command=" + command;
-        final String response = Utils.performServerPut(this.requestSpec, responseSpec, url, payload, null);
+        final String response = Utils.feign(this.requestSpec, responseSpec).put(url, payload, null);
         return GSON.fromJson(response, PutLoansLoanIdResponse.class);
     }
 
@@ -314,7 +313,7 @@ public class LoanTransactionHelper {
     public ArrayList getLoanRepaymentSchedule(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer loanID) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "?associations=repaymentSchedule&" + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, URL, "repaymentSchedule");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(URL, "repaymentSchedule");
         return (ArrayList) response.get("periods");
     }
 
@@ -325,7 +324,7 @@ public class LoanTransactionHelper {
     public ArrayList getLoanCharges(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer loanID) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "?associations=charges&" + Utils.TENANT_IDENTIFIER;
-        return (ArrayList) Utils.performServerGet(requestSpec, responseSpec, URL, "charges");
+        return (ArrayList) Utils.feign(requestSpec, responseSpec).get(URL, "charges");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -335,7 +334,7 @@ public class LoanTransactionHelper {
     public ArrayList getLoanTransactions(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer loanID) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "?associations=transactions&" + Utils.TENANT_IDENTIFIER;
-        return (ArrayList) Utils.performServerGet(requestSpec, responseSpec, URL, "transactions");
+        return (ArrayList) Utils.feign(requestSpec, responseSpec).get(URL, "transactions");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -346,7 +345,7 @@ public class LoanTransactionHelper {
             final Integer loanID) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "?associations=repaymentSchedule,futureSchedule&"
                 + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, URL, "repaymentSchedule");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(URL, "repaymentSchedule");
         return (ArrayList) response.get("futurePeriods");
     }
 
@@ -356,7 +355,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public HashMap getLoanSummary(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, final Integer loanID) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "?" + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, URL, "summary");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(URL, "summary");
         return response;
     }
 
@@ -367,7 +366,7 @@ public class LoanTransactionHelper {
     public <T> T getLoanDetail(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, final Integer loanID,
             final String param) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "?associations=all&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, URL, param);
+        return Utils.feign(requestSpec, responseSpec).get(URL, param);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -377,7 +376,7 @@ public class LoanTransactionHelper {
     public GetLoansLoanIdResponse getLoan(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer loanId) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanId + "?associations=all&" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(requestSpec, responseSpec, URL);
+        final String response = Utils.feign(requestSpec, responseSpec).get(URL);
         return GSON.fromJson(response, GetLoansLoanIdResponse.class);
     }
 
@@ -389,7 +388,7 @@ public class LoanTransactionHelper {
             final Integer loanID, final String param) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "?associations=all&exclude=guarantors,futureSchedule&"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, URL, param);
+        return Utils.feign(requestSpec, responseSpec).get(URL, param);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -398,7 +397,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public String getLoanDetails(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, final Integer loanID) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "?associations=all&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, URL, null);
+        return Utils.feign(requestSpec, responseSpec).get(URL, null);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -408,7 +407,7 @@ public class LoanTransactionHelper {
     public ArrayList<GetDelinquencyTagHistoryResponse> getLoanDelinquencyTags(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final Integer loanID) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "/delinquencytags?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(requestSpec, responseSpec, URL);
+        final String response = Utils.feign(requestSpec, responseSpec).get(URL);
         Type delinquencyTagsListType = new TypeToken<ArrayList<GetDelinquencyTagHistoryResponse>>() {
 
         }.getType();
@@ -449,7 +448,7 @@ public class LoanTransactionHelper {
     public Object getLoanProductDetail(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer loanProductId, final String jsonAttributeToGetBack) {
         final String URL = "/fineract-provider/api/v1/loanproducts/" + loanProductId + "?associations=all&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, URL, jsonAttributeToGetBack);
+        return Utils.feign(requestSpec, responseSpec).get(URL, jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -459,7 +458,7 @@ public class LoanTransactionHelper {
     public String getLoanProductDetails(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer loanProductId) {
         final String URL = "/fineract-provider/api/v1/loanproducts/" + loanProductId + "?associations=all&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, URL, null);
+        return Utils.feign(requestSpec, responseSpec).get(URL, null);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -468,7 +467,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public ArrayList getLoanCharges(final Integer loanId) {
         final String GET_LOAN_CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/charges?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, GET_LOAN_CHARGES_URL, "");
+        return Utils.feign(requestSpec, responseSpec).get(GET_LOAN_CHARGES_URL, "");
     }
 
     public List<GetLoansLoanIdChargesChargeIdResponse> getLoanCharges(final Long loanId) {
@@ -493,7 +492,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public HashMap applyLoan(final String payload, final ResponseSpecification responseSpec) {
         final String postURLForLoan = "/fineract-provider/api/v1/loans?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, postURLForLoan, payload, null);
+        return Utils.feign(this.requestSpec, this.responseSpec).post(postURLForLoan, payload, null);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -503,7 +502,7 @@ public class LoanTransactionHelper {
     public List getRepaymentTemplate(final Integer loanId) {
         final String GET_REPAYMENTS_URL = "/fineract-provider/api/v1/loans/" + loanId + "/transactions/template?command=repayment&"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, GET_REPAYMENTS_URL, "$");
+        return Utils.feign(requestSpec, responseSpec).get(GET_REPAYMENTS_URL, "$");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -513,7 +512,7 @@ public class LoanTransactionHelper {
     public ArrayList<HashMap> getRepayments(final Integer loanId) {
         final String GET_REPAYMENTS_URL = "/fineract-provider/api/v1/loans/" + loanId + "/transactions/template?command=disburse&"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, GET_REPAYMENTS_URL, "loanRepaymentScheduleInstallments");
+        return Utils.feign(requestSpec, responseSpec).get(GET_REPAYMENTS_URL, "loanRepaymentScheduleInstallments");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -524,7 +523,7 @@ public class LoanTransactionHelper {
             final String command, final String payload, final ResponseSpecification responseSpec) {
         final String LOAN_TRANSACTION_URL = "/fineract-provider/api/v1/loans/" + loanId + "/transactions/" + transactionId + "?command="
                 + command + "&" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerPost(requestSpec, responseSpec, LOAN_TRANSACTION_URL, payload, null);
+        final String response = Utils.feign(requestSpec, responseSpec).post(LOAN_TRANSACTION_URL, payload, null);
         return GSON.fromJson(response, PostLoansLoanIdTransactionsResponse.class);
     }
 
@@ -711,7 +710,7 @@ public class LoanTransactionHelper {
             undoBodyJson = "{'note' : 'UNDO DISBURSAL'}";
             url = createLoanOperationURL(UNDO_DISBURSE_LOAN_COMMAND, loanId);
         }
-        final String response = Utils.performServerPost(this.requestSpec, this.responseSpec, url, undoBodyJson, null);
+        final String response = Utils.feign(this.requestSpec, this.responseSpec).post(url, undoBodyJson, null);
         return GSON.fromJson(response, PostLoansLoanIdResponse.class);
     }
 
@@ -819,8 +818,8 @@ public class LoanTransactionHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public Integer waiveInterestAndReturnTransactionId(final String date, final String amountToBeWaived, final Integer loanID) {
-        Integer resourceId = Utils.performServerPost(this.requestSpec, this.responseSpec,
-                createLoanTransactionURL(WAIVE_INTEREST_COMMAND, loanID), getWaiveBodyAsJSON(date, amountToBeWaived), "resourceId");
+        Integer resourceId = Utils.feign(this.requestSpec, this.responseSpec).post(createLoanTransactionURL(WAIVE_INTEREST_COMMAND, loanID),
+                getWaiveBodyAsJSON(date, amountToBeWaived), "resourceId");
         return resourceId;
     }
 
@@ -1064,7 +1063,7 @@ public class LoanTransactionHelper {
     public String retrieveInterestPauseByLoanId(final Integer loanID) {
         log.info("Retrieving interest pauses for Loan ID {}", loanID);
         String url = retrieveInterestPause(loanID);
-        return Utils.performServerGet(requestSpec, responseSpec, url);
+        return Utils.feign(requestSpec, responseSpec).get(url);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1074,7 +1073,7 @@ public class LoanTransactionHelper {
     public String retrieveInterestPauseByExternalId(final String externalId) {
         log.info("Retrieving interest pauses for External ID {}", externalId);
         String url = retrieveInterestPause(externalId);
-        return Utils.performServerGet(requestSpec, responseSpec, url);
+        return Utils.feign(requestSpec, responseSpec).get(url);
     }
 
     public PostLoansLoanIdTransactionsResponse makeInterestPaymentWaiver(final Long loanId,
@@ -1421,7 +1420,7 @@ public class LoanTransactionHelper {
     public Integer addChargesForLoan(final Integer loanId, final String request) {
         log.info("--------------------------------- ADD CHARGES FOR LOAN --------------------------------");
         final String ADD_CHARGES_URL = LOAN_ACCOUNT_URL + "/" + loanId + "/charges?" + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerPost(requestSpec, responseSpec, ADD_CHARGES_URL, request, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).post(ADD_CHARGES_URL, request, "");
         return (Integer) response.get("resourceId");
     }
 
@@ -1432,7 +1431,7 @@ public class LoanTransactionHelper {
     public HashMap addChargesForLoanGetFullResponse(final Integer loanId, final String request) {
         log.info("--------------------------------- ADD CHARGES FOR LOAN --------------------------------");
         final String ADD_CHARGES_URL = LOAN_ACCOUNT_URL + "/" + loanId + "/charges?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, ADD_CHARGES_URL, request, "");
+        return Utils.feign(requestSpec, responseSpec).post(ADD_CHARGES_URL, request, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1442,7 +1441,7 @@ public class LoanTransactionHelper {
     public Integer addChargesForLoan(final Integer loanId, final String request, final ResponseSpecification responseSpecParam) {
         log.info("--------------------------------- ADD CHARGES FOR LOAN --------------------------------");
         final String ADD_CHARGES_URL = LOAN_ACCOUNT_URL + "/" + loanId + "/charges?" + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerPost(requestSpec, responseSpecParam, ADD_CHARGES_URL, request, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpecParam).post(ADD_CHARGES_URL, request, "");
         return (Integer) response.get("resourceId");
     }
 
@@ -1458,7 +1457,7 @@ public class LoanTransactionHelper {
             final ResponseSpecification responseSpecParam) {
         log.info("--------------------------------- ADD CHARGES FOR LOAN --------------------------------");
         final String ADD_CHARGES_URL = LOAN_ACCOUNT_URL + "/" + loanId + "/charges?" + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerPost(requestSpec, responseSpecParam, ADD_CHARGES_URL, payload);
+        final String response = Utils.feign(requestSpec, responseSpecParam).post(ADD_CHARGES_URL, payload);
         return GSON.fromJson(response, PostLoansLoanIdChargesResponse.class);
     }
 
@@ -1469,7 +1468,7 @@ public class LoanTransactionHelper {
     public Object addChargesForAllreadyDisursedLoan(final Integer loanId, final String request,
             final ResponseSpecification responseSpecification) {
         final String ADD_CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/charges?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, responseSpecification, ADD_CHARGES_URL, request, "");
+        return Utils.feign(this.requestSpec, responseSpecification).post(ADD_CHARGES_URL, request, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1480,7 +1479,7 @@ public class LoanTransactionHelper {
         log.info("--------------------------------- ADD CHARGES FOR LOAN --------------------------------");
         final String UPDATE_CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/charges/" + loanchargeId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerPut(requestSpec, responseSpec, UPDATE_CHARGES_URL, request, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).put(UPDATE_CHARGES_URL, request, "");
         return (Integer) response.get("resourceId");
     }
 
@@ -1534,7 +1533,7 @@ public class LoanTransactionHelper {
         log.info("--------------------------------- DELETE CHARGES FOR LOAN --------------------------------");
         final String DELETE_CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/charges/" + loanchargeId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerDelete(requestSpec, responseSpec, DELETE_CHARGES_URL, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).delete(DELETE_CHARGES_URL, "");
         return (Integer) response.get("resourceId");
     }
 
@@ -1547,7 +1546,7 @@ public class LoanTransactionHelper {
         log.info("--------------------------------- WAIVE CHARGES FOR LOAN --------------------------------");
         final String CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/charges/" + loanchargeId + "?command=" + commad + "&"
                 + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerPost(requestSpec, responseSpec, CHARGES_URL, json, null);
+        final String response = Utils.feign(requestSpec, responseSpec).post(CHARGES_URL, json, null);
         return GSON.fromJson(response, PostLoansLoanIdChargesChargeIdResponse.class);
     }
 
@@ -1559,7 +1558,7 @@ public class LoanTransactionHelper {
         log.info("--------------------------------- WAIVE CHARGES FOR LOAN --------------------------------");
         final String CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/charges/" + loanchargeId + "?command=waive&"
                 + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerPost(requestSpec, responseSpec, CHARGES_URL, json, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).post(CHARGES_URL, json, "");
         return (Integer) response.get("resourceId");
     }
 
@@ -1571,7 +1570,7 @@ public class LoanTransactionHelper {
         log.info("--------------------------------- UNDO WAIVE CHARGES FOR LOAN --------------------------------");
         final String TRANSAC_URL = "/fineract-provider/api/v1/loans/" + loanId + "/transactions/" + transactionId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, TRANSAC_URL, body, "");
+        return Utils.feign(requestSpec, responseSpec).put(TRANSAC_URL, body, "");
     }
 
     public PostLoansLoanIdChargesChargeIdResponse chargeAdjustment(final Long loanId, final Long chargeId,
@@ -1594,7 +1593,7 @@ public class LoanTransactionHelper {
         log.info("--------------------------------- UNDO WAIVE CHARGES FOR LOAN --------------------------------");
         final String TRANSAC_URL = "/fineract-provider/api/v1/loans/" + loanId + "/transactions/" + transactionId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerPut(requestSpec, responseSpec, TRANSAC_URL, body, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).put(TRANSAC_URL, body, "");
         return (Integer) response.get("resourceId");
     }
 
@@ -1606,7 +1605,7 @@ public class LoanTransactionHelper {
         log.info("--------------------------------- WAIVE CHARGES FOR LOAN --------------------------------");
         final String CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/charges/" + loanchargeId + "?command=pay&"
                 + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerPost(requestSpec, responseSpec, CHARGES_URL, json, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).post(CHARGES_URL, json, "");
         return (Integer) response.get("resourceId");
     }
 
@@ -1636,7 +1635,7 @@ public class LoanTransactionHelper {
             final Integer loanID) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "?associations=all&exclude=guarantors,futureSchedule&"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, URL, "transactions");
+        return Utils.feign(requestSpec, responseSpec).get(URL, "transactions");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1646,7 +1645,7 @@ public class LoanTransactionHelper {
     public HashMap getLoanCharge(final Integer loanId, final Integer chargeId) {
         final String GET_LOAN_CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/charges/" + chargeId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, GET_LOAN_CHARGES_URL, "");
+        return Utils.feign(requestSpec, responseSpec).get(GET_LOAN_CHARGES_URL, "");
     }
 
     public GetLoansLoanIdChargesChargeIdResponse getLoanCharge(final Long loanId, final Long loanChargeId) {
@@ -1675,7 +1674,7 @@ public class LoanTransactionHelper {
     public Object getLoanTransactionDetails(final Integer loanId, final Integer txnId, final String param) {
         final String GET_LOAN_CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/transactions/" + txnId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, GET_LOAN_CHARGES_URL, param);
+        return Utils.feign(requestSpec, responseSpec).get(GET_LOAN_CHARGES_URL, param);
     }
 
     public GetLoansLoanIdTransactionsTransactionIdResponse getLoanTransactionDetails(final Long loanId, final Long transactionId) {
@@ -1767,7 +1766,7 @@ public class LoanTransactionHelper {
     public GetLoansLoanIdTransactionsTransactionIdResponse getLoanTransaction(final Integer loanId, final Integer txnId) {
         final String GET_LOAN_CHARGES_URL = "/fineract-provider/api/v1/loans/" + loanId + "/transactions/" + txnId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        final String response = Utils.performServerGet(requestSpec, responseSpec, GET_LOAN_CHARGES_URL);
+        final String response = Utils.feign(requestSpec, responseSpec).get(GET_LOAN_CHARGES_URL);
         return GSON.fromJson(response, GetLoansLoanIdTransactionsTransactionIdResponse.class);
     }
 
@@ -1778,7 +1777,7 @@ public class LoanTransactionHelper {
     public HashMap getPostDatedCheck(final Integer loanId, final Integer installmentId) {
         final String GET_POST_DATED_TRANS_URL = "/fineract-provider/api/v1/loans/" + loanId + "/postdatedchecks/" + installmentId + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, GET_POST_DATED_TRANS_URL, "");
+        return Utils.feign(requestSpec, responseSpec).get(GET_POST_DATED_TRANS_URL, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -2333,8 +2332,7 @@ public class LoanTransactionHelper {
     private HashMap performLoanTransaction(final String postURLForLoanTransaction, final String jsonToBeSent) {
         log.info("URL: {}", postURLForLoanTransaction);
         log.info("Body: {}", jsonToBeSent);
-        final HashMap response = Utils.performServerPost(this.requestSpec, this.responseSpec, postURLForLoanTransaction, jsonToBeSent,
-                "changes");
+        final HashMap response = Utils.feign(this.requestSpec, this.responseSpec).post(postURLForLoanTransaction, jsonToBeSent, "changes");
         return (HashMap) response.get("status");
     }
 
@@ -2344,8 +2342,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     private Float performUndoLastLoanDisbursementTransaction(final String postURLForLoanTransaction, final String jsonToBeSent) {
 
-        final HashMap response = Utils.performServerPost(this.requestSpec, this.responseSpec, postURLForLoanTransaction, jsonToBeSent,
-                "changes");
+        final HashMap response = Utils.feign(this.requestSpec, this.responseSpec).post(postURLForLoanTransaction, jsonToBeSent, "changes");
         return (Float) response.get("disbursedAmount");
     }
 
@@ -2355,7 +2352,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     private Object performLoanTransaction(final String postURLForLoanTransaction, final String jsonToBeSent,
             final String responseAttribute) {
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, postURLForLoanTransaction, jsonToBeSent, responseAttribute);
+        return Utils.feign(this.requestSpec, this.responseSpec).post(postURLForLoanTransaction, jsonToBeSent, responseAttribute);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -2372,17 +2369,17 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     private PostLoansLoanIdTransactionsResponse postLoanTransaction(final String postURLForLoanTransaction, final String jsonToBeSent,
             ResponseSpecification responseSpec) {
-        final String response = Utils.performServerPost(this.requestSpec, responseSpec, postURLForLoanTransaction, jsonToBeSent);
+        final String response = Utils.feign(this.requestSpec, responseSpec).post(postURLForLoanTransaction, jsonToBeSent);
         return GSON.fromJson(response, PostLoansLoanIdTransactionsResponse.class);
     }
 
     private PostLoansLoanIdTransactionsResponse putLoanTransaction(final String putURLForLoanTransaction, final String jsonToBeSent) {
-        final String response = Utils.performServerPut(this.requestSpec, this.responseSpec, putURLForLoanTransaction, jsonToBeSent);
+        final String response = Utils.feign(this.requestSpec, this.responseSpec).put(putURLForLoanTransaction, jsonToBeSent);
         return GSON.fromJson(response, PostLoansLoanIdTransactionsResponse.class);
     }
 
     private void deleteLoanTransaction(final String deleteURLForLoanTransaction) {
-        Utils.performServerDelete(this.requestSpec, this.responseSpec, deleteURLForLoanTransaction, null);
+        Utils.feign(this.requestSpec, this.responseSpec).delete(deleteURLForLoanTransaction, null);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -2392,7 +2389,7 @@ public class LoanTransactionHelper {
     private Object performLoanTransaction(final String postURLForLoanTransaction, final String jsonToBeSent,
             ResponseSpecification responseValidationError) {
 
-        return Utils.performServerPost(this.requestSpec, responseValidationError, postURLForLoanTransaction, jsonToBeSent,
+        return Utils.feign(this.requestSpec, responseValidationError).post(postURLForLoanTransaction, jsonToBeSent,
                 CommonConstants.RESPONSE_ERROR);
     }
 
@@ -2412,7 +2409,7 @@ public class LoanTransactionHelper {
     private Object adjustLoanTransaction(final Integer loanId, final Integer tansactionId, final String jsonToBeSent,
             final String responseAttribute) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanId + "/transactions/" + tansactionId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, URL, jsonToBeSent, responseAttribute);
+        return Utils.feign(this.requestSpec, this.responseSpec).post(URL, jsonToBeSent, responseAttribute);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -2437,7 +2434,7 @@ public class LoanTransactionHelper {
     public HashMap getPrepayAmount(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, final Integer loanID) {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID + "/transactions/template?command=prepayLoan&"
                 + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, URL, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(URL, "");
         return response;
     }
 
@@ -2450,7 +2447,7 @@ public class LoanTransactionHelper {
         final String URL = "/fineract-provider/api/v1/loans/" + loanID
                 + "/transactions/template?command=prepayLoan&locale=en&dateFormat=yyyy-MM-dd&transactionDate=" + transactionDate + "&"
                 + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, URL, "");
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(URL, "");
         return response;
     }
 
@@ -2613,7 +2610,7 @@ public class LoanTransactionHelper {
             final String expectedDisbursementDate, final String updatedExpectedDisbursementDate, final String updatedPrincipal,
             final String jsonAttributeToGetBack) {
 
-        return Utils.performServerPut(this.requestSpec, this.responseSpec, createEditDisbursementURL(loanID, disbursementId),
+        return Utils.feign(this.requestSpec, this.responseSpec).put(createEditDisbursementURL(loanID, disbursementId),
                 getEditDisbursementsAsJSON(approvalAmount, expectedDisbursementDate, updatedExpectedDisbursementDate, updatedPrincipal),
                 jsonAttributeToGetBack);
     }
@@ -2625,7 +2622,7 @@ public class LoanTransactionHelper {
     public Object addAndDeleteDisbursementDetail(final Integer loanID, final String approvalAmount, final String expectedDisbursementDate,
             List<HashMap> disbursementData, final String jsonAttributeToGetBack) {
 
-        return Utils.performServerPut(this.requestSpec, this.responseSpec, createAddAndDeleteDisbursementURL(loanID),
+        return Utils.feign(this.requestSpec, this.responseSpec).put(createAddAndDeleteDisbursementURL(loanID),
                 getAddAndDeleteDisbursementsAsJSON(approvalAmount, expectedDisbursementDate, disbursementData), jsonAttributeToGetBack);
     }
 
@@ -2715,8 +2712,8 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public Workbook getLoanWorkbook(String dateFormat) throws IOException {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, "application/vnd.ms-excel");
-        byte[] byteArray = Utils.performGetBinaryResponse(requestSpec, responseSpec,
-                LOAN_ACCOUNT_URL + "/downloadtemplate" + "?" + Utils.TENANT_IDENTIFIER + "&dateFormat=" + dateFormat);
+        byte[] byteArray = Utils.feign(requestSpec, responseSpec)
+                .getBytes(LOAN_ACCOUNT_URL + "/downloadtemplate" + "?" + Utils.TENANT_IDENTIFIER + "&dateFormat=" + dateFormat);
         InputStream inputStream = new ByteArrayInputStream(byteArray);
         Workbook workbook = new HSSFWorkbook(inputStream);
         return workbook;
@@ -2732,8 +2729,8 @@ public class LoanTransactionHelper {
         String dateFormat = "dd MMMM yyyy";
         String legalFormType = null;
         requestSpec.header(HttpHeaders.CONTENT_TYPE, MediaType.MULTIPART_FORM_DATA);
-        return Utils.performServerTemplatePost(requestSpec, responseSpec,
-                LOAN_ACCOUNT_URL + "/uploadtemplate" + "?" + Utils.TENANT_IDENTIFIER, legalFormType, file, locale, dateFormat);
+        return Utils.feign(requestSpec, responseSpec).postTemplate(LOAN_ACCOUNT_URL + "/uploadtemplate" + "?" + Utils.TENANT_IDENTIFIER,
+                legalFormType, file, locale, dateFormat);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -2742,14 +2739,14 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public String getOutputTemplateLocation(final String importDocumentId) {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_PLAIN);
-        return Utils.performServerOutputTemplateLocationGet(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).getOutputTemplateLocation(
                 "/fineract-provider/api/v1/imports/getOutputTemplateLocation" + "?" + Utils.TENANT_IDENTIFIER, importDocumentId);
     }
 
     @Deprecated(forRemoval = true)
     public byte[] downloadOutputTemplate(final String importDocumentId) {
         requestSpec.header(HttpHeaders.CONTENT_TYPE, "application/vnd.ms-excel");
-        return Utils.performServerOutputTemplateDownloadGet(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).getOutputTemplate(
                 "/fineract-provider/api/v1/imports/downloadOutputTemplate" + "?" + Utils.TENANT_IDENTIFIER, importDocumentId);
     }
 
@@ -2761,7 +2758,7 @@ public class LoanTransactionHelper {
             final ResponseSpecification responseSpec, final Integer loanId, final String jsonReturn) {
         final String GET_LOAN_URL = "/fineract-provider/api/v1/internal/loan/" + loanId + "/audit?" + Utils.TENANT_IDENTIFIER;
         log.info("---------------------------------GET A LOAN ENTITY AUDIT FIELDS---------------------------------------------");
-        return Utils.performServerGet(requestSpec, responseSpec, GET_LOAN_URL, jsonReturn);
+        return Utils.feign(requestSpec, responseSpec).get(GET_LOAN_URL, jsonReturn);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -2774,7 +2771,7 @@ public class LoanTransactionHelper {
                 + "/audit?" + Utils.TENANT_IDENTIFIER;
         log.info(
                 "---------------------------------GET A LOAN TRANSACTION ENTITY AUDIT FIELDS---------------------------------------------");
-        return Utils.performServerGet(requestSpec, responseSpec, GET_LOAN_TRANSACTION_URL, jsonReturn);
+        return Utils.feign(requestSpec, responseSpec).get(GET_LOAN_TRANSACTION_URL, jsonReturn);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -2785,7 +2782,7 @@ public class LoanTransactionHelper {
             final Long loanId, final String jsonBody) {
         final String POST_LOAN_TRANSACTION_URL = "/fineract-provider/api/v1/internal/loan/" + loanId + "/apply-interest-refund/" + "?"
                 + Utils.TENANT_IDENTIFIER;
-        final String reponse = Utils.performServerPost(requestSpec, responseSpec, POST_LOAN_TRANSACTION_URL, jsonBody);
+        final String reponse = Utils.feign(requestSpec, responseSpec).post(POST_LOAN_TRANSACTION_URL, jsonBody);
         return Long.valueOf(reponse);
     }
 
@@ -3145,7 +3142,7 @@ public class LoanTransactionHelper {
             Integer statusId) {
         final String GET_LOAN_URL = "/fineract-provider/api/v1/internal/loan/status/" + statusId + "?" + Utils.TENANT_IDENTIFIER;
         log.info("---------------------------------GET LOANS BY STATUS---------------------------------------------");
-        final String get = Utils.performServerGet(requestSpec, responseSpec, GET_LOAN_URL, null);
+        final String get = Utils.feign(requestSpec, responseSpec).get(GET_LOAN_URL, null);
         return new Gson().fromJson(get, new TypeToken<ArrayList<Integer>>() {}.getType());
     }
 
@@ -3208,7 +3205,7 @@ public class LoanTransactionHelper {
     public Object addChargesForLoanWithError(final Integer loanId, final String request, final String jsonAttributeToGetBack) {
         log.info("--------------------------------- ADD CHARGES FOR LOAN --------------------------------");
         final String ADD_CHARGES_URL = LOAN_ACCOUNT_URL + "/" + loanId + "/charges?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(requestSpec, responseSpec, ADD_CHARGES_URL, request, jsonAttributeToGetBack);
+        return Utils.feign(requestSpec, responseSpec).post(ADD_CHARGES_URL, request, jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -3217,7 +3214,7 @@ public class LoanTransactionHelper {
     @Deprecated(forRemoval = true)
     public Object updateLoanProduct(final Long loanProductId, final String request) {
         final String UPDATE_LOAN_PRODUCT_URL = LOAN_PRODUCTS_URL + "/" + loanProductId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPut(requestSpec, responseSpec, UPDATE_LOAN_PRODUCT_URL, request, null);
+        return Utils.feign(requestSpec, responseSpec).put(UPDATE_LOAN_PRODUCT_URL, request, null);
     }
 
     public PostLoansLoanIdResponse undoApprovalForLoan(Long loanId, PostLoansLoanIdRequest request) {

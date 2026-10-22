@@ -84,7 +84,7 @@ public final class FixedDepositAccountStatusChecker {
             final String fixedDepositAccountID) {
         final String GET_STATUS_OF_FIXED_DEPOSIT_ACCOUNT_URL = FIXED_DEPOSIT_ACCOUNT_URL + "/" + fixedDepositAccountID + "?"
                 + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, GET_STATUS_OF_FIXED_DEPOSIT_ACCOUNT_URL, "status");
+        return Utils.feign(requestSpec, responseSpec).get(GET_STATUS_OF_FIXED_DEPOSIT_ACCOUNT_URL, "status");
     }
 
     public static void verifyFixedDepositAccountIsPrematureClosed(HashMap fixedDepositStatusHashMap) {

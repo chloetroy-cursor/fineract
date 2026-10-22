@@ -32,6 +32,7 @@ import org.apache.fineract.client.models.GetOfficesResponse;
 import org.apache.fineract.client.models.PostUsersRequest;
 import org.apache.fineract.client.models.PostUsersResponse;
 import org.apache.fineract.client.util.JSON;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
@@ -57,7 +58,7 @@ public final class UserHelper {
     @Deprecated(forRemoval = true)
     public static Integer createUser(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, int roleId,
             int staffId) {
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_USER_URL, getTestCreateUserAsJSON(roleId, staffId), "resourceId");
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_USER_URL, getTestCreateUserAsJSON(roleId, staffId), "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -66,8 +67,7 @@ public final class UserHelper {
     @Deprecated(forRemoval = true)
     public static Object createUser(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, int roleId,
             int staffId, String username, String attribute) {
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_USER_URL, getTestCreateUserAsJSON(roleId, staffId, username),
-                attribute);
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_USER_URL, getTestCreateUserAsJSON(roleId, staffId, username), attribute);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -76,8 +76,8 @@ public final class UserHelper {
     @Deprecated(forRemoval = true)
     public static Object createUser(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, int roleId,
             int staffId, String username, String password, String attribute) {
-        return Utils.performServerPost(requestSpec, responseSpec, CREATE_USER_URL,
-                getTestCreateUserAsJSON(roleId, staffId, username, password), attribute);
+        return Utils.feign(requestSpec, responseSpec).post(CREATE_USER_URL, getTestCreateUserAsJSON(roleId, staffId, username, password),
+                attribute);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -87,7 +87,7 @@ public final class UserHelper {
     public static PostUsersResponse createUser(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             PostUsersRequest request) {
         String requestBody = GSON.toJson(request);
-        String response = Utils.performServerPost(requestSpec, responseSpec, CREATE_USER_URL, requestBody);
+        String response = Utils.feign(requestSpec, responseSpec).post(CREATE_USER_URL, requestBody);
         return GSON.fromJson(response, PostUsersResponse.class);
     }
 
@@ -98,7 +98,7 @@ public final class UserHelper {
     public static JsonObject createUserWithJsonResponse(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             PostUsersRequest request) {
         String requestBody = GSON.toJson(request);
-        String jsonResponse = Utils.performServerPost(requestSpec, responseSpec, CREATE_USER_URL, requestBody);
+        String jsonResponse = Utils.feign(requestSpec, responseSpec).post(CREATE_USER_URL, requestBody);
         return JsonParser.parseString(jsonResponse).getAsJsonObject();
     }
 
@@ -107,7 +107,7 @@ public final class UserHelper {
     // org.apache.fineract.client.models.PostLoansLoanIdRequest)
     @Deprecated(forRemoval = true)
     public static Integer getUserId(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, String userName) {
-        String json = Utils.performServerGet(requestSpec, responseSpec, CREATE_USER_URL, null);
+        String json = Utils.feign(requestSpec, responseSpec).get(CREATE_USER_URL, null);
         Assertions.assertNotNull(json);
         List<HashMap<String, Object>> userList = JsonPath.from(json).getList("$");
 
@@ -167,7 +167,7 @@ public final class UserHelper {
     @Deprecated(forRemoval = true)
     public static Integer deleteUser(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer userId) {
-        return Utils.performServerDelete(requestSpec, responseSpec, createRoleOperationURL(userId), "resourceId");
+        return Utils.feign(requestSpec, responseSpec).delete(createRoleOperationURL(userId), "resourceId");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -176,8 +176,7 @@ public final class UserHelper {
     @Deprecated(forRemoval = true)
     public static Object updateUser(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, int userId,
             String username, String attribute) {
-        return Utils.performServerPut(requestSpec, responseSpec, createRoleOperationURL(userId), getTestUpdateUserAsJSON(username),
-                attribute);
+        return Utils.feign(requestSpec, responseSpec).put(createRoleOperationURL(userId), getTestUpdateUserAsJSON(username), attribute);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -209,7 +208,7 @@ public final class UserHelper {
         }
         RequestSpecification responseRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         responseRequestSpec.header("Authorization",
-                "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(SIMPLE_USER_NAME, password));
+                "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey(SIMPLE_USER_NAME, password));
         return responseRequestSpec;
     }
 

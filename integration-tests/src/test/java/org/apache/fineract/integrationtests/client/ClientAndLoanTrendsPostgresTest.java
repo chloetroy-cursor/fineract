@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Map;
 import org.apache.fineract.client.models.RunReportsResponse;
-import org.apache.fineract.integrationtests.common.Utils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import retrofit2.Response;
@@ -30,9 +29,7 @@ import retrofit2.Response;
 public class ClientAndLoanTrendsPostgresTest extends IntegrationTest {
 
     @BeforeEach
-    public void setup() {
-        Utils.initializeRESTAssured();
-    }
+    public void setup() {}
 
     @Test
     void testClientTrendsByWeekReportRunsSuccessfully() {

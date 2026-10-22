@@ -62,9 +62,7 @@ public class ReportsTest extends IntegrationTest {
     private Long stringParamTestReportId;
 
     @BeforeEach
-    public void setup() {
-        Utils.initializeRESTAssured();
-    }
+    public void setup() {}
 
     @BeforeAll
     public void setupStringParamReport() throws IOException {

@@ -18,15 +18,13 @@
  */
 package org.apache.fineract.integrationtests.common.system;
 
-import static io.restassured.RestAssured.given;
-
 import com.google.gson.Gson;
-import io.restassured.path.json.JsonPath;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.apache.fineract.client.models.GetCodesResponse;
 import org.apache.fineract.client.models.PostCodeValueDataResponse;
 import org.apache.fineract.client.models.PostCodeValuesDataRequest;
@@ -58,7 +56,7 @@ public final class CodeHelper {
     public static Object createCode(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, final String codeName,
             final String jsonAttributeToGetback) {
 
-        return Utils.performServerPost(requestSpec, responseSpec, CODE_URL + "?" + Utils.TENANT_IDENTIFIER, getTestCodeAsJSON(codeName),
+        return Utils.feign(requestSpec, responseSpec).post(CODE_URL + "?" + Utils.TENANT_IDENTIFIER, getTestCodeAsJSON(codeName),
                 jsonAttributeToGetback);
     }
 
@@ -69,7 +67,7 @@ public final class CodeHelper {
     public static Object updateCode(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, final Integer codeId,
             final String codeName, final String jsonAttributeToGetback) {
 
-        return Utils.performServerPut(requestSpec, responseSpec, CODE_URL + "/" + codeId + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(requestSpec, responseSpec).put(CODE_URL + "/" + codeId + "?" + Utils.TENANT_IDENTIFIER,
                 getTestCodeAsJSON(codeName), jsonAttributeToGetback);
     }
 
@@ -80,8 +78,7 @@ public final class CodeHelper {
     public static Object getCodeById(final RequestSpecification requestSpec, final ResponseSpecification responseSpec, final Integer codeId,
             final String jsonAttributeToGetback) {
 
-        return Utils.performServerGet(requestSpec, responseSpec, CODE_URL + "/" + codeId + "?" + Utils.TENANT_IDENTIFIER,
-                jsonAttributeToGetback);
+        return Utils.feign(requestSpec, responseSpec).get(CODE_URL + "/" + codeId + "?" + Utils.TENANT_IDENTIFIER, jsonAttributeToGetback);
 
     }
 
@@ -162,7 +159,7 @@ public final class CodeHelper {
         } else {
             return codeValuesList.get(0);
         }
-        return Utils.performServerGet(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).get(
                 CODE_VALUE_URL.replace("[codeId]", codeId.toString()) + "/" + codeValueId.toString() + "?" + Utils.TENANT_IDENTIFIER, "");
 
     }
@@ -174,7 +171,7 @@ public final class CodeHelper {
     public static ArrayList<HashMap<String, Object>> getAllCodes(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
 
-        return Utils.performServerGet(requestSpec, responseSpec, CODE_URL + "?" + Utils.TENANT_IDENTIFIER, "");
+        return Utils.feign(requestSpec, responseSpec).get(CODE_URL + "?" + Utils.TENANT_IDENTIFIER, "");
 
     }
 
@@ -185,8 +182,8 @@ public final class CodeHelper {
     public static ArrayList<HashMap<String, Object>> getAllCodeValuesByCodeId(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final Integer codeId) {
 
-        return Utils.performServerGet(requestSpec, responseSpec,
-                CODE_VALUE_URL.replace("[codeId]", codeId.toString()) + "?" + Utils.TENANT_IDENTIFIER, "");
+        return Utils.feign(requestSpec, responseSpec)
+                .get(CODE_VALUE_URL.replace("[codeId]", codeId.toString()) + "?" + Utils.TENANT_IDENTIFIER, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -195,13 +192,11 @@ public final class CodeHelper {
     @Deprecated(forRemoval = true)
     public static Object getSystemDefinedCodes(final RequestSpecification requestSpec, final ResponseSpecification responseSpec) {
 
-        final String getResponse = given().spec(requestSpec).expect().spec(responseSpec).when()
-                .get(CodeHelper.CODE_URL + "?" + Utils.TENANT_IDENTIFIER).asString();
-
-        final JsonPath getResponseJsonPath = new JsonPath(getResponse);
+        final List<Map<String, Object>> codes = Utils.feign(requestSpec, responseSpec)
+                .get(CodeHelper.CODE_URL + "?" + Utils.TENANT_IDENTIFIER, "");
 
         // get any systemDefined code
-        return getResponseJsonPath.get("find { e -> e.systemDefined == true }");
+        return codes.stream().filter(code -> Boolean.TRUE.equals(code.get("systemDefined"))).findFirst().orElse(null);
 
     }
 
@@ -236,7 +231,7 @@ public final class CodeHelper {
     public static Object deleteCodeById(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer codeId, final String jsonAttributeToGetback) {
 
-        return Utils.performServerDelete(requestSpec, responseSpec, CODE_URL + "/" + codeId + "?" + Utils.TENANT_IDENTIFIER,
+        return Utils.feign(requestSpec, responseSpec).delete(CODE_URL + "/" + codeId + "?" + Utils.TENANT_IDENTIFIER,
                 jsonAttributeToGetback);
 
     }
@@ -279,7 +274,7 @@ public final class CodeHelper {
             final Integer codeId, final String codeValueName, final String description, final Integer position,
             final String jsonAttributeToGetback) {
 
-        return Utils.performServerPost(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).post(
                 CODE_VALUE_URL.replace("[codeId]", codeId.toString()) + "?" + Utils.TENANT_IDENTIFIER,
                 getTestCodeValueAsJSON(codeValueName, description, position), jsonAttributeToGetback);
     }
@@ -291,8 +286,8 @@ public final class CodeHelper {
     public static List<HashMap<String, Object>> getCodeValuesForCode(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final Integer codeId, final String jsonAttributeToGetback) {
 
-        return Utils.performServerGet(requestSpec, responseSpec,
-                CODE_VALUE_URL.replace("[codeId]", codeId.toString()) + "?" + Utils.TENANT_IDENTIFIER, jsonAttributeToGetback);
+        return Utils.feign(requestSpec, responseSpec)
+                .get(CODE_VALUE_URL.replace("[codeId]", codeId.toString()) + "?" + Utils.TENANT_IDENTIFIER, jsonAttributeToGetback);
 
     }
 
@@ -303,7 +298,7 @@ public final class CodeHelper {
     public static Object getCodeValueById(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer codeId, final Integer codeValueId, final String jsonAttributeToGetback) {
 
-        return Utils.performServerGet(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).get(
                 CODE_VALUE_URL.replace("[codeId]", codeId.toString()) + "/" + codeValueId.toString() + "?" + Utils.TENANT_IDENTIFIER,
                 jsonAttributeToGetback);
     }
@@ -315,7 +310,7 @@ public final class CodeHelper {
     public static Object deleteCodeValueById(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final Integer codeId, final Integer codeValueId, final String jsonAttributeToGetback) {
 
-        return Utils.performServerDelete(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).delete(
                 CODE_VALUE_URL.replace("[codeId]", codeId.toString()) + "/" + codeValueId.toString() + "?" + Utils.TENANT_IDENTIFIER,
                 jsonAttributeToGetback);
     }
@@ -340,7 +335,7 @@ public final class CodeHelper {
             final Integer codeId, final Integer codeValueId, final String codeValueName, final String description, final Integer position,
             final String jsonAttributeToGetback) {
 
-        return Utils.performServerPut(requestSpec, responseSpec,
+        return Utils.feign(requestSpec, responseSpec).put(
                 CODE_VALUE_URL.replace("[codeId]", codeId.toString()) + "/" + codeValueId + "?" + Utils.TENANT_IDENTIFIER,
                 getTestCodeValueAsJSON(codeValueName, description, position), jsonAttributeToGetback);
     }

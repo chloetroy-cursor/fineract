@@ -18,8 +18,6 @@
  */
 package org.apache.fineract.integrationtests.common.externalevents;
 
-import static org.apache.fineract.integrationtests.common.Utils.initializeRESTAssured;
-
 import com.google.common.collect.MapDifference;
 import com.google.common.collect.Maps;
 import io.restassured.builder.RequestSpecBuilder;
@@ -32,8 +30,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.ExternalEventConfigurationUpdateRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.ExternalEventConfigurationHelper;
-import org.apache.fineract.integrationtests.common.Utils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
@@ -47,9 +45,8 @@ public class ExternalEventsExtension implements AfterEachCallback, BeforeEachCal
     private RequestSpecification requestSpec;
 
     public ExternalEventsExtension() {
-        initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.requestSpec.header("Fineract-Platform-TenantId", "default");
     }

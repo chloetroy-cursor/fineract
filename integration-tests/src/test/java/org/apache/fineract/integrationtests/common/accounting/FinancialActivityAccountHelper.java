@@ -47,8 +47,8 @@ public class FinancialActivityAccountHelper {
     public Object createFinancialActivityAccount(Integer financialActivityId, Integer glAccountId,
             final ResponseSpecification responseSpecification, String jsonBack) {
         String json = FinancialActivityAccountsMappingBuilder.build(financialActivityId, glAccountId);
-        return Utils.performServerPost(this.requestSpec, responseSpecification,
-                FINANCIAL_ACTIVITY_ACCOUNT_MAPPING_URL + "?" + Utils.TENANT_IDENTIFIER, json, jsonBack);
+        return Utils.feign(this.requestSpec, responseSpecification)
+                .post(FINANCIAL_ACTIVITY_ACCOUNT_MAPPING_URL + "?" + Utils.TENANT_IDENTIFIER, json, jsonBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -57,7 +57,7 @@ public class FinancialActivityAccountHelper {
     @Deprecated(forRemoval = true)
     public List<HashMap> getAllFinancialActivityAccounts(final ResponseSpecification responseSpecification) {
         final String url = FINANCIAL_ACTIVITY_ACCOUNT_MAPPING_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(this.requestSpec, responseSpecification, url, "");
+        return Utils.feign(this.requestSpec, responseSpecification).get(url, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -67,7 +67,7 @@ public class FinancialActivityAccountHelper {
     public Integer deleteFinancialActivityAccount(final Integer financialActivityAccountId,
             final ResponseSpecification responseSpecification, String jsonBack) {
         final String url = FINANCIAL_ACTIVITY_ACCOUNT_MAPPING_URL + "/" + financialActivityAccountId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerDelete(this.requestSpec, responseSpecification, url, jsonBack);
+        return Utils.feign(this.requestSpec, responseSpecification).delete(url, jsonBack);
     }
 
     public PostFinancialActivityAccountsResponse createFinancialActivityAccount(PostFinancialActivityAccountsRequest request) {

@@ -30,6 +30,7 @@ import io.restassured.specification.ResponseSpecification;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -70,7 +71,6 @@ public class CampaignsTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         // Set up mock server for message-gateway
         this.client.when(request().withMethod("GET").withPath("/smsbridges"))
                 .respond(response().withContentType(MediaType.APPLICATION_JSON).withBody("[\n" //
@@ -84,7 +84,7 @@ public class CampaignsTest {
                         + "]") //
                 );
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.requestSpec.header("Fineract-Platform-TenantId", "default");
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.campaignsHelper = new CampaignsHelper(this.requestSpec, this.responseSpec);

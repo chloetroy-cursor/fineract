@@ -78,8 +78,8 @@ public final class BusinessStepConfigurationHelper {
     @Deprecated(forRemoval = true)
     public static JobBusinessStepConfigData getConfiguredBusinessStepsByJobName(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, String jobName) {
-        final String response = Utils.performServerGet(requestSpec, responseSpec,
-                BUSINESS_STEPS_API_URL_START + jobName + BUSINESS_STEPS_API_URL_END);
+        final String response = Utils.feign(requestSpec, responseSpec)
+                .get(BUSINESS_STEPS_API_URL_START + jobName + BUSINESS_STEPS_API_URL_END);
         log.info("BusinessStepConfigurationHelper Response: {}", response);
         return BusinessStepConfigurationHelper.configuredBusinessStepFromJsonString(response);
     }
@@ -90,8 +90,8 @@ public final class BusinessStepConfigurationHelper {
     @Deprecated(forRemoval = true)
     public static JobBusinessStepDetail getAvailableBusinessStepsByJobName(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, String jobName) {
-        final String response = Utils.performServerGet(requestSpec, responseSpec,
-                BUSINESS_STEPS_API_URL_START + jobName + GET_AVAILABLE_BUSINESS_STEPS_API_URL_END);
+        final String response = Utils.feign(requestSpec, responseSpec)
+                .get(BUSINESS_STEPS_API_URL_START + jobName + GET_AVAILABLE_BUSINESS_STEPS_API_URL_END);
         log.info("BusinessStepConfigurationHelper Response: {}", response);
         return BusinessStepConfigurationHelper.availableBusinessStepFromJsonString(response);
     }
@@ -102,8 +102,8 @@ public final class BusinessStepConfigurationHelper {
     @Deprecated(forRemoval = true)
     public static void updateBusinessStepOrder(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             String jobName, String jsonBodyToSend) {
-        String response = Utils.performServerPut(requestSpec, responseSpec,
-                BUSINESS_STEPS_API_URL_START + jobName + BUSINESS_STEPS_API_URL_END, jsonBodyToSend);
+        String response = Utils.feign(requestSpec, responseSpec).put(BUSINESS_STEPS_API_URL_START + jobName + BUSINESS_STEPS_API_URL_END,
+                jsonBodyToSend);
         log.info("BusinessStepConfigurationHelper Response: {}", response);
     }
 
@@ -113,8 +113,8 @@ public final class BusinessStepConfigurationHelper {
     @Deprecated(forRemoval = true)
     public static ApiParameterError updateBusinessStepOrderWithError(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, String jobName, String jsonBodyToSend) {
-        String response = Utils.performServerPut(requestSpec, responseSpec,
-                BUSINESS_STEPS_API_URL_START + jobName + BUSINESS_STEPS_API_URL_END, jsonBodyToSend);
+        String response = Utils.feign(requestSpec, responseSpec).put(BUSINESS_STEPS_API_URL_START + jobName + BUSINESS_STEPS_API_URL_END,
+                jsonBodyToSend);
         log.info("BusinessStepConfigurationHelper Response: {}", response);
         return BusinessStepConfigurationHelper.configuredApiParameterErrorFromJsonString(response);
     }

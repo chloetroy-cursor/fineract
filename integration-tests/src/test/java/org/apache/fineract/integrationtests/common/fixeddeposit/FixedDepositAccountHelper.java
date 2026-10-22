@@ -157,7 +157,7 @@ public class FixedDepositAccountHelper {
     public static Integer applyFixedDepositApplicationGetId(final String fixedDepositAccountAsJson, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
         LOG.info("--------------------- APPLYING FOR FIXED DEPOSIT ACCOUNT ------------------------");
-        return Utils.performServerPost(requestSpec, responseSpec, APPLY_FIXED_DEPOSIT_ACCOUNT_URL, fixedDepositAccountAsJson,
+        return Utils.feign(requestSpec, responseSpec).post(APPLY_FIXED_DEPOSIT_ACCOUNT_URL, fixedDepositAccountAsJson,
                 CommonConstants.RESPONSE_RESOURCE_ID);
     }
 
@@ -168,7 +168,7 @@ public class FixedDepositAccountHelper {
     public static String applyFixedDepositApplication(final String fixedDepositAccountAsJson, final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
         LOG.info("--------------------- APPLYING FOR FIXED DEPOSIT ACCOUNT ------------------------");
-        return Utils.performServerPost(requestSpec, responseSpec, APPLY_FIXED_DEPOSIT_ACCOUNT_URL, fixedDepositAccountAsJson);
+        return Utils.feign(requestSpec, responseSpec).post(APPLY_FIXED_DEPOSIT_ACCOUNT_URL, fixedDepositAccountAsJson);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -179,7 +179,7 @@ public class FixedDepositAccountHelper {
             final Integer accountID) {
         final String GET_FIXED_DEPOSIT_BY_ID_URL = FIXED_DEPOSIT_ACCOUNT_URL + "/" + accountID + "?" + Utils.TENANT_IDENTIFIER;
         LOG.info("------------------------ RETRIEVING FIXED DEPOSIT ACCOUNT BY ID -------------------------");
-        return Utils.performServerGet(requestSpec, responseSpec, GET_FIXED_DEPOSIT_BY_ID_URL, "");
+        return Utils.feign(requestSpec, responseSpec).get(GET_FIXED_DEPOSIT_BY_ID_URL, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -196,7 +196,7 @@ public class FixedDepositAccountHelper {
     @Deprecated(forRemoval = true)
     private HashMap getFixedDepositDetails(final Integer accountID, final String jsonAttributeToGetBack) {
         final String URL = FIXED_DEPOSIT_ACCOUNT_URL + "/" + accountID + "?" + Utils.TENANT_IDENTIFIER;
-        final HashMap response = Utils.performServerGet(requestSpec, responseSpec, URL, jsonAttributeToGetBack);
+        final HashMap response = Utils.feign(requestSpec, responseSpec).get(URL, jsonAttributeToGetBack);
         return response;
     }
 
@@ -264,7 +264,7 @@ public class FixedDepositAccountHelper {
                 .withSubmittedOnDate(submittedOnDate) //
                 .build(clientID, productID, penalInterestType);
 
-        return Utils.performServerPut(this.requestSpec, this.responseSpec,
+        return Utils.feign(this.requestSpec, this.responseSpec).put(
                 FIXED_DEPOSIT_ACCOUNT_URL + "/" + accountID + "?" + Utils.TENANT_IDENTIFIER, fixedDepositApplicationJSON,
                 CommonConstants.RESPONSE_CHANGES);
     }
@@ -286,7 +286,7 @@ public class FixedDepositAccountHelper {
                 .withInterestPostingPeriodType(interestPostingPeriodType) //
                 .build(clientID, productID, penalInterestType);
 
-        return Utils.performServerPut(this.requestSpec, this.responseSpec,
+        return Utils.feign(this.requestSpec, this.responseSpec).put(
                 FIXED_DEPOSIT_ACCOUNT_URL + "/" + accountID + "?" + Utils.TENANT_IDENTIFIER, fixedDepositApplicationJSON,
                 CommonConstants.RESPONSE_CHANGES);
     }
@@ -349,8 +349,8 @@ public class FixedDepositAccountHelper {
     @Deprecated(forRemoval = true)
     public Object deleteFixedDepositApplication(final Integer fixedDepositAccountID, final String jsonAttributeToGetBack) {
         LOG.info("---------------------------------- DELETE FIXED DEPOSIT APPLICATION ----------------------------------");
-        return Utils.performServerDelete(this.requestSpec, this.responseSpec,
-                FIXED_DEPOSIT_ACCOUNT_URL + "/" + fixedDepositAccountID + "?" + Utils.TENANT_IDENTIFIER, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, this.responseSpec)
+                .delete(FIXED_DEPOSIT_ACCOUNT_URL + "/" + fixedDepositAccountID + "?" + Utils.TENANT_IDENTIFIER, jsonAttributeToGetBack);
 
     }
 
@@ -527,7 +527,7 @@ public class FixedDepositAccountHelper {
     @Deprecated(forRemoval = true)
     private Object performFixedDepositActions(final String postURLForFixedDeposit, final String jsonToBeSent,
             final String jsonAttributeToGetBack) {
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, postURLForFixedDeposit, jsonToBeSent, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, this.responseSpec).post(postURLForFixedDeposit, jsonToBeSent, jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -536,7 +536,7 @@ public class FixedDepositAccountHelper {
     @Deprecated(forRemoval = true)
     private HashMap performFixedDepositApplicationActions(final String postURLForFixedDepositAction, final String jsonToBeSent) {
         HashMap status = null;
-        final HashMap response = Utils.performServerPost(this.requestSpec, this.responseSpec, postURLForFixedDepositAction, jsonToBeSent,
+        final HashMap response = Utils.feign(this.requestSpec, this.responseSpec).post(postURLForFixedDepositAction, jsonToBeSent,
                 CommonConstants.RESPONSE_CHANGES);
         if (response != null) {
             status = (HashMap) response.get("status");
@@ -559,8 +559,8 @@ public class FixedDepositAccountHelper {
     public static ArrayList retrieveAllFixedDepositAccounts(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec) {
         LOG.info("-------------------- RETRIEVING ALL FIXED DEPOSIT ACCOUNTS ---------------------");
-        final ArrayList response = Utils.performServerGet(requestSpec, responseSpec,
-                FIXED_DEPOSIT_ACCOUNT_URL + "?" + Utils.TENANT_IDENTIFIER, "");
+        final ArrayList response = Utils.feign(requestSpec, responseSpec).get(FIXED_DEPOSIT_ACCOUNT_URL + "?" + Utils.TENANT_IDENTIFIER,
+                "");
         return response;
     }
 

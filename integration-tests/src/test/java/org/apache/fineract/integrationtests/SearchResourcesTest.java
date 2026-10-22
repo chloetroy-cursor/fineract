@@ -37,6 +37,8 @@ import org.apache.fineract.client.models.PostLoansLoanIdTransactionsRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsResponse;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignSearchHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
@@ -66,9 +68,8 @@ public class SearchResourcesTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.searchHelper = new FeignSearchHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
@@ -410,7 +411,7 @@ public class SearchResourcesTest {
                 }
                 """.formatted(transactionDate, transactionAmount, checkNumber, routingCode, receiptNumber, externalId);
         final String url = SAVINGS_ACCOUNT_TRANSACTION_URL.formatted(savingsId, command);
-        return ((Number) Utils.performServerPost(requestSpec, responseSpec, url, json, CommonConstants.RESPONSE_RESOURCE_ID)).longValue();
+        return ((Number) FeignRawHttpHelper.post(url, json, CommonConstants.RESPONSE_RESOURCE_ID)).longValue();
     }
 
     private GetSearchResponse assertSingleSearchResult(final List<GetSearchResponse> searchResponse) {

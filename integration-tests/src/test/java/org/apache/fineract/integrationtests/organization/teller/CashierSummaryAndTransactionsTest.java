@@ -26,7 +26,7 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import org.apache.fineract.client.models.GetTellersTellerIdCashiersCashiersIdTransactionsResponse;
-import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,10 +40,9 @@ public class CashierSummaryAndTransactionsTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
 
         requestSpecification = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        requestSpecification.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        requestSpecification.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         responseSpecification = new ResponseSpecBuilder().expectStatusCode(200).build();
         cashierTransactionsHelper = new CashierTransactionsHelper(requestSpecification, responseSpecification);
         StaffHelper.createStaff(requestSpecification, responseSpecification);

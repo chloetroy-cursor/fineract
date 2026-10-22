@@ -19,16 +19,10 @@
 package org.apache.fineract.integrationtests;
 
 import com.google.gson.Gson;
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.builder.ResponseSpecBuilder;
-import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
-import java.util.ArrayList;
 import java.util.HashMap;
-import org.apache.fineract.integrationtests.common.Utils;
+import java.util.List;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -37,18 +31,6 @@ public class TemplateIntegrationTest {
     private static final String GET_TEMPLATES_URL = "/fineract-provider/api/v1/templates?tenantIdentifier=default";
 
     private static final String RESPONSE_ATTRIBUTE_NAME = "name";
-
-    private ResponseSpecification responseSpec;
-    private RequestSpecification requestSpec;
-
-    @BeforeEach
-    public void setup() {
-
-        Utils.initializeRESTAssured();
-        this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-    }
 
     @Disabled
     @Test
@@ -61,21 +43,20 @@ public class TemplateIntegrationTest {
         map.put("text", "Hello {{template}}");
         map.put("mappers", metadata);
 
-        ArrayList<?> get = Utils.performServerGet(this.requestSpec, this.responseSpec, GET_TEMPLATES_URL, "");
+        List<?> get = FeignRawHttpHelper.get(GET_TEMPLATES_URL, "");
         final int entriesBeforeTest = get.size();
 
-        final Integer id = Utils.performServerPost(this.requestSpec, this.responseSpec, GET_TEMPLATES_URL, new Gson().toJson(map),
-                "resourceId");
+        final Integer id = FeignRawHttpHelper.post(GET_TEMPLATES_URL, new Gson().toJson(map), "resourceId");
 
         final String templateUrlForId = String.format("/fineract-provider/api/v1/templates/%s?tenantIdentifier=default", id);
 
-        final String getrequest2 = Utils.performServerGet(this.requestSpec, this.responseSpec, templateUrlForId, RESPONSE_ATTRIBUTE_NAME);
+        final String getrequest2 = FeignRawHttpHelper.get(templateUrlForId, RESPONSE_ATTRIBUTE_NAME);
 
         Assertions.assertTrue(getrequest2.equals("foo"));
 
-        Utils.performServerDelete(this.requestSpec, this.responseSpec, templateUrlForId, "");
+        FeignRawHttpHelper.delete(templateUrlForId, "");
 
-        get = Utils.performServerGet(this.requestSpec, this.responseSpec, GET_TEMPLATES_URL, "");
+        get = FeignRawHttpHelper.get(GET_TEMPLATES_URL, "");
         final int entriesAfterTest = get.size();
 
         Assertions.assertEquals(entriesBeforeTest, entriesAfterTest);

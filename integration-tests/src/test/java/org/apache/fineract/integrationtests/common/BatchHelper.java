@@ -123,8 +123,8 @@ public final class BatchHelper {
     @Deprecated(forRemoval = true)
     public static List<BatchResponse> postBatchRequestsWithoutEnclosingTransaction(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final String jsonifiedBatchRequests) {
-        final String response = Utils.performServerPost(requestSpec, responseSpec, BATCH_API_WITHOUT_ENCLOSING_URL_EXT,
-                jsonifiedBatchRequests, null);
+        final String response = Utils.feign(requestSpec, responseSpec).post(BATCH_API_WITHOUT_ENCLOSING_URL_EXT, jsonifiedBatchRequests,
+                null);
         LOG.info("BatchHelper Response {}", response);
         return BatchHelper.fromJsonString(response);
     }
@@ -135,8 +135,8 @@ public final class BatchHelper {
     @Deprecated(forRemoval = true)
     public static ErrorResponse postBatchRequestsWithoutEnclosingTransactionError(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final String jsonifiedBatchRequests) {
-        final String response = Utils.performServerPost(requestSpec, responseSpec, BATCH_API_WITHOUT_ENCLOSING_URL_EXT,
-                jsonifiedBatchRequests, null);
+        final String response = Utils.feign(requestSpec, responseSpec).post(BATCH_API_WITHOUT_ENCLOSING_URL_EXT, jsonifiedBatchRequests,
+                null);
         LOG.info("BatchHelper Response {}", response);
         return GSON.fromJson(response, ErrorResponse.class);
     }
@@ -156,7 +156,7 @@ public final class BatchHelper {
     @Deprecated(forRemoval = true)
     public static List<BatchResponse> postBatchRequestsWithEnclosingTransaction(final RequestSpecification requestSpec,
             final ResponseSpecification responseSpec, final String jsonifiedBatchRequests) {
-        final String response = Utils.performServerPost(requestSpec, responseSpec, BATCH_API_URL_EXT, jsonifiedBatchRequests, null);
+        final String response = Utils.feign(requestSpec, responseSpec).post(BATCH_API_URL_EXT, jsonifiedBatchRequests, null);
         return BatchHelper.fromJsonString(response);
     }
 
@@ -1098,7 +1098,7 @@ public final class BatchHelper {
             final String externalId) {
         LOG.info("------------------------------CHECK CLIENT DETAILS------------------------------------\n");
         final String CLIENT_URL = "/fineract-provider/api/v1/clients?externalId=" + externalId + "&" + Utils.TENANT_IDENTIFIER;
-        final Integer responseRecords = Utils.performServerGet(requestSpec, responseSpec, CLIENT_URL, "totalFilteredRecords");
+        final Integer responseRecords = Utils.feign(requestSpec, responseSpec).get(CLIENT_URL, "totalFilteredRecords");
         Assertions.assertEquals((long) 0, (long) responseRecords, "No records found with given externalId");
     }
 
