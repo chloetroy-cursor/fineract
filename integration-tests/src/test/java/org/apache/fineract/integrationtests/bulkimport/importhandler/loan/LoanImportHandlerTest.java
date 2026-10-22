@@ -46,7 +46,8 @@ import org.apache.fineract.client.models.PaymentTypeCreateRequest;
 import org.apache.fineract.infrastructure.bulkimport.constants.LoanConstants;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
 import org.apache.fineract.integrationtests.bulkimport.importhandler.BulkImportOutputTemplateHelper;
-import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCollateralHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.PaymentTypeHelper;
@@ -77,6 +78,7 @@ public class LoanImportHandlerTest {
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
     private PaymentTypeHelper paymentTypeHelper;
+    private final FeignCollateralHelper collateralHelper = new FeignCollateralHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     @BeforeEach
     public void setup() {
@@ -120,10 +122,10 @@ public class LoanImportHandlerTest {
 
         List<HashMap> collaterals = new ArrayList<>();
         HashMap<String, String> collateralHashMap = new HashMap<>();
-        final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
+        final Long collateralId = collateralHelper.createCollateralProduct().getResourceId();
         Assertions.assertNotNull(collateralId);
-        final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec,
-                String.valueOf(outcome_client_creation), collateralId);
+        final Long clientCollateralId = collateralHelper.createClientCollateral(outcome_client_creation.longValue(), collateralId)
+                .getResourceId();
         Assertions.assertNotNull(clientCollateralId);
         collateralHashMap.put("clientCollateralId", collateralId.toString());
         collateralHashMap.put("quantity", "1");

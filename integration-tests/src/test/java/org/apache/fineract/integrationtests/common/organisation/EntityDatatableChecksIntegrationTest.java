@@ -34,9 +34,10 @@ import java.util.List;
 import org.apache.fineract.client.models.GetEntityDatatableChecksResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.client.models.PostEntityDatatableChecksTemplateResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCollateralHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
@@ -66,6 +67,7 @@ public class EntityDatatableChecksIntegrationTest {
     private SavingsAccountHelper savingsAccountHelper;
     private LoanTransactionHelper loanTransactionHelper;
     private LoanTransactionHelper validationErrorHelper;
+    private final FeignCollateralHelper collateralHelper = new FeignCollateralHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final String CLIENT_APP_TABLE_NAME = "m_client";
     private static final String GROUP_APP_TABLE_NAME = "m_group";
@@ -476,10 +478,9 @@ public class EntityDatatableChecksIntegrationTest {
             final String registeredTableName) {
         LOG.info("--------------------------------APPLYING FOR LOAN APPLICATION--------------------------------");
         List<HashMap> collaterals = new ArrayList<>();
-        final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
+        final Long collateralId = collateralHelper.createCollateralProduct().getResourceId();
         Assertions.assertNotNull(collateralId);
-        final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec,
-                clientID.toString(), collateralId);
+        final Long clientCollateralId = collateralHelper.createClientCollateral(clientID.longValue(), collateralId).getResourceId();
         Assertions.assertNotNull(clientCollateralId);
         addCollaterals(collaterals, clientCollateralId, BigDecimal.valueOf(1));
 
@@ -505,10 +506,9 @@ public class EntityDatatableChecksIntegrationTest {
             final String responseAttribute) {
         LOG.info("--------------------------------APPLYING FOR LOAN APPLICATION--------------------------------");
         List<HashMap> collaterals = new ArrayList<>();
-        final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
+        final Long collateralId = collateralHelper.createCollateralProduct().getResourceId();
         Assertions.assertNotNull(collateralId);
-        final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec,
-                clientID.toString(), collateralId);
+        final Long clientCollateralId = collateralHelper.createClientCollateral(clientID.longValue(), collateralId).getResourceId();
         Assertions.assertNotNull(clientCollateralId);
         addCollaterals(collaterals, clientCollateralId, BigDecimal.valueOf(1));
         final String loanApplicationJSON = new LoanApplicationTestBuilder() //
@@ -528,14 +528,14 @@ public class EntityDatatableChecksIntegrationTest {
         return this.validationErrorHelper.getLoanError(loanApplicationJSON, responseAttribute);
     }
 
-    private HashMap<String, String> collaterals(Integer collateralId, BigDecimal quantity) {
+    private HashMap<String, String> collaterals(Long collateralId, BigDecimal quantity) {
         HashMap<String, String> collateral = new HashMap<String, String>(1);
         collateral.put("clientCollateralId", collateralId.toString());
         collateral.put("quantity", quantity.toString());
         return collateral;
     }
 
-    private void addCollaterals(List<HashMap> collaterals, Integer collateralId, BigDecimal amount) {
+    private void addCollaterals(List<HashMap> collaterals, Long collateralId, BigDecimal amount) {
         collaterals.add(collaterals(collateralId, amount));
     }
 
