@@ -18,20 +18,14 @@
  */
 package org.apache.fineract.integrationtests;
 
+import static org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper.DIRECT_TRIGGER_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.builder.ResponseSpecBuilder;
-import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
-import java.util.HashMap;
-import java.util.List;
-import org.apache.fineract.integrationtests.common.CommonConstants;
-import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.organisation.CampaignsHelper;
-import org.junit.jupiter.api.BeforeEach;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSmsCampaignHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.FeignErrors;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockserver.integration.ClientAndServer;
@@ -46,13 +40,11 @@ import org.mockserver.model.MediaType;
  */
 @ExtendWith(MockServerExtension.class)
 @MockServerSettings(ports = { 9191 })
-@SuppressWarnings("removal")
 public class SmsCampaignIntegrationTest {
 
-    private RequestSpecification requestSpec;
-    private ResponseSpecification responseSpec;
-    private ResponseSpecification errorResponseSpec;
-    private CampaignsHelper campaignsHelper;
+    private static final String REPORT_NAME = "Prospective Clients";
+
+    private final FeignSmsCampaignHelper campaignsHelper = new FeignSmsCampaignHelper(FineractFeignClientHelper.getFineractFeignClient());
     private final ClientAndServer client;
 
     public SmsCampaignIntegrationTest(ClientAndServer client) {
@@ -62,56 +54,38 @@ public class SmsCampaignIntegrationTest {
                         "[{\"id\":1,\"tenantId\":1,\"phoneNo\":\"+1234567890\",\"providerName\":\"Dummy SMS Provider - Testing\",\"providerDescription\":\"Dummy, just for testing\"}]"));
     }
 
-    @BeforeEach
-    @SuppressWarnings("removal")
-    public void setup() {
-        Utils.initializeRESTAssured();
-        this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        this.requestSpec.header("Fineract-Platform-TenantId", "default");
-        this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.errorResponseSpec = new ResponseSpecBuilder().expectStatusCode(403).build();
-        this.campaignsHelper = new CampaignsHelper(this.requestSpec, this.responseSpec);
-    }
-
     @Test
     public void testCreateCampaignWithDuplicateNameShouldFail() {
-        String reportName = "Prospective Clients";
-        int triggerType = 1;
         String campaignName = "Duplicate_Test_Campaign_" + System.currentTimeMillis();
 
         // Create first campaign with specific name
-        Integer firstCampaignId = campaignsHelper.createCampaignWithName(reportName, triggerType, campaignName);
+        Long firstCampaignId = campaignsHelper.createCampaign(REPORT_NAME, DIRECT_TRIGGER_TYPE, campaignName);
         assertNotNull(firstCampaignId, "First campaign should be created successfully");
-        campaignsHelper.verifyCampaignCreatedOnServer(requestSpec, responseSpec, firstCampaignId);
+        assertEquals(firstCampaignId, campaignsHelper.getCampaign(firstCampaignId).getId());
 
         // Attempt to create second campaign with the same name - should fail
-        List<HashMap> errors = campaignsHelper.createCampaignWithNameExpectingError(errorResponseSpec, reportName, triggerType,
-                campaignName);
+        CallFailedRuntimeException duplicate = campaignsHelper.createCampaignExpectingError(REPORT_NAME, DIRECT_TRIGGER_TYPE, campaignName);
 
-        assertNotNull(errors, "Error response should not be null");
-        assertEquals(1, errors.size(), "Should have exactly one error");
-        assertEquals("error.msg.sms.campaign.duplicate.name", errors.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE),
+        assertEquals(403, duplicate.getStatus());
+        assertEquals("error.msg.sms.campaign.duplicate.name", FeignErrors.errorGlobalisationCode(duplicate),
                 "Error code should indicate duplicate campaign name");
     }
 
     @Test
     public void testCreateCampaignWithUniqueNameShouldSucceed() {
-        String reportName = "Prospective Clients";
-        int triggerType = 1;
         String campaignName1 = "Unique_Campaign_1_" + System.currentTimeMillis();
         String campaignName2 = "Unique_Campaign_2_" + System.currentTimeMillis();
 
         // Create first campaign
-        Integer firstCampaignId = campaignsHelper.createCampaignWithName(reportName, triggerType, campaignName1);
+        Long firstCampaignId = campaignsHelper.createCampaign(REPORT_NAME, DIRECT_TRIGGER_TYPE, campaignName1);
         assertNotNull(firstCampaignId, "First campaign should be created successfully");
 
         // Create second campaign with different name - should succeed
-        Integer secondCampaignId = campaignsHelper.createCampaignWithName(reportName, triggerType, campaignName2);
+        Long secondCampaignId = campaignsHelper.createCampaign(REPORT_NAME, DIRECT_TRIGGER_TYPE, campaignName2);
         assertNotNull(secondCampaignId, "Second campaign with different name should be created successfully");
 
         // Verify both campaigns exist
-        campaignsHelper.verifyCampaignCreatedOnServer(requestSpec, responseSpec, firstCampaignId);
-        campaignsHelper.verifyCampaignCreatedOnServer(requestSpec, responseSpec, secondCampaignId);
+        assertEquals(firstCampaignId, campaignsHelper.getCampaign(firstCampaignId).getId());
+        assertEquals(secondCampaignId, campaignsHelper.getCampaign(secondCampaignId).getId());
     }
 }
