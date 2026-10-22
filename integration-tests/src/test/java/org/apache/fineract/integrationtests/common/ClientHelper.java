@@ -46,7 +46,7 @@ import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.client.util.Calls;
 import org.apache.fineract.client.util.JSON;
 import org.apache.fineract.infrastructure.bulkimport.data.GlobalEntityType;
-import org.apache.fineract.integrationtests.common.system.CodeHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCodeHelper;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.apache.poi.ss.usermodel.Workbook;
 
@@ -445,14 +445,9 @@ public class ClientHelper {
     public String getCloseClientAsJSON() {
         final HashMap<String, String> map = new HashMap<>();
 
-        /* Retrieve Code id for the Code "ClientClosureReason" */
-        String codeName = "ClientClosureReason";
-        HashMap<String, Object> code = CodeHelper.getCodeByName(this.requestSpec, this.responseSpec, codeName);
-        Integer clientClosureCodeId = (Integer) code.get("id");
-
         /* Retrieve/Create Code Values for the Code "ClientClosureReason" */
-        HashMap<String, Object> codeValue = CodeHelper.retrieveOrCreateCodeValue(clientClosureCodeId, this.requestSpec, this.responseSpec);
-        Integer closureReasonId = (Integer) codeValue.get("id");
+        Long closureReasonId = new FeignCodeHelper(FineractFeignClientHelper.getFineractFeignClient())
+                .retrieveOrCreateCodeValueId("ClientClosureReason");
 
         map.put("closureReasonId", closureReasonId.toString());
         map.put("locale", CommonConstants.LOCALE);
