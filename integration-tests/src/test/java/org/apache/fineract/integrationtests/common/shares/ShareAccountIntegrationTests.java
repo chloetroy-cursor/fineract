@@ -24,16 +24,22 @@ import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
+import org.apache.fineract.client.models.AccountChargesRequest;
+import org.apache.fineract.client.models.AccountRequest;
+import org.apache.fineract.client.models.GetAccountsCharges;
+import org.apache.fineract.client.models.GetAccountsPurchasedShares;
+import org.apache.fineract.client.models.GetAccountsTypeAccountIdResponse;
+import org.apache.fineract.client.models.PutAccountsTypeAccountIdRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignShareAccountHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
@@ -46,9 +52,18 @@ import org.slf4j.LoggerFactory;
 public class ShareAccountIntegrationTests {
 
     private static final Logger LOG = LoggerFactory.getLogger(ShareAccountIntegrationTests.class);
+    private static final String DATE_FORMAT = Utils.DATE_FORMAT;
+    private static final String PURCHASED = "purchasedSharesType.purchased";
+    private static final String REDEEMED = "purchasedSharesType.redeemed";
+    private static final String CHARGE_PAYMENT = "charge.payment";
+    private static final String APPLIED = "purchasedSharesStatusType.applied";
+    private static final String APPROVED = "purchasedSharesStatusType.approved";
+    private static final String REJECTED = "purchasedSharesStatusType.rejected";
+
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private ShareProductHelper shareProductHelper;
+    private FeignShareAccountHelper shareAccountHelper;
 
     @BeforeEach
     public void setup() {
@@ -57,6 +72,7 @@ public class ShareAccountIntegrationTests {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.requestSpec.header("Fineract-Platform-TenantId", "default");
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        this.shareAccountHelper = new FeignShareAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -98,7 +114,6 @@ public class ShareAccountIntegrationTests {
 
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testCreateShareAccount() {
         shareProductHelper = new ShareProductHelper();
@@ -108,37 +123,23 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
-        final Integer shareAccountId = createShareAccount(clientId, productId, savingsAccountId);
+        final Long shareAccountId = createShareAccount(clientId, productId, savingsAccountId);
         Assertions.assertNotNull(shareAccountId);
-        Map<String, Object> shareProductData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        Assertions.assertNotNull(shareProductData);
+        Assertions.assertNotNull(shareAccountHelper.getShareAccount(shareAccountId));
 
-        Map<String, Object> shareAccountDataForUpdate = new HashMap<>();
-        shareAccountDataForUpdate.put("requestedShares", 30);
-        shareAccountDataForUpdate.put("applicationDate", "02 March 2016");
-        shareAccountDataForUpdate.put("dateFormat", "dd MMMM yyyy");
-        shareAccountDataForUpdate.put("locale", "en_GB");
-        String updateShareAccountJsonString = new Gson().toJson(shareAccountDataForUpdate);
-        ShareAccountTransactionHelper.updateShareAccount(shareAccountId, updateShareAccountJsonString, requestSpec, responseSpec);
-        shareProductData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareProductData.get("purchasedShares");
+        updateShareAccount(shareAccountId, 30, "02 March 2016", null);
+        GetAccountsTypeAccountIdResponse shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Set<GetAccountsPurchasedShares> transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(1, transactions.size());
-        Map<String, Object> transaction = transactions.get(0);
-        Assertions.assertEquals("30", String.valueOf(transaction.get("numberOfShares")));
-        Assertions.assertEquals("60.0", String.valueOf(transaction.get("amount")));
-        Assertions.assertEquals("60.0", String.valueOf(transaction.get("amountPaid")));
-        List<Integer> dateList = (List<Integer>) transaction.get("purchasedDate");
-        Calendar cal = Calendar.getInstance();
-        cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-        Date date = cal.getTime();
-        DateFormat simple = new SimpleDateFormat("dd MMMM yyyy");
-        Assertions.assertEquals("02 March 2016", simple.format(date));
+        GetAccountsPurchasedShares transaction = transactions.iterator().next();
+        Assertions.assertEquals(30, transaction.getNumberOfShares());
+        assertAmount("60.0", transaction.getAmount());
+        assertAmount("60.0", transaction.getAmountPaid());
+        Assertions.assertEquals("02 March 2016", purchasedDate(transaction));
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testShareAccountApproval() {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
@@ -147,67 +148,39 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
-        String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
-        Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
-        String purchaseCharge = ChargesHelper.getShareAccountPurchaseChargeJson();
-        Integer purchaseChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, purchaseCharge);
-        String redeemCharge = ChargesHelper.getShareAccountRedeemChargeJson();
-        Integer redeemChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, redeemCharge);
-        List<Map<String, Object>> charges = new ArrayList<>();
-        charges.add(createCharge(activationChargeId, "2"));
-        charges.add(createCharge(purchaseChargeId, "2"));
-        charges.add(createCharge(redeemChargeId, "1"));
-        final Integer shareAccountId = createShareAccount(clientId, productId, savingsAccountId, charges);
+        final Long shareAccountId = createShareAccount(clientId, productId, savingsAccountId, createShareCharges());
         Assertions.assertNotNull(shareAccountId);
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        Assertions.assertNotNull(shareAccountData);
+        Assertions.assertNotNull(shareAccountHelper.getShareAccount(shareAccountId));
 
         // Approve share Account
-        Map<String, Object> approveMap = new HashMap<>();
-        approveMap.put("note", "Share Account Approval Note");
-        approveMap.put("dateFormat", "dd MMMM yyyy");
-        approveMap.put("approvedDate", "01 January 2016");
-        approveMap.put("locale", "en");
-        String approve = new Gson().toJson(approveMap);
-        ShareAccountTransactionHelper.postCommand("approve", shareAccountId, approve, requestSpec, responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        Map<String, Object> statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.approved", String.valueOf(statusMap.get("code")));
-        Map<String, Object> timelineMap = (Map<String, Object>) shareAccountData.get("timeline");
-        List<Integer> dateList = (List<Integer>) timelineMap.get("approvedDate");
-        LocalDate approvedDate = LocalDate.of(dateList.get(0), dateList.get(1), dateList.get(2));
-        Assertions.assertEquals("01 January 2016", approvedDate.format(Utils.dateFormatter));
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        shareAccountHelper.approve(shareAccountId, "01 January 2016", "Share Account Approval Note", DATE_FORMAT, "en");
+        GetAccountsTypeAccountIdResponse shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.approved", shareAccountData.getStatus().getCode());
+        Assertions.assertEquals("01 January 2016", format(shareAccountData.getTimeline().getApprovedDate()));
+        Set<GetAccountsPurchasedShares> transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(2, transactions.size());
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            LocalDate transactionDate = LocalDate.of(dateList.get(0), dateList.get(1), dateList.get(2));
-            String transactionType = (String) transactionTypeMap.get("code");
-            if (transactionType.equals("purchasedSharesType.purchased")) {
-                Assertions.assertEquals("25", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("52.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("52.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Assertions.assertEquals("01 January 2016", transactionDate.format(Utils.dateFormatter));
-            } else if (transactionType.equals("charge.payment")) {
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals(Utils.getLocalDateOfTenant(), transactionDate);
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            if (transactionType.equals(PURCHASED)) {
+                Assertions.assertEquals(25, transaction.getNumberOfShares());
+                assertAmount("52.0", transaction.getAmount());
+                assertAmount("52.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals("01 January 2016", purchasedDate(transaction));
+            } else if (transactionType.equals(CHARGE_PAYMENT)) {
+                assertAmount("2.0", transaction.getAmount());
+                assertAmount("0", transaction.getAmountPaid());
+                Assertions.assertEquals(Utils.getLocalDateOfTenant(), transaction.getPurchasedDate());
             }
         }
 
-        Map<String, Object> summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("25", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(25, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalPendingForApprovalShares());
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void rejectShareAccount() {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
@@ -216,66 +189,40 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
-        String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
-        Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
-        String purchaseCharge = ChargesHelper.getShareAccountPurchaseChargeJson();
-        Integer purchaseChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, purchaseCharge);
-        String redeemCharge = ChargesHelper.getShareAccountRedeemChargeJson();
-        Integer redeemChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, redeemCharge);
-        List<Map<String, Object>> charges = new ArrayList<>();
-        charges.add(createCharge(activationChargeId, "2"));
-        charges.add(createCharge(purchaseChargeId, "2"));
-        charges.add(createCharge(redeemChargeId, "1"));
-        final Integer shareAccountId = createShareAccount(clientId, productId, savingsAccountId, charges);
+        final Long shareAccountId = createShareAccount(clientId, productId, savingsAccountId, createShareCharges());
         Assertions.assertNotNull(shareAccountId);
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        Assertions.assertNotNull(shareAccountData);
+        Assertions.assertNotNull(shareAccountHelper.getShareAccount(shareAccountId));
 
         // Reject share Account
-        Map<String, Object> rejectMap = new HashMap<>();
-        rejectMap.put("note", "Share Account Rejection Note");
-        String rejectJson = new Gson().toJson(rejectMap);
-        ShareAccountTransactionHelper.postCommand("reject", shareAccountId, rejectJson, requestSpec, responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        Map<String, Object> statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.rejected", String.valueOf(statusMap.get("code")));
-        Map<String, Object> timelineMap = (Map<String, Object>) shareAccountData.get("timeline");
-        List<Integer> dateList = (List<Integer>) timelineMap.get("rejectedDate");
-        LocalDate rejectedDate = LocalDate.of(dateList.get(0), dateList.get(1), dateList.get(2));
-        Assertions.assertEquals(Utils.getLocalDateOfTenant(), rejectedDate);
+        shareAccountHelper.reject(shareAccountId, "Share Account Rejection Note");
+        GetAccountsTypeAccountIdResponse shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.rejected", shareAccountData.getStatus().getCode());
+        Assertions.assertEquals(Utils.getLocalDateOfTenant(), shareAccountData.getTimeline().getRejectedDate());
 
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        Set<GetAccountsPurchasedShares> transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(2, transactions.size());
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            LocalDate date = LocalDate.of(dateList.get(0), dateList.get(1), dateList.get(2));
-            String transactionType = (String) transactionTypeMap.get("code");
-            if (transactionType.equals("purchasedSharesType.purchased")) {
-                Assertions.assertEquals("25", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("50.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("50.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Assertions.assertEquals("01 January 2016", date.format(Utils.dateFormatter));
-            } else if (transactionType.equals("charge.payment")) {
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("amountPaid")));
-                LocalDate transactionDate = Utils.getLocalDateOfTenant();
-                Assertions.assertEquals(transactionDate, date);
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            if (transactionType.equals(PURCHASED)) {
+                Assertions.assertEquals(25, transaction.getNumberOfShares());
+                assertAmount("50.0", transaction.getAmount());
+                assertAmount("50.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals("01 January 2016", purchasedDate(transaction));
+            } else if (transactionType.equals(CHARGE_PAYMENT)) {
+                assertAmount("2.0", transaction.getAmount());
+                assertAmount("0", transaction.getAmountPaid());
+                Assertions.assertEquals(Utils.getLocalDateOfTenant(), transaction.getPurchasedDate());
             }
         }
 
-        Map<String, Object> summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalPendingForApprovalShares());
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testShareAccountUndoApproval() {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
@@ -284,78 +231,44 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
-        String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
-        Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
-        String purchaseCharge = ChargesHelper.getShareAccountPurchaseChargeJson();
-        Integer purchaseChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, purchaseCharge);
-        String redeemCharge = ChargesHelper.getShareAccountRedeemChargeJson();
-        Integer redeemChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, redeemCharge);
-        List<Map<String, Object>> charges = new ArrayList<>();
-        charges.add(createCharge(activationChargeId, "2"));
-        charges.add(createCharge(purchaseChargeId, "2"));
-        charges.add(createCharge(redeemChargeId, "1"));
-        final Integer shareAccountId = createShareAccount(clientId, productId, savingsAccountId, charges);
+        final Long shareAccountId = createShareAccount(clientId, productId, savingsAccountId, createShareCharges());
         Assertions.assertNotNull(shareAccountId);
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        Assertions.assertNotNull(shareAccountData);
+        Assertions.assertNotNull(shareAccountHelper.getShareAccount(shareAccountId));
 
         // Approve share Account
-        Map<String, Object> approveMap = new HashMap<>();
-        approveMap.put("note", "Share Account Approval Note");
-        approveMap.put("dateFormat", "dd MMMM yyyy");
-        approveMap.put("approvedDate", "01 January 2016");
-        approveMap.put("locale", "en");
-        String approve = new Gson().toJson(approveMap);
-        ShareAccountTransactionHelper.postCommand("approve", shareAccountId, approve, requestSpec, responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        Map<String, Object> statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.approved", String.valueOf(statusMap.get("code")));
-        Map<String, Object> timelineMap = (Map<String, Object>) shareAccountData.get("timeline");
-        List<Integer> dateList = (List<Integer>) timelineMap.get("approvedDate");
-
-        LocalDate approvedDate = LocalDate.of(dateList.get(0), dateList.get(1), dateList.get(2));
-        Assertions.assertEquals("01 January 2016", approvedDate.format(Utils.dateFormatter));
+        shareAccountHelper.approve(shareAccountId, "01 January 2016", "Share Account Approval Note", DATE_FORMAT, "en");
+        GetAccountsTypeAccountIdResponse shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.approved", shareAccountData.getStatus().getCode());
+        Assertions.assertEquals("01 January 2016", format(shareAccountData.getTimeline().getApprovedDate()));
 
         // Undo Approval share Account
-        Map<String, Object> undoApprovalMap = new HashMap<>();
-        String undoApprovalJson = new Gson().toJson(undoApprovalMap);
-        ShareAccountTransactionHelper.postCommand("undoapproval", shareAccountId, undoApprovalJson, requestSpec, responseSpec);
+        shareAccountHelper.undoApproval(shareAccountId);
+        shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.submitted.and.pending.approval", shareAccountData.getStatus().getCode());
 
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-
-        statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.submitted.and.pending.approval", String.valueOf(statusMap.get("code")));
-
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        Set<GetAccountsPurchasedShares> transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(2, transactions.size());
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            LocalDate transactionDate = LocalDate.of(dateList.get(0), dateList.get(1), dateList.get(2));
-            String transactionType = (String) transactionTypeMap.get("code");
-            if (transactionType.equals("purchasedSharesType.purchased")) {
-                Assertions.assertEquals("25", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("52.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Assertions.assertEquals("01 January 2016", transactionDate.format(Utils.dateFormatter));
-            } else if (transactionType.equals("charge.payment")) {
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals(Utils.getLocalDateOfTenant(), transactionDate);
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            if (transactionType.equals(PURCHASED)) {
+                Assertions.assertEquals(25, transaction.getNumberOfShares());
+                assertAmount("52.0", transaction.getAmount());
+                assertAmount("0.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals("01 January 2016", purchasedDate(transaction));
+            } else if (transactionType.equals(CHARGE_PAYMENT)) {
+                assertAmount("2.0", transaction.getAmount());
+                assertAmount("0", transaction.getAmountPaid());
+                Assertions.assertEquals(Utils.getLocalDateOfTenant(), transaction.getPurchasedDate());
             }
         }
 
-        Map<String, Object> summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("25", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(25, shareAccountData.getSummary().getTotalPendingForApprovalShares());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testCreateShareAccountWithCharges() {
         shareProductHelper = new ShareProductHelper();
@@ -365,627 +278,459 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
-        String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
-        Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
-        String purchaseCharge = ChargesHelper.getShareAccountPurchaseChargeJson();
-        Integer purchaseChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, purchaseCharge);
-        String redeemCharge = ChargesHelper.getShareAccountRedeemChargeJson();
-        Integer redeemChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, redeemCharge);
-        List<Map<String, Object>> charges = new ArrayList<>();
-        charges.add(createCharge(activationChargeId, "2"));
-        charges.add(createCharge(purchaseChargeId, "2"));
-        charges.add(createCharge(redeemChargeId, "1"));
-        final Integer shareAccountId = createShareAccount(clientId, productId, savingsAccountId, charges);
+        List<AccountChargesRequest> charges = createShareCharges();
+        final Long shareAccountId = createShareAccount(clientId, productId, savingsAccountId, charges);
         Assertions.assertNotNull(shareAccountId);
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        Assertions.assertNotNull(shareAccountData);
+        Assertions.assertNotNull(shareAccountHelper.getShareAccount(shareAccountId));
 
-        Map<String, Object> shareAccountDataForUpdate = new HashMap<>();
-        shareAccountDataForUpdate.put("requestedShares", 30);
-        shareAccountDataForUpdate.put("applicationDate", "02 March 2016");
-        shareAccountDataForUpdate.put("dateFormat", "dd MMMM yyyy");
-        shareAccountDataForUpdate.put("locale", "en_GB");
-        shareAccountDataForUpdate.put("charges", charges);
-
-        String updateShareAccountJsonString = new Gson().toJson(shareAccountDataForUpdate);
-        ShareAccountTransactionHelper.updateShareAccount(shareAccountId, updateShareAccountJsonString, requestSpec, responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        updateShareAccount(shareAccountId, 30, "02 March 2016", charges);
+        GetAccountsTypeAccountIdResponse shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Set<GetAccountsPurchasedShares> transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(2, transactions.size());
-        DateFormat simple = new SimpleDateFormat("dd MMMM yyyy");
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            List<Integer> dateList = (List<Integer>) transaction.get("purchasedDate");
-            Calendar cal = Calendar.getInstance();
-            cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-            Date date = cal.getTime();
-            String transactionType = (String) transactionTypeMap.get("code");
-            if (transactionType.equals("purchasedSharesType.purchased")) {
-                Assertions.assertEquals("30", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("60.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Assertions.assertEquals("02 March 2016", simple.format(date));
-            } else if (transactionType.equals("charge.payment")) {
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("chargeAmount")));
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            if (transactionType.equals(PURCHASED)) {
+                Assertions.assertEquals(30, transaction.getNumberOfShares());
+                assertAmount("62.0", transaction.getAmount());
+                assertAmount("60.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals("02 March 2016", purchasedDate(transaction));
+            } else if (transactionType.equals(CHARGE_PAYMENT)) {
+                assertAmount("2.0", transaction.getAmount());
+                assertAmount("0", transaction.getAmountPaid());
+                assertAmount("0", transaction.getChargeAmount());
             }
         }
 
         // charges verification
-        List<Map<String, Object>> chargesList = (List<Map<String, Object>>) shareAccountData.get("charges");
-        for (Map<String, Object> chargeDef : chargesList) {
-            Map<String, Object> chargeTimeTypeMap = (Map<String, Object>) chargeDef.get("chargeTimeType");
-            String chargeTimeType = String.valueOf(chargeTimeTypeMap.get("code"));
+        for (GetAccountsCharges chargeDef : shareAccountData.getCharges()) {
+            String chargeTimeType = chargeTimeTypeCode(chargeDef);
             if (chargeTimeType.equals("chargeTimeType.activation")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("2.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharespurchase")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("2.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharesredeem")) {
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountOrPercentage")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("1.0", chargeDef.getAmountOrPercentage());
+                assertAmount("0.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else {
                 Assertions.fail("Other Charge defintion found");
             }
         }
 
         // Approve share Account
-        Map<String, Object> approveMap = new HashMap<>();
-        approveMap.put("note", "Share Account Approval Note");
-        approveMap.put("dateFormat", "dd MMMM yyyy");
-        approveMap.put("approvedDate", "01 January 2016");
-        approveMap.put("locale", "en");
-        String approve = new Gson().toJson(approveMap);
-        ShareAccountTransactionHelper.postCommand("approve", shareAccountId, approve, requestSpec, responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        Map<String, Object> statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.approved", String.valueOf(statusMap.get("code")));
-        Map<String, Object> timelineMap = (Map<String, Object>) shareAccountData.get("timeline");
-        List<Integer> dateList = (List<Integer>) timelineMap.get("approvedDate");
-        Calendar cal = Calendar.getInstance();
-        cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-        Date approvedDate = cal.getTime();
-        Assertions.assertEquals("01 January 2016", simple.format(approvedDate));
+        shareAccountHelper.approve(shareAccountId, "01 January 2016", "Share Account Approval Note", DATE_FORMAT, "en");
+        shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.approved", shareAccountData.getStatus().getCode());
+        Assertions.assertEquals("01 January 2016", format(shareAccountData.getTimeline().getApprovedDate()));
 
         // charges verification
-        chargesList = (List<Map<String, Object>>) shareAccountData.get("charges");
-        for (Map<String, Object> chargeDef : chargesList) {
-            Map<String, Object> chargeTimeTypeMap = (Map<String, Object>) chargeDef.get("chargeTimeType");
-            String chargeTimeType = String.valueOf(chargeTimeTypeMap.get("code"));
+        for (GetAccountsCharges chargeDef : shareAccountData.getCharges()) {
+            String chargeTimeType = chargeTimeTypeCode(chargeDef);
             if (chargeTimeType.equals("chargeTimeType.activation")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("2.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharespurchase")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharesredeem")) {
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountOrPercentage")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("1.0", chargeDef.getAmountOrPercentage());
+                assertAmount("0.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else {
                 Assertions.fail("Other Charge defintion found");
             }
         }
 
-        Map<String, Object> activateMap = new HashMap<>();
-        activateMap.put("dateFormat", "dd MMMM yyyy");
-        activateMap.put("activatedDate", "01 January 2016");
-        activateMap.put("locale", "en");
-        String activateJson = new Gson().toJson(activateMap);
-        ShareAccountTransactionHelper.postCommand("activate", shareAccountId, activateJson, requestSpec, responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.active", String.valueOf(statusMap.get("code")));
-        timelineMap = (Map<String, Object>) shareAccountData.get("timeline");
-        dateList = (List<Integer>) timelineMap.get("activatedDate");
-        cal = Calendar.getInstance();
-        cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-        Date activatedDate = cal.getTime();
-        Assertions.assertEquals("01 January 2016", simple.format(activatedDate));
+        shareAccountHelper.activate(shareAccountId, "01 January 2016", DATE_FORMAT, "en");
+        shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.active", shareAccountData.getStatus().getCode());
+        Assertions.assertEquals("01 January 2016", format(shareAccountData.getTimeline().getActivatedDate()));
 
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(2, transactions.size());
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            cal = Calendar.getInstance();
-            cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-            Date date = cal.getTime();
-            String transactionType = (String) transactionTypeMap.get("code");
-            if (transactionType.equals("purchasedSharesType.purchased")) {
-                Assertions.assertEquals("30", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Assertions.assertEquals("02 March 2016", simple.format(date));
-            } else if (transactionType.equals("charge.payment")) {
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("01 January 2016", simple.format(date));
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            if (transactionType.equals(PURCHASED)) {
+                Assertions.assertEquals(30, transaction.getNumberOfShares());
+                assertAmount("62.0", transaction.getAmount());
+                assertAmount("62.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals("02 March 2016", purchasedDate(transaction));
+            } else if (transactionType.equals(CHARGE_PAYMENT)) {
+                assertAmount("2.0", transaction.getAmount());
+                assertAmount("2.0", transaction.getAmountPaid());
+                assertAmount("0", transaction.getChargeAmount());
+                Assertions.assertEquals("01 January 2016", purchasedDate(transaction));
             }
         }
 
         // charges verification
-        chargesList = (List<Map<String, Object>>) shareAccountData.get("charges");
-        for (Map<String, Object> chargeDef : chargesList) {
-            Map<String, Object> chargeTimeTypeMap = (Map<String, Object>) chargeDef.get("chargeTimeType");
-            String chargeTimeType = String.valueOf(chargeTimeTypeMap.get("code"));
+        for (GetAccountsCharges chargeDef : shareAccountData.getCharges()) {
+            String chargeTimeType = chargeTimeTypeCode(chargeDef);
             if (chargeTimeType.equals("chargeTimeType.activation")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharespurchase")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharesredeem")) {
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountOrPercentage")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("1.0", chargeDef.getAmountOrPercentage());
+                assertAmount("0.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else {
                 Assertions.fail("Other Charge defintion found");
             }
         }
 
-        Map<String, Object> summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("30", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(30, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalPendingForApprovalShares());
 
         // apply additional shares
-        Map<String, Object> additionalSharesRequestMap = new HashMap<>();
-        additionalSharesRequestMap.put("requestedDate", "01 April 2016");
-        additionalSharesRequestMap.put("dateFormat", "dd MMMM yyyy");
-        additionalSharesRequestMap.put("locale", "en");
-        additionalSharesRequestMap.put("requestedShares", "15");
-        String additionalSharesRequestJson = new Gson().toJson(additionalSharesRequestMap);
-        ShareAccountTransactionHelper.postCommand("applyadditionalshares", shareAccountId, additionalSharesRequestJson, requestSpec,
-                responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        applyAdditionalShares(shareAccountId, "01 April 2016", 15);
+        shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(3, transactions.size());
-        String addtionalSharesRequestId = null;
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            cal = Calendar.getInstance();
-            cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-            Date date = cal.getTime();
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = simple.format(date);
-            if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("02 March 2016")) {
-                Assertions.assertEquals("30", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-            } else if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("01 April 2016")) {
-                addtionalSharesRequestId = String.valueOf(transaction.get("id"));
-                Assertions.assertEquals("15", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("32.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("30.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Map<String, Object> transactionstatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals("purchasedSharesStatusType.applied", String.valueOf(transactionstatusMap.get("code")));
+        Long addtionalSharesRequestId = null;
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            String transactionDate = purchasedDate(transaction);
+            if (transactionType.equals(PURCHASED) && transactionDate.equals("02 March 2016")) {
+                Assertions.assertEquals(30, transaction.getNumberOfShares());
+                assertAmount("62.0", transaction.getAmount());
+                assertAmount("62.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+            } else if (transactionType.equals(PURCHASED) && transactionDate.equals("01 April 2016")) {
+                addtionalSharesRequestId = transaction.getId();
+                Assertions.assertEquals(15, transaction.getNumberOfShares());
+                assertAmount("32.0", transaction.getAmount());
+                assertAmount("30.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals(APPLIED, statusCode(transaction));
 
-            } else if (transactionType.equals("charge.payment")) {
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("chargeAmount")));
+            } else if (transactionType.equals(CHARGE_PAYMENT)) {
+                assertAmount("2.0", transaction.getAmount());
+                assertAmount("2.0", transaction.getAmountPaid());
+                assertAmount("0", transaction.getChargeAmount());
                 Assertions.assertEquals("01 January 2016", transactionDate);
             }
         }
 
         // charges verification
-        chargesList = (List<Map<String, Object>>) shareAccountData.get("charges");
-        for (Map<String, Object> chargeDef : chargesList) {
-            Map<String, Object> chargeTimeTypeMap = (Map<String, Object>) chargeDef.get("chargeTimeType");
-            String chargeTimeType = String.valueOf(chargeTimeTypeMap.get("code"));
+        for (GetAccountsCharges chargeDef : shareAccountData.getCharges()) {
+            String chargeTimeType = chargeTimeTypeCode(chargeDef);
             if (chargeTimeType.equals("chargeTimeType.activation")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharespurchase")) {
-                Assertions.assertEquals("4.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("4.0", chargeDef.getAmount());
+                assertAmount("2.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharesredeem")) {
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountOrPercentage")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("1.0", chargeDef.getAmountOrPercentage());
+                assertAmount("0.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else {
                 Assertions.fail("Other Charge defintion found");
             }
         }
 
-        summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("30", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("15", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(30, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(15, shareAccountData.getSummary().getTotalPendingForApprovalShares());
 
         // Approve additional Shares request
-        Map<String, List<Map<String, Object>>> approveadditionalsharesMap = new HashMap<>();
-        List<Map<String, Object>> list = new ArrayList<>();
-        Map<String, Object> idsMap = new HashMap<>();
-        idsMap.put("id", addtionalSharesRequestId);
-        list.add(idsMap);
-        approveadditionalsharesMap.put("requestedShares", list);
-        String approveadditionalsharesJson = new Gson().toJson(approveadditionalsharesMap);
-        ShareAccountTransactionHelper.postCommand("approveadditionalshares", shareAccountId, approveadditionalsharesJson, requestSpec,
-                responseSpec);
+        Assertions.assertNotNull(addtionalSharesRequestId);
+        shareAccountHelper.approveAdditionalShares(shareAccountId, List.of(addtionalSharesRequestId));
 
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(3, transactions.size());
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            cal = Calendar.getInstance();
-            cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-            Date date = cal.getTime();
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = simple.format(date);
-            if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("02 March 2016")) {
-                Assertions.assertEquals("30", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-            } else if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("01 April 2016")) {
-                Assertions.assertEquals("15", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("32.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("32.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Map<String, Object> transactionstatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals("purchasedSharesStatusType.approved", String.valueOf(transactionstatusMap.get("code")));
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            String transactionDate = purchasedDate(transaction);
+            if (transactionType.equals(PURCHASED) && transactionDate.equals("02 March 2016")) {
+                Assertions.assertEquals(30, transaction.getNumberOfShares());
+                assertAmount("62.0", transaction.getAmount());
+                assertAmount("62.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+            } else if (transactionType.equals(PURCHASED) && transactionDate.equals("01 April 2016")) {
+                Assertions.assertEquals(15, transaction.getNumberOfShares());
+                assertAmount("32.0", transaction.getAmount());
+                assertAmount("32.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals(APPROVED, statusCode(transaction));
 
-            } else if (transactionType.equals("charge.payment")) {
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("chargeAmount")));
+            } else if (transactionType.equals(CHARGE_PAYMENT)) {
+                assertAmount("2.0", transaction.getAmount());
+                assertAmount("2.0", transaction.getAmountPaid());
+                assertAmount("0", transaction.getChargeAmount());
                 Assertions.assertEquals("01 January 2016", transactionDate);
             }
         }
 
         // charges verification
-        chargesList = (List<Map<String, Object>>) shareAccountData.get("charges");
-        for (Map<String, Object> chargeDef : chargesList) {
-            Map<String, Object> chargeTimeTypeMap = (Map<String, Object>) chargeDef.get("chargeTimeType");
-            String chargeTimeType = String.valueOf(chargeTimeTypeMap.get("code"));
+        for (GetAccountsCharges chargeDef : shareAccountData.getCharges()) {
+            String chargeTimeType = chargeTimeTypeCode(chargeDef);
             if (chargeTimeType.equals("chargeTimeType.activation")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharespurchase")) {
-                Assertions.assertEquals("4.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("4.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("4.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("4.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharesredeem")) {
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountOrPercentage")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("1.0", chargeDef.getAmountOrPercentage());
+                assertAmount("0.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else {
                 Assertions.fail("Other Charge defintion found");
             }
         }
 
-        summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("45", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(45, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalPendingForApprovalShares());
 
         // apply aditional shres and reject it
-        additionalSharesRequestMap = new HashMap<>();
-        additionalSharesRequestMap.put("requestedDate", "01 May 2016");
-        additionalSharesRequestMap.put("dateFormat", "dd MMMM yyyy");
-        additionalSharesRequestMap.put("locale", "en");
-        additionalSharesRequestMap.put("requestedShares", "20");
-        additionalSharesRequestJson = new Gson().toJson(additionalSharesRequestMap);
-        ShareAccountTransactionHelper.postCommand("applyadditionalshares", shareAccountId, additionalSharesRequestJson, requestSpec,
-                responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        applyAdditionalShares(shareAccountId, "01 May 2016", 20);
+        shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(4, transactions.size());
         addtionalSharesRequestId = null;
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            cal = Calendar.getInstance();
-            cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-            Date date = cal.getTime();
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = simple.format(date);
-            if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("01 May 2016")) {
-                addtionalSharesRequestId = String.valueOf(transaction.get("id"));
-                Assertions.assertEquals("20", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("42.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("40.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Map<String, Object> transactionstatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals("purchasedSharesStatusType.applied", String.valueOf(transactionstatusMap.get("code")));
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            String transactionDate = purchasedDate(transaction);
+            if (transactionType.equals(PURCHASED) && transactionDate.equals("01 May 2016")) {
+                addtionalSharesRequestId = transaction.getId();
+                Assertions.assertEquals(20, transaction.getNumberOfShares());
+                assertAmount("42.0", transaction.getAmount());
+                assertAmount("40.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals(APPLIED, statusCode(transaction));
             }
         }
 
         // charges verification
-        chargesList = (List<Map<String, Object>>) shareAccountData.get("charges");
-        for (Map<String, Object> chargeDef : chargesList) {
-            Map<String, Object> chargeTimeTypeMap = (Map<String, Object>) chargeDef.get("chargeTimeType");
-            String chargeTimeType = String.valueOf(chargeTimeTypeMap.get("code"));
+        for (GetAccountsCharges chargeDef : shareAccountData.getCharges()) {
+            String chargeTimeType = chargeTimeTypeCode(chargeDef);
             if (chargeTimeType.equals("chargeTimeType.activation")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharespurchase")) {
-                Assertions.assertEquals("6.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("4.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("6.0", chargeDef.getAmount());
+                assertAmount("2.0", chargeDef.getAmountOutstanding());
+                assertAmount("4.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharesredeem")) {
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountOrPercentage")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("1.0", chargeDef.getAmountOrPercentage());
+                assertAmount("0.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else {
                 Assertions.fail("Other Charge defintion found");
             }
         }
 
-        summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("45", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("20", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(45, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(20, shareAccountData.getSummary().getTotalPendingForApprovalShares());
 
         // rejectadditionalshares
-        Map<String, List<Map<String, Object>>> rejectadditionalsharesMap = new HashMap<>();
-        list = new ArrayList<>();
-        idsMap = new HashMap<>();
-        idsMap.put("id", addtionalSharesRequestId);
-        list.add(idsMap);
-        rejectadditionalsharesMap.put("requestedShares", list);
-        String rejectadditionalsharesJson = new Gson().toJson(rejectadditionalsharesMap);
-        ShareAccountTransactionHelper.postCommand("rejectadditionalshares", shareAccountId, rejectadditionalsharesJson, requestSpec,
-                responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        Assertions.assertNotNull(addtionalSharesRequestId);
+        shareAccountHelper.rejectAdditionalShares(shareAccountId, List.of(addtionalSharesRequestId));
+        shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(4, transactions.size());
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            cal = Calendar.getInstance();
-            cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-            Date date = cal.getTime();
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = simple.format(date);
-            if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("01 May 2016")) {
-                addtionalSharesRequestId = String.valueOf(transaction.get("id"));
-                Assertions.assertEquals("20", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("40.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("40.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Map<String, Object> transactionstatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals("purchasedSharesStatusType.rejected", String.valueOf(transactionstatusMap.get("code")));
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            String transactionDate = purchasedDate(transaction);
+            if (transactionType.equals(PURCHASED) && transactionDate.equals("01 May 2016")) {
+                Assertions.assertEquals(20, transaction.getNumberOfShares());
+                assertAmount("40.0", transaction.getAmount());
+                assertAmount("40.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals(REJECTED, statusCode(transaction));
             }
         }
 
         // charges verification
-        chargesList = (List<Map<String, Object>>) shareAccountData.get("charges");
-        for (Map<String, Object> chargeDef : chargesList) {
-            Map<String, Object> chargeTimeTypeMap = (Map<String, Object>) chargeDef.get("chargeTimeType");
-            String chargeTimeType = String.valueOf(chargeTimeTypeMap.get("code"));
+        for (GetAccountsCharges chargeDef : shareAccountData.getCharges()) {
+            String chargeTimeType = chargeTimeTypeCode(chargeDef);
             if (chargeTimeType.equals("chargeTimeType.activation")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharespurchase")) {
-                Assertions.assertEquals("6.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("6.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("6.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("6.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharesredeem")) {
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountOrPercentage")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("1.0", chargeDef.getAmountOrPercentage());
+                assertAmount("0.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("0", chargeDef.getAmountPaid());
             } else {
                 Assertions.fail("Other Charge defintion found");
             }
         }
 
-        summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("45", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(45, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalPendingForApprovalShares());
 
         // redeem shares
-        Map<String, Object> redeemRequestMap = new HashMap<>();
-        redeemRequestMap.put("requestedDate", "05 May 2016");
-        redeemRequestMap.put("dateFormat", "dd MMMM yyyy");
-        redeemRequestMap.put("locale", "en");
-        redeemRequestMap.put("requestedShares", "15");
-        String redeemRequestJson = new Gson().toJson(redeemRequestMap);
-        ShareAccountTransactionHelper.postCommand("redeemshares", shareAccountId, redeemRequestJson, requestSpec, responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        shareAccountHelper.redeemShares(shareAccountId, 15, "05 May 2016", DATE_FORMAT, "en");
+        shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(5, transactions.size());
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            cal = Calendar.getInstance();
-            cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-            Date date = cal.getTime();
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = simple.format(date);
-            if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("02 March 2016")) {
-                Assertions.assertEquals("30", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-            } else if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("01 April 2016")) {
-                Assertions.assertEquals("15", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("32.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("32.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Map<String, Object> transactionstatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals("purchasedSharesStatusType.approved", String.valueOf(transactionstatusMap.get("code")));
-            } else if (transactionType.equals("purchasedSharesType.redeemed") && transactionDate.equals("05 May 2016")) {
-                Assertions.assertEquals("15", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("29.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("29.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("1.0", String.valueOf(transaction.get("chargeAmount")));
-                Map<String, Object> transactionstatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals("purchasedSharesStatusType.approved", String.valueOf(transactionstatusMap.get("code")));
-            } else if (transactionType.equals("charge.payment")) {
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("chargeAmount")));
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            String transactionDate = purchasedDate(transaction);
+            if (transactionType.equals(PURCHASED) && transactionDate.equals("02 March 2016")) {
+                Assertions.assertEquals(30, transaction.getNumberOfShares());
+                assertAmount("62.0", transaction.getAmount());
+                assertAmount("62.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+            } else if (transactionType.equals(PURCHASED) && transactionDate.equals("01 April 2016")) {
+                Assertions.assertEquals(15, transaction.getNumberOfShares());
+                assertAmount("32.0", transaction.getAmount());
+                assertAmount("32.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals(APPROVED, statusCode(transaction));
+            } else if (transactionType.equals(REDEEMED) && transactionDate.equals("05 May 2016")) {
+                Assertions.assertEquals(15, transaction.getNumberOfShares());
+                assertAmount("29.0", transaction.getAmount());
+                assertAmount("29.0", transaction.getAmountPaid());
+                assertAmount("1.0", transaction.getChargeAmount());
+                Assertions.assertEquals(APPROVED, statusCode(transaction));
+            } else if (transactionType.equals(CHARGE_PAYMENT)) {
+                assertAmount("2.0", transaction.getAmount());
+                assertAmount("2.0", transaction.getAmountPaid());
+                assertAmount("0", transaction.getChargeAmount());
                 Assertions.assertEquals("01 January 2016", transactionDate);
             }
         }
 
         // charges verification
-        chargesList = (List<Map<String, Object>>) shareAccountData.get("charges");
-        for (Map<String, Object> chargeDef : chargesList) {
-            Map<String, Object> chargeTimeTypeMap = (Map<String, Object>) chargeDef.get("chargeTimeType");
-            String chargeTimeType = String.valueOf(chargeTimeTypeMap.get("code"));
+        for (GetAccountsCharges chargeDef : shareAccountData.getCharges()) {
+            String chargeTimeType = chargeTimeTypeCode(chargeDef);
             if (chargeTimeType.equals("chargeTimeType.activation")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharespurchase")) {
-                Assertions.assertEquals("6.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("6.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("6.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("6.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharesredeem")) {
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountOrPercentage")));
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("1.0", chargeDef.getAmountOrPercentage());
+                assertAmount("1.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("1.0", chargeDef.getAmountPaid());
             } else {
                 Assertions.fail("Other Charge defintion found");
             }
         }
-        summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("30", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(30, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalPendingForApprovalShares());
 
         // Close Share Account
-        Map<String, Object> closeAccountMap = new HashMap<>();
-        closeAccountMap.put("note", "Share Account Close Note");
-        closeAccountMap.put("dateFormat", "dd MMMM yyyy");
-        closeAccountMap.put("closedDate", "10 May 2016");
-        closeAccountMap.put("locale", "en");
-        String closeJson = new Gson().toJson(closeAccountMap);
-        ShareAccountTransactionHelper.postCommand("close", shareAccountId, closeJson, requestSpec, responseSpec);
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.closed", String.valueOf(statusMap.get("code")));
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        shareAccountHelper.close(shareAccountId, "10 May 2016", "Share Account Close Note", DATE_FORMAT, "en");
+        shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.closed", shareAccountData.getStatus().getCode());
+        transactions = shareAccountData.getPurchasedShares();
         Assertions.assertNotNull(transactions);
         Assertions.assertEquals(6, transactions.size());
-        for (int i = 0; i < transactions.size(); i++) {
-            Map<String, Object> transaction = transactions.get(i);
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            dateList = (List<Integer>) transaction.get("purchasedDate");
-            cal = Calendar.getInstance();
-            cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-            Date date = cal.getTime();
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = simple.format(date);
-            if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("02 March 2016")) {
-                Assertions.assertEquals("30", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("62.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-            } else if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("01 April 2016")) {
-                Assertions.assertEquals("15", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("32.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("32.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("chargeAmount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("purchasedPrice")));
-                Map<String, Object> transactionstatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals("purchasedSharesStatusType.approved", String.valueOf(transactionstatusMap.get("code")));
-            } else if (transactionType.equals("purchasedSharesType.redeemed") && transactionDate.equals("05 May 2016")) {
-                Assertions.assertEquals("15", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("29.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("29.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("1.0", String.valueOf(transaction.get("chargeAmount")));
-                Map<String, Object> transactionstatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals("purchasedSharesStatusType.approved", String.valueOf(transactionstatusMap.get("code")));
-            } else if (transactionType.equals("purchasedSharesType.redeemed") && transactionDate.equals("10 May 2016")) {
-                Assertions.assertEquals("30", String.valueOf(transaction.get("numberOfShares")));
-                Assertions.assertEquals("59.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("59.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("1.0", String.valueOf(transaction.get("chargeAmount")));
-                Map<String, Object> transactionstatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals("purchasedSharesStatusType.approved", String.valueOf(transactionstatusMap.get("code")));
-            } else if (transactionType.equals("charge.payment")) {
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amount")));
-                Assertions.assertEquals("2.0", String.valueOf(transaction.get("amountPaid")));
-                Assertions.assertEquals("0", String.valueOf(transaction.get("chargeAmount")));
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            String transactionType = typeCode(transaction);
+            String transactionDate = purchasedDate(transaction);
+            if (transactionType.equals(PURCHASED) && transactionDate.equals("02 March 2016")) {
+                Assertions.assertEquals(30, transaction.getNumberOfShares());
+                assertAmount("62.0", transaction.getAmount());
+                assertAmount("62.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+            } else if (transactionType.equals(PURCHASED) && transactionDate.equals("01 April 2016")) {
+                Assertions.assertEquals(15, transaction.getNumberOfShares());
+                assertAmount("32.0", transaction.getAmount());
+                assertAmount("32.0", transaction.getAmountPaid());
+                assertAmount("2.0", transaction.getChargeAmount());
+                assertAmount("2.0", transaction.getPurchasedPrice());
+                Assertions.assertEquals(APPROVED, statusCode(transaction));
+            } else if (transactionType.equals(REDEEMED) && transactionDate.equals("05 May 2016")) {
+                Assertions.assertEquals(15, transaction.getNumberOfShares());
+                assertAmount("29.0", transaction.getAmount());
+                assertAmount("29.0", transaction.getAmountPaid());
+                assertAmount("1.0", transaction.getChargeAmount());
+                Assertions.assertEquals(APPROVED, statusCode(transaction));
+            } else if (transactionType.equals(REDEEMED) && transactionDate.equals("10 May 2016")) {
+                Assertions.assertEquals(30, transaction.getNumberOfShares());
+                assertAmount("59.0", transaction.getAmount());
+                assertAmount("59.0", transaction.getAmountPaid());
+                assertAmount("1.0", transaction.getChargeAmount());
+                Assertions.assertEquals(APPROVED, statusCode(transaction));
+            } else if (transactionType.equals(CHARGE_PAYMENT)) {
+                assertAmount("2.0", transaction.getAmount());
+                assertAmount("2.0", transaction.getAmountPaid());
+                assertAmount("0", transaction.getChargeAmount());
                 Assertions.assertEquals("01 January 2016", transactionDate);
             }
         }
         // charges verification
-        chargesList = (List<Map<String, Object>>) shareAccountData.get("charges");
-        for (Map<String, Object> chargeDef : chargesList) {
-            Map<String, Object> chargeTimeTypeMap = (Map<String, Object>) chargeDef.get("chargeTimeType");
-            String chargeTimeType = String.valueOf(chargeTimeTypeMap.get("code"));
+        for (GetAccountsCharges chargeDef : shareAccountData.getCharges()) {
+            String chargeTimeType = chargeTimeTypeCode(chargeDef);
             if (chargeTimeType.equals("chargeTimeType.activation")) {
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharespurchase")) {
-                Assertions.assertEquals("6.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("6.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("6.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("6.0", chargeDef.getAmountPaid());
             } else if (chargeTimeType.equals("chargeTimeType.sharesredeem")) {
-                Assertions.assertEquals("1.0", String.valueOf(chargeDef.get("amountOrPercentage")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amount")));
-                Assertions.assertEquals("0.0", String.valueOf(chargeDef.get("amountOutstanding")));
-                Assertions.assertEquals("2.0", String.valueOf(chargeDef.get("amountPaid")));
+                assertAmount("1.0", chargeDef.getAmountOrPercentage());
+                assertAmount("2.0", chargeDef.getAmount());
+                assertAmount("0.0", chargeDef.getAmountOutstanding());
+                assertAmount("2.0", chargeDef.getAmountPaid());
             } else {
                 Assertions.fail("Other Charge defintion found");
             }
         }
-        summaryMap = (Map<String, Object>) shareAccountData.get("summary");
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalApprovedShares")));
-        Assertions.assertEquals("0", String.valueOf(summaryMap.get("totalPendingForApprovalShares")));
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalApprovedShares());
+        Assertions.assertEquals(0, shareAccountData.getSummary().getTotalPendingForApprovalShares());
     }
 
     // Refactored Test 1
     @Test
-    @SuppressWarnings("unchecked")
     public void testChronologicalAdditionalSharesAfterRejectedTransaction() {
         shareProductHelper = new ShareProductHelper();
         final Integer productId = createShareProduct();
@@ -996,42 +741,36 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016
-        final Integer shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
+        final Long shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
 
         // Apply additional shares on 15 April 2016
-        applyAdditionalShares(shareAccountId, "15 April 2016", "20");
+        applyAdditionalShares(shareAccountId, "15 April 2016", 20);
 
         // Retrieve transactions and find the additional shares request
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        Set<GetAccountsPurchasedShares> transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
         Assertions.assertNotNull(transactions);
 
         // Find and reject the additional shares request (15 April 2016)
-        String additionalSharesRequestId = findTransactionId(transactions, "purchasedSharesType.purchased", "15 April 2016");
+        Long additionalSharesRequestId = findTransactionId(transactions, PURCHASED, "15 April 2016");
         Assertions.assertNotNull(additionalSharesRequestId, "Additional shares request for 15 April 2016 should exist");
 
         // Reject the additional shares request
-        rejectAdditionalSharesRequest(shareAccountId, additionalSharesRequestId);
+        shareAccountHelper.rejectAdditionalShares(shareAccountId, List.of(additionalSharesRequestId));
 
         // Verify transaction is rejected
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
-        verifyTransactionStatus(transactions, "purchasedSharesType.purchased", "15 April 2016", "purchasedSharesStatusType.rejected");
+        transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
+        verifyTransactionStatus(transactions, PURCHASED, "15 April 2016", REJECTED);
 
         // Now try to apply additional shares with a date BEFORE the rejected transaction (10 April 2016)
         // This should succeed because rejected transactions should be ignored in chronological validation
-        applyAdditionalShares(shareAccountId, "10 April 2016", "15");
+        applyAdditionalShares(shareAccountId, "10 April 2016", 15);
 
         // Verify the new transaction was successfully added
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
-        verifyTransactionWithShares(transactions, "purchasedSharesType.purchased", "10 April 2016", "15",
-                "purchasedSharesStatusType.applied");
+        transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
+        verifyTransactionWithShares(transactions, PURCHASED, "10 April 2016", 15, APPLIED);
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void testChronologicalAccountClosureBeforeRejectedTransaction() {
         // FINERACT-2457: Account closure validation should ignore rejected/reversed transactions
         shareProductHelper = new ShareProductHelper();
@@ -1043,53 +782,38 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016
-        final Integer shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
+        final Long shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
 
         // Apply additional shares on 20 May 2016
-        applyAdditionalShares(shareAccountId, "20 May 2016", "30");
+        applyAdditionalShares(shareAccountId, "20 May 2016", 30);
 
         // Retrieve transactions and find the additional shares request
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        Set<GetAccountsPurchasedShares> transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
         Assertions.assertNotNull(transactions);
 
         // Find and reject the additional shares request (20 May 2016)
-        String additionalSharesRequestId = findTransactionId(transactions, "purchasedSharesType.purchased", "20 May 2016");
+        Long additionalSharesRequestId = findTransactionId(transactions, PURCHASED, "20 May 2016");
         Assertions.assertNotNull(additionalSharesRequestId, "Additional shares request for 20 May 2016 should exist");
 
         // Reject the additional shares request
-        rejectAdditionalSharesRequest(shareAccountId, additionalSharesRequestId);
+        shareAccountHelper.rejectAdditionalShares(shareAccountId, List.of(additionalSharesRequestId));
 
         // Verify transaction is rejected
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
-        verifyTransactionStatus(transactions, "purchasedSharesType.purchased", "20 May 2016", "purchasedSharesStatusType.rejected");
+        transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
+        verifyTransactionStatus(transactions, PURCHASED, "20 May 2016", REJECTED);
 
         // Now try to close the account with a date BEFORE the rejected transaction (15 May 2016)
         // This should succeed because rejected transactions should be ignored in chronological validation
-        Map<String, Object> closeAccountMap = new HashMap<>();
-        closeAccountMap.put("note", "Share Account Close Note");
-        closeAccountMap.put("dateFormat", "dd MMMM yyyy");
-        closeAccountMap.put("closedDate", "15 May 2016");
-        closeAccountMap.put("locale", "en");
-        String closeJson = new Gson().toJson(closeAccountMap);
-        ShareAccountTransactionHelper.postCommand("close", shareAccountId, closeJson, requestSpec, responseSpec);
+        shareAccountHelper.close(shareAccountId, "15 May 2016", "Share Account Close Note", DATE_FORMAT, "en");
 
         // Verify the account was successfully closed
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        Map<String, Object> statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.closed", String.valueOf(statusMap.get("code")));
-
-        Map<String, Object> timelineMap = (Map<String, Object>) shareAccountData.get("timeline");
-        List<Integer> closedDateList = (List<Integer>) timelineMap.get("closedDate");
-        LocalDate closedDate = LocalDate.of(closedDateList.get(0), closedDateList.get(1), closedDateList.get(2));
-        Assertions.assertEquals("15 May 2016", closedDate.format(Utils.dateFormatter));
+        GetAccountsTypeAccountIdResponse shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.closed", shareAccountData.getStatus().getCode());
+        Assertions.assertEquals("15 May 2016", format(shareAccountData.getTimeline().getClosedDate()));
     }
 
     // Additional Test 1: Verify original validation still works (Negative Test)
     @Test
-    @SuppressWarnings("unchecked")
     public void testChronologicalAdditionalSharesBeforeActiveTransactionShouldFail() {
         // FINERACT-2457: Verify that the fix didn't break the original chronological validation
         // Transactions BEFORE active/approved transactions should still be REJECTED
@@ -1102,45 +826,27 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016
-        final Integer shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
+        final Long shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
 
         // Apply additional shares on 15 April 2016 (this remains active/approved)
-        applyAdditionalShares(shareAccountId, "15 April 2016", "20");
+        applyAdditionalShares(shareAccountId, "15 April 2016", 20);
 
         // Verify the transaction exists and is in applied/active state
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        Set<GetAccountsPurchasedShares> transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
         Assertions.assertNotNull(transactions);
 
-        String transactionId = findTransactionId(transactions, "purchasedSharesType.purchased", "15 April 2016");
+        Long transactionId = findTransactionId(transactions, PURCHASED, "15 April 2016");
         Assertions.assertNotNull(transactionId, "Transaction for 15 April 2016 should exist");
 
         // Try to apply additional shares BEFORE the active transaction (10 April 2016)
         // This should FAIL because the April 15 transaction is ACTIVE/APPROVED
-        Map<String, Object> additionalSharesRequestMap = new HashMap<>();
-        additionalSharesRequestMap.put("requestedDate", "10 April 2016");
-        additionalSharesRequestMap.put("dateFormat", "dd MMMM yyyy");
-        additionalSharesRequestMap.put("locale", "en");
-        additionalSharesRequestMap.put("requestedShares", "15");
-        String additionalSharesRequestJson = new Gson().toJson(additionalSharesRequestMap);
-
-        ResponseSpecification errorResponse = new ResponseSpecBuilder().expectStatusCode(400).build();
-
-        try {
-            ShareAccountTransactionHelper.postCommand("applyadditionalshares", shareAccountId, additionalSharesRequestJson, requestSpec,
-                    errorResponse);
-
-        } catch (Exception e) {
-            Assertions.assertTrue(
-                    e.getMessage().contains("chronological") || e.getMessage().contains("date") || e.getMessage().contains("before"),
-                    "Error message should indicate chronological validation failure");
-        }
+        CallFailedRuntimeException error = Assertions.assertThrows(CallFailedRuntimeException.class,
+                () -> applyAdditionalShares(shareAccountId, "10 April 2016", 15));
+        Assertions.assertEquals(400, error.getStatus());
     }
 
     // Additional Test 3: Test edge case - transaction on same date as rejected transaction
     @Test
-    @SuppressWarnings("unchecked")
     public void testChronologicalAdditionalSharesOnSameDateAsRejectedTransaction() {
         // FINERACT-2457: Test behavior when applying shares on the SAME date as a rejected transaction
         shareProductHelper = new ShareProductHelper();
@@ -1152,48 +858,36 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016
-        final Integer shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
+        final Long shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
 
         // Apply and reject shares on 15 April 2016
-        applyAdditionalShares(shareAccountId, "15 April 2016", "20");
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
-        String txId = findTransactionId(transactions, "purchasedSharesType.purchased", "15 April 2016");
+        applyAdditionalShares(shareAccountId, "15 April 2016", 20);
+        Set<GetAccountsPurchasedShares> transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
+        Long txId = findTransactionId(transactions, PURCHASED, "15 April 2016");
         Assertions.assertNotNull(txId);
-        rejectAdditionalSharesRequest(shareAccountId, txId);
+        shareAccountHelper.rejectAdditionalShares(shareAccountId, List.of(txId));
 
         // Verify transaction is rejected
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
-        verifyTransactionStatus(transactions, "purchasedSharesType.purchased", "15 April 2016", "purchasedSharesStatusType.rejected");
+        transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
+        verifyTransactionStatus(transactions, PURCHASED, "15 April 2016", REJECTED);
 
         // Try to apply shares on the SAME date as the rejected transaction
         // This should succeed since rejected transactions are ignored
-        applyAdditionalShares(shareAccountId, "15 April 2016", "15");
+        applyAdditionalShares(shareAccountId, "15 April 2016", 15);
 
         // Verify the new transaction was successfully added
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
+        transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
 
         // Count how many transactions exist for 15 April 2016
-        DateFormat simple = new SimpleDateFormat("dd MMMM yyyy");
         int countForDate = 0;
         int appliedCountForDate = 0;
 
-        for (Map<String, Object> transaction : transactions) {
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            List<Integer> dateList = (List<Integer>) transaction.get("purchasedDate");
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = formatTransactionDate(dateList, simple);
-
-            if (transactionType.equals("purchasedSharesType.purchased") && transactionDate.equals("15 April 2016")) {
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            if (typeCode(transaction).equals(PURCHASED) && purchasedDate(transaction).equals("15 April 2016")) {
                 countForDate++;
-                Map<String, Object> transactionStatusMap = (Map<String, Object>) transaction.get("status");
-                String status = String.valueOf(transactionStatusMap.get("code"));
-                if (status.equals("purchasedSharesStatusType.applied")) {
+                if (statusCode(transaction).equals(APPLIED)) {
                     appliedCountForDate++;
-                    Assertions.assertEquals("15", String.valueOf(transaction.get("numberOfShares")));
+                    Assertions.assertEquals(15, transaction.getNumberOfShares());
                 }
             }
         }
@@ -1205,7 +899,6 @@ public class ShareAccountIntegrationTests {
 
     // Additional Test 4: Test account closure before active transaction should still fail
     @Test
-    @SuppressWarnings("unchecked")
     public void testChronologicalAccountClosureBeforeActiveTransactionShouldFail() {
         // FINERACT-2457: Verify that closing account before active transactions is still blocked
         shareProductHelper = new ShareProductHelper();
@@ -1217,48 +910,25 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(savingsAccountId);
 
         // Setup and activate share account with initial shares on 01 March 2016
-        final Integer shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
+        final Long shareAccountId = setupAndActivateShareAccount(clientId, productId, savingsAccountId, "01 March 2016");
 
         // Apply additional shares on 20 May 2016 (and keep it active/approved)
-        applyAdditionalShares(shareAccountId, "20 May 2016", "30");
+        applyAdditionalShares(shareAccountId, "20 May 2016", 30);
 
         // Verify the transaction exists and is active
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        List<Map<String, Object>> transactions = (List<Map<String, Object>>) shareAccountData.get("purchasedShares");
-        String transactionId = findTransactionId(transactions, "purchasedSharesType.purchased", "20 May 2016");
+        Set<GetAccountsPurchasedShares> transactions = shareAccountHelper.getShareAccount(shareAccountId).getPurchasedShares();
+        Long transactionId = findTransactionId(transactions, PURCHASED, "20 May 2016");
         Assertions.assertNotNull(transactionId, "Transaction for 20 May 2016 should exist");
 
         // Try to close account on 15 May 2016 (before the active transaction)
         // This should FAIL
-        Map<String, Object> closeAccountMap = new HashMap<>();
-        closeAccountMap.put("note", "Share Account Close Note");
-        closeAccountMap.put("dateFormat", "dd MMMM yyyy");
-        closeAccountMap.put("closedDate", "15 May 2016");
-        closeAccountMap.put("locale", "en");
-        String closeJson = new Gson().toJson(closeAccountMap);
-
-        ResponseSpecification errorResponse = new ResponseSpecBuilder().expectStatusCode(400).build();
-
-        try {
-            ShareAccountTransactionHelper.postCommand("close", shareAccountId, closeJson, requestSpec, errorResponse);
-
-            // If we get here, the validation worked correctly (request was rejected)
-            // This is the expected behavior
-        } catch (Exception e) {
-            // Depending on the framework, the error might be thrown as an exception
-            // We expect this to fail, so this is acceptable
-            Assertions
-                    .assertTrue(
-                            e.getMessage().contains("chronological") || e.getMessage().contains("date") || e.getMessage().contains("before")
-                                    || e.getMessage().contains("transaction"),
-                            "Error message should indicate chronological validation failure");
-        }
+        CallFailedRuntimeException error = Assertions.assertThrows(CallFailedRuntimeException.class,
+                () -> shareAccountHelper.close(shareAccountId, "15 May 2016", "Share Account Close Note", DATE_FORMAT, "en"));
+        Assertions.assertEquals(400, error.getStatus());
 
         // Verify account is still active (not closed)
-        shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec, responseSpec);
-        Map<String, Object> statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.active", String.valueOf(statusMap.get("code")),
+        GetAccountsTypeAccountIdResponse shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.active", shareAccountData.getStatus().getCode(),
                 "Account should still be active since closure was rejected");
     }
 
@@ -1267,115 +937,64 @@ public class ShareAccountIntegrationTests {
         return ShareProductTransactionHelper.createShareProduct(shareProductJson, requestSpec, responseSpec);
     }
 
-    private Integer createShareAccount(final Integer clientId, final Integer productId, final Integer savingsAccountId) {
-        String josn = new ShareAccountHelper().withClientId(String.valueOf(clientId)).withProductId(String.valueOf(productId))
-                .withExternalId("External1").withSavingsAccountId(String.valueOf(savingsAccountId)).withSubmittedDate("01 January 2016")
-                .withApplicationDate("01 January 2016").withRequestedShares("25").build();
-        return ShareAccountTransactionHelper.createShareAccount(josn, requestSpec, responseSpec);
+    private Long createShareAccount(final Integer clientId, final Integer productId, final Integer savingsAccountId) {
+        return createShareAccount(clientId, productId, savingsAccountId, null);
     }
 
-    private Integer createShareAccount(final Integer clientId, final Integer productId, final Integer savingsAccountId,
-            List<Map<String, Object>> charges) {
-        String json = new ShareAccountHelper().withClientId(String.valueOf(clientId)).withProductId(String.valueOf(productId))
-                .withExternalId("External1").withSavingsAccountId(String.valueOf(savingsAccountId)).withSubmittedDate("01 January 2016")
-                .withApplicationDate("01 January 2016").withRequestedShares("25").withCharges(charges).build();
-        return ShareAccountTransactionHelper.createShareAccount(json, requestSpec, responseSpec);
+    private Long createShareAccount(final Integer clientId, final Integer productId, final Integer savingsAccountId,
+            List<AccountChargesRequest> charges) {
+        AccountRequest request = new AccountRequest().clientId(clientId.longValue()).productId(productId.longValue())
+                .externalId("External1").savingsAccountId(savingsAccountId.longValue()).submittedDate("01 January 2016")
+                .applicationDate("01 January 2016").requestedShares(25L).dateFormat(DATE_FORMAT).locale("en_GB");
+        if (charges != null) {
+            request.charges(charges);
+        }
+        return shareAccountHelper.applyShareAccount(request);
     }
 
-    private Map<String, Object> createCharge(final Integer chargeId, String amount) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("chargeId", chargeId);
-        map.put("amount", amount);
-        return map;
+    /** One activation, one purchase and one redeem charge, as every charge-bearing scenario in this class uses. */
+    private List<AccountChargesRequest> createShareCharges() {
+        Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
+                ChargesHelper.getShareAccountActivationChargeJson());
+        Integer purchaseChargeId = ChargesHelper.createCharges(requestSpec, responseSpec,
+                ChargesHelper.getShareAccountPurchaseChargeJson());
+        Integer redeemChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper.getShareAccountRedeemChargeJson());
+        return List.of(createCharge(activationChargeId, "2"), createCharge(purchaseChargeId, "2"), createCharge(redeemChargeId, "1"));
     }
 
-    private void updateShareAccountWithInitialData(Integer shareAccountId, Integer requestedShares, String applicationDate) {
-        Map<String, Object> shareAccountDataForUpdate = new HashMap<>();
-        shareAccountDataForUpdate.put("requestedShares", requestedShares);
-        shareAccountDataForUpdate.put("applicationDate", applicationDate);
-        shareAccountDataForUpdate.put("dateFormat", "dd MMMM yyyy");
-        shareAccountDataForUpdate.put("locale", "en_GB");
-        String updateShareAccountJsonString = new Gson().toJson(shareAccountDataForUpdate);
-        ShareAccountTransactionHelper.updateShareAccount(shareAccountId, updateShareAccountJsonString, requestSpec, responseSpec);
+    private AccountChargesRequest createCharge(final Integer chargeId, String amount) {
+        return new AccountChargesRequest().chargeId(chargeId.longValue()).amount(new BigDecimal(amount));
     }
 
-    private void approveShareAccount(Integer shareAccountId, String approvalDate) {
-        Map<String, Object> approveMap = new HashMap<>();
-        approveMap.put("note", "Share Account Approval Note");
-        approveMap.put("dateFormat", "dd MMMM yyyy");
-        approveMap.put("approvedDate", approvalDate);
-        approveMap.put("locale", "en");
-        String approve = new Gson().toJson(approveMap);
-        ShareAccountTransactionHelper.postCommand("approve", shareAccountId, approve, requestSpec, responseSpec);
+    private void updateShareAccount(Long shareAccountId, int requestedShares, String applicationDate, List<AccountChargesRequest> charges) {
+        PutAccountsTypeAccountIdRequest request = new PutAccountsTypeAccountIdRequest().requestedShares(requestedShares)
+                .applicationDate(applicationDate).dateFormat(DATE_FORMAT).locale("en_GB");
+        if (charges != null) {
+            request.charges(charges);
+        }
+        shareAccountHelper.updateShareAccount(shareAccountId, request);
     }
 
-    private void activateShareAccount(Integer shareAccountId, String activationDate) {
-        Map<String, Object> activateMap = new HashMap<>();
-        activateMap.put("dateFormat", "dd MMMM yyyy");
-        activateMap.put("activatedDate", activationDate);
-        activateMap.put("locale", "en");
-        String activateJson = new Gson().toJson(activateMap);
-        ShareAccountTransactionHelper.postCommand("activate", shareAccountId, activateJson, requestSpec, responseSpec);
+    private void applyAdditionalShares(Long shareAccountId, String requestedDate, long requestedShares) {
+        shareAccountHelper.applyAdditionalShares(shareAccountId, requestedShares, requestedDate, DATE_FORMAT, "en");
     }
 
-    private void applyAdditionalShares(Integer shareAccountId, String requestedDate, String requestedShares) {
-        Map<String, Object> additionalSharesRequestMap = new HashMap<>();
-        additionalSharesRequestMap.put("requestedDate", requestedDate);
-        additionalSharesRequestMap.put("dateFormat", "dd MMMM yyyy");
-        additionalSharesRequestMap.put("locale", "en");
-        additionalSharesRequestMap.put("requestedShares", requestedShares);
-        String additionalSharesRequestJson = new Gson().toJson(additionalSharesRequestMap);
-        ShareAccountTransactionHelper.postCommand("applyadditionalshares", shareAccountId, additionalSharesRequestJson, requestSpec,
-                responseSpec);
-    }
-
-    private String formatTransactionDate(List<Integer> dateList, DateFormat formatter) {
-        Calendar cal = Calendar.getInstance();
-        cal.set(dateList.get(0), dateList.get(1) - 1, dateList.get(2));
-        Date date = cal.getTime();
-        return formatter.format(date);
-    }
-
-    private String findTransactionId(List<Map<String, Object>> transactions, String transactionTypeCode, String expectedDate) {
-        DateFormat simple = new SimpleDateFormat("dd MMMM yyyy");
-        for (Map<String, Object> transaction : transactions) {
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            List<Integer> dateList = (List<Integer>) transaction.get("purchasedDate");
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = formatTransactionDate(dateList, simple);
-
-            if (transactionType.equals(transactionTypeCode) && transactionDate.equals(expectedDate)) {
-                return String.valueOf(transaction.get("id"));
+    private Long findTransactionId(Set<GetAccountsPurchasedShares> transactions, String transactionTypeCode, String expectedDate) {
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            if (typeCode(transaction).equals(transactionTypeCode) && purchasedDate(transaction).equals(expectedDate)) {
+                return transaction.getId();
             }
         }
         return null;
     }
 
-    private void rejectAdditionalSharesRequest(Integer shareAccountId, String transactionId) {
-        Map<String, List<Map<String, Object>>> rejectMap = new HashMap<>();
-        List<Map<String, Object>> list = new ArrayList<>();
-        Map<String, Object> idsMap = new HashMap<>();
-        idsMap.put("id", transactionId);
-        list.add(idsMap);
-        rejectMap.put("requestedShares", list);
-        String rejectJson = new Gson().toJson(rejectMap);
-        ShareAccountTransactionHelper.postCommand("rejectadditionalshares", shareAccountId, rejectJson, requestSpec, responseSpec);
-    }
-
-    private void verifyTransactionStatus(List<Map<String, Object>> transactions, String transactionTypeCode, String expectedDate,
+    private void verifyTransactionStatus(Set<GetAccountsPurchasedShares> transactions, String transactionTypeCode, String expectedDate,
             String expectedStatus) {
-        DateFormat simple = new SimpleDateFormat("dd MMMM yyyy");
         boolean transactionFound = false;
 
-        for (Map<String, Object> transaction : transactions) {
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            List<Integer> dateList = (List<Integer>) transaction.get("purchasedDate");
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = formatTransactionDate(dateList, simple);
-
-            if (transactionType.equals(transactionTypeCode) && transactionDate.equals(expectedDate)) {
-                Map<String, Object> transactionStatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals(expectedStatus, String.valueOf(transactionStatusMap.get("code")));
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            if (typeCode(transaction).equals(transactionTypeCode) && purchasedDate(transaction).equals(expectedDate)) {
+                Assertions.assertEquals(expectedStatus, statusCode(transaction));
                 transactionFound = true;
                 break;
             }
@@ -1385,21 +1004,14 @@ public class ShareAccountIntegrationTests {
                 String.format("Transaction with type %s for %s should exist", transactionTypeCode, expectedDate));
     }
 
-    private void verifyTransactionWithShares(List<Map<String, Object>> transactions, String transactionTypeCode, String expectedDate,
-            String expectedShares, String expectedStatus) {
-        DateFormat simple = new SimpleDateFormat("dd MMMM yyyy");
+    private void verifyTransactionWithShares(Set<GetAccountsPurchasedShares> transactions, String transactionTypeCode, String expectedDate,
+            int expectedShares, String expectedStatus) {
         boolean transactionFound = false;
 
-        for (Map<String, Object> transaction : transactions) {
-            Map<String, Object> transactionTypeMap = (Map<String, Object>) transaction.get("type");
-            List<Integer> dateList = (List<Integer>) transaction.get("purchasedDate");
-            String transactionType = (String) transactionTypeMap.get("code");
-            String transactionDate = formatTransactionDate(dateList, simple);
-
-            if (transactionType.equals(transactionTypeCode) && transactionDate.equals(expectedDate)) {
-                Assertions.assertEquals(expectedShares, String.valueOf(transaction.get("numberOfShares")));
-                Map<String, Object> transactionStatusMap = (Map<String, Object>) transaction.get("status");
-                Assertions.assertEquals(expectedStatus, String.valueOf(transactionStatusMap.get("code")));
+        for (GetAccountsPurchasedShares transaction : transactions) {
+            if (typeCode(transaction).equals(transactionTypeCode) && purchasedDate(transaction).equals(expectedDate)) {
+                Assertions.assertEquals(expectedShares, transaction.getNumberOfShares());
+                Assertions.assertEquals(expectedStatus, statusCode(transaction));
                 transactionFound = true;
                 break;
             }
@@ -1408,20 +1020,46 @@ public class ShareAccountIntegrationTests {
         Assertions.assertTrue(transactionFound, String.format("Transaction for %s should be successfully created", expectedDate));
     }
 
-    private Integer setupAndActivateShareAccount(Integer clientId, Integer productId, Integer savingsAccountId, String initialDate) {
-        final Integer shareAccountId = createShareAccount(clientId, productId, savingsAccountId);
+    private Long setupAndActivateShareAccount(Integer clientId, Integer productId, Integer savingsAccountId, String initialDate) {
+        final Long shareAccountId = createShareAccount(clientId, productId, savingsAccountId);
         Assertions.assertNotNull(shareAccountId);
 
-        updateShareAccountWithInitialData(shareAccountId, 25, initialDate);
-        approveShareAccount(shareAccountId, initialDate);
-        activateShareAccount(shareAccountId, initialDate);
+        updateShareAccount(shareAccountId, 25, initialDate, null);
+        shareAccountHelper.approve(shareAccountId, initialDate, "Share Account Approval Note", DATE_FORMAT, "en");
+        shareAccountHelper.activate(shareAccountId, initialDate, DATE_FORMAT, "en");
 
         // Verify account is active
-        Map<String, Object> shareAccountData = ShareAccountTransactionHelper.retrieveShareAccount(shareAccountId, requestSpec,
-                responseSpec);
-        Map<String, Object> statusMap = (Map<String, Object>) shareAccountData.get("status");
-        Assertions.assertEquals("shareAccountStatusType.active", String.valueOf(statusMap.get("code")));
+        GetAccountsTypeAccountIdResponse shareAccountData = shareAccountHelper.getShareAccount(shareAccountId);
+        Assertions.assertEquals("shareAccountStatusType.active", shareAccountData.getStatus().getCode());
 
         return shareAccountId;
+    }
+
+    private static String typeCode(GetAccountsPurchasedShares transaction) {
+        return transaction.getType().getCode();
+    }
+
+    private static String statusCode(GetAccountsPurchasedShares transaction) {
+        return transaction.getStatus().getCode();
+    }
+
+    private static String chargeTimeTypeCode(GetAccountsCharges charge) {
+        return charge.getChargeTimeType().getCode();
+    }
+
+    private static String purchasedDate(GetAccountsPurchasedShares transaction) {
+        return format(transaction.getPurchasedDate());
+    }
+
+    private static String format(LocalDate date) {
+        Assertions.assertNotNull(date);
+        return date.format(Utils.dateFormatter);
+    }
+
+    /** Compares by value so {@code 0}, {@code 0.0} and {@code 0.00} from the server all satisfy {@code "0"}. */
+    private static void assertAmount(String expected, Number actual) {
+        Assertions.assertNotNull(actual, "amount");
+        BigDecimal actualAmount = new BigDecimal(actual.toString());
+        Assertions.assertEquals(0, new BigDecimal(expected).compareTo(actualAmount), () -> "expected " + expected + " but was " + actual);
     }
 }
