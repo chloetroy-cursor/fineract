@@ -50,6 +50,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 import org.apache.fineract.client.models.BusinessDateUpdateRequest;
+import org.apache.fineract.client.models.GetGLAccountsResponse;
 import org.apache.fineract.client.models.GetHolidaysResponse;
 import org.apache.fineract.client.models.GetJobsResponse;
 import org.apache.fineract.client.models.GetJournalEntriesTransactionIdResponse;
@@ -64,17 +65,18 @@ import org.apache.fineract.client.models.PutJobsJobIDRequest;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAccountHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.BusinessStepHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.HolidayHelper;
 import org.apache.fineract.integrationtests.common.SchedulerJobHelper;
 import org.apache.fineract.integrationtests.common.StandingInstructionsHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
-import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.accounting.JournalEntry;
 import org.apache.fineract.integrationtests.common.accounting.JournalEntryHelper;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
@@ -122,7 +124,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     private RequestSpecification requestSpec;
     private SavingsAccountHelper savingsAccountHelper;
     private LoanTransactionHelper loanTransactionHelper;
-    private AccountHelper accountHelper;
+    private FeignAccountHelper accountHelper;
     private JournalEntryHelper journalEntryHelper;
     private ClientHelper clientHelper;
     private TimeZone systemTimeZone;
@@ -147,7 +149,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         requestSpec.header("Fineract-Platform-TenantId", "default");
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.accountHelper = new AccountHelper(requestSpec, responseSpec);
+        this.accountHelper = new FeignAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.journalEntryHelper = new JournalEntryHelper(requestSpec, responseSpec);
         clientHelper = new ClientHelper(requestSpec, responseSpec);
         this.businessDateHelper = new BusinessDateHelper();
@@ -622,11 +624,11 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         String JobName = "Update Accounting Running Balances";
 
         SchedulerJobHelper.executeAndAwaitJob(JobName);
-        final HashMap runningBalanceAfter = this.accountHelper.getAccountingWithRunningBalanceById(accountID.toString());
+        final GetGLAccountsResponse runningBalanceAfter = this.accountHelper.getGLAccountWithRunningBalance(accountID.longValue());
 
-        final Integer INT_BALANCE = Integer.valueOf(MINIMUM_OPENING_BALANCE);
+        final Long INT_BALANCE = Long.valueOf(MINIMUM_OPENING_BALANCE);
 
-        Assertions.assertEquals(INT_BALANCE, runningBalanceAfter.get("organizationRunningBalance"),
+        Assertions.assertEquals(INT_BALANCE, runningBalanceAfter.getOrganizationRunningBalance(),
                 "Verifying Account Running Balance after running Update Accounting Running Balances Scheduler Job");
     }
 

@@ -30,9 +30,10 @@ import io.restassured.specification.ResponseSpecification;
 import java.util.Collections;
 import java.util.HashMap;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAccountHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
@@ -61,7 +62,7 @@ public class AuthenticationIntegrationTest {
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
 
-        AccountHelper accountHelper = new AccountHelper(this.requestSpec, this.responseSpec);
+        FeignAccountHelper accountHelper = new FeignAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
         Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
         String username = Utils.uniqueRandomStringGenerator("user", 8);
         UserHelper.createUser(this.requestSpec, this.responseSpec, 1, staffId, username, "A1b2c3d4e5f$", "resourceId");
@@ -102,7 +103,7 @@ public class AuthenticationIntegrationTest {
         assertEquals("Unauthorized", response.get("error"));
     }
 
-    private Integer setupLoanProduct(AccountHelper accountHelper) {
+    private Integer setupLoanProduct(FeignAccountHelper accountHelper) {
         return this.loanTransactionHelper.createLoanProduct("0", "0", LoanProductTestBuilder.DEFAULT_STRATEGY, "2",
                 accountHelper.createAssetAccount(), accountHelper.createIncomeAccount(), accountHelper.createExpenseAccount(),
                 accountHelper.createLiabilityAccount());
