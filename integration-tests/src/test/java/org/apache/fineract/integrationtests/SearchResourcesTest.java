@@ -30,6 +30,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.client.models.AccountTransferRequest;
 import org.apache.fineract.client.models.GetClientsClientIdResponse;
 import org.apache.fineract.client.models.GetSearchResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
@@ -37,19 +38,21 @@ import org.apache.fineract.client.models.PostLoansLoanIdTransactionsRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsResponse;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAccountTransferHelper;
 import org.apache.fineract.integrationtests.client.feign.helpers.FeignSearchHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.AccountTransferRequestBuilders;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
-import org.apache.fineract.integrationtests.common.savings.AccountTransferHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.shares.ShareAccountHelper;
 import org.apache.fineract.integrationtests.common.shares.ShareAccountTransactionHelper;
 import org.apache.fineract.integrationtests.common.shares.ShareProductHelper;
 import org.apache.fineract.integrationtests.common.shares.ShareProductTransactionHelper;
+import org.apache.fineract.portfolio.account.PortfolioAccountType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import retrofit2.Response;
@@ -58,11 +61,12 @@ public class SearchResourcesTest {
 
     private static final String SAVINGS_ACCOUNT_TRANSACTION_URL = "/fineract-provider/api/v1/savingsaccounts/%s/transactions?command=%s&"
             + Utils.TENANT_IDENTIFIER;
-    private static final String SAVINGS_ACCOUNT_TYPE = "2";
+    private static final String ACCOUNT_TRANSFER_DATE = "01 March 2013";
 
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
     private FeignSearchHelper searchHelper;
+    private FeignAccountTransferHelper accountTransferHelper;
 
     @BeforeEach
     public void setup() {
@@ -71,6 +75,7 @@ public class SearchResourcesTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.searchHelper = new FeignSearchHelper(FineractFeignClientHelper.getFineractFeignClient());
+        this.accountTransferHelper = new FeignAccountTransferHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -350,10 +355,11 @@ public class SearchResourcesTest {
         final String checkNumber = "tr-check-" + UUID.randomUUID();
         final String routingCode = "tr-route-" + UUID.randomUUID();
         final String receiptNumber = "tr-receipt-" + UUID.randomUUID();
-        final AccountTransferHelper accountTransferHelper = new AccountTransferHelper(requestSpec, responseSpec);
-        accountTransferHelper.accountTransferReturningResourceId(fromClientId.intValue(), fromSavingsId, toClientId.intValue(), toSavingsId,
-                SAVINGS_ACCOUNT_TYPE, SAVINGS_ACCOUNT_TYPE, "50",
-                Map.of("paymentTypeId", 1L, "checkNumber", checkNumber, "routingCode", routingCode, "receiptNumber", receiptNumber));
+        final AccountTransferRequest transferRequest = AccountTransferRequestBuilders.withPaymentDetails(
+                AccountTransferRequestBuilders.transfer(ACCOUNT_TRANSFER_DATE, fromClientId, fromSavingsId.longValue(),
+                        PortfolioAccountType.SAVINGS, toClientId, toSavingsId.longValue(), PortfolioAccountType.SAVINGS, "50"),
+                1L, null, checkNumber, routingCode, receiptNumber, null);
+        accountTransferHelper.createAccountTransfer(transferRequest);
 
         List<GetSearchResponse> results = searchHelper.search(checkNumber, resources, Boolean.TRUE);
         assertSavingsTransferTransactionSearchResults(results, fromClientId, fromSavingsId.longValue(), toClientId,
