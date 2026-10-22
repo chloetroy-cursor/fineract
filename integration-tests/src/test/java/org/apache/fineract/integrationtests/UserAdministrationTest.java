@@ -20,6 +20,7 @@
 package org.apache.fineract.integrationtests;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
@@ -38,11 +39,11 @@ import org.apache.fineract.client.models.PutUsersUserIdRequest;
 import org.apache.fineract.client.models.PutUsersUserIdResponse;
 import org.apache.fineract.client.util.CallFailedRuntimeException;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignUserHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
-import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.apache.fineract.useradministration.service.AppUserConstants;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -56,26 +57,27 @@ public class UserAdministrationTest extends IntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(UserAdministrationTest.class);
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
-    private List<Integer> transientUsers = new ArrayList<>();
-
-    private ResponseSpecification expectStatusCode(int code) {
-        return new ResponseSpecBuilder().expectStatusCode(code).build();
-    }
+    private List<Long> transientUsers = new ArrayList<>();
 
     @BeforeEach
     public void setup() {
         Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        this.responseSpec = expectStatusCode(200);
+        this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
     }
 
     @AfterEach
     public void tearDown() {
-        for (Integer userId : this.transientUsers) {
-            UserHelper.deleteUser(this.requestSpec, this.responseSpec, userId);
+        for (Long userId : this.transientUsers) {
+            FeignUserHelper.deleteUser(userId);
         }
         this.transientUsers.clear();
+    }
+
+    /** The first entry of the {@code errors} array in a failed call's response body. */
+    private static JsonObject firstError(String responseBody) {
+        return JsonParser.parseString(responseBody).getAsJsonObject().getAsJsonArray("errors").get(0).getAsJsonObject();
     }
 
     @Test
@@ -87,17 +89,17 @@ public class UserAdministrationTest extends IntegrationTest {
         final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(staffId);
 
-        final Integer userId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, "alphabet",
-                "resourceId");
+        final Long userId = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), "alphabet").getResourceId();
         Assertions.assertNotNull(userId);
         this.transientUsers.add(userId);
 
-        final List errors = (List) UserHelper.createUser(this.requestSpec, expectStatusCode(403), roleId, staffId, "alphabet", "errors");
-        Map reason = (Map) errors.get(0);
+        final var failure = FeignUserHelper.createUserExpectingError(roleId.longValue(), staffId.longValue(), "alphabet");
+        Assertions.assertEquals(403, failure.getStatus());
+        JsonObject reason = firstError(failure.getResponseBody());
         LOG.info("Reason: {}", reason.get("defaultUserMessage"));
         LOG.info("Code: {}", reason.get("userMessageGlobalisationCode"));
-        Assertions.assertEquals("User with username alphabet already exists.", reason.get("defaultUserMessage"));
-        Assertions.assertEquals("error.msg.user.duplicate.username", reason.get("userMessageGlobalisationCode"));
+        Assertions.assertEquals("User with username alphabet already exists.", reason.get("defaultUserMessage").getAsString());
+        Assertions.assertEquals("error.msg.user.duplicate.username", reason.get("userMessageGlobalisationCode").getAsString());
     }
 
     @Test
@@ -108,15 +110,14 @@ public class UserAdministrationTest extends IntegrationTest {
         final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(staffId);
 
-        final Integer userId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, "alphabet",
-                "resourceId");
+        final Long userId = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), "alphabet").getResourceId();
         Assertions.assertNotNull(userId);
         this.transientUsers.add(userId);
 
-        final Integer userId2 = (Integer) UserHelper.updateUser(this.requestSpec, this.responseSpec, userId, "renegade", "resourceId");
+        final Long userId2 = FeignUserHelper.updateUser(userId, "renegade").getResourceId();
         Assertions.assertNotNull(userId2);
 
-        final Integer userId3 = (Integer) UserHelper.updateUser(this.requestSpec, this.responseSpec, userId, "renegade", "resourceId");
+        final Long userId3 = FeignUserHelper.updateUser(userId, "renegade").getResourceId();
         Assertions.assertNotNull(userId3);
     }
 
@@ -128,28 +129,28 @@ public class UserAdministrationTest extends IntegrationTest {
         final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(staffId);
 
-        final Integer userId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, "alphabet",
-                "resourceId");
+        final Long userId = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), "alphabet").getResourceId();
         Assertions.assertNotNull(userId);
         this.transientUsers.add(userId);
 
-        final Integer userId2 = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, "bilingual",
-                "resourceId");
+        final Long userId2 = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), "bilingual").getResourceId();
         Assertions.assertNotNull(userId2);
         this.transientUsers.add(userId2);
 
-        final List errors = (List) UserHelper.updateUser(this.requestSpec, expectStatusCode(403), userId2, "alphabet", "errors");
-        Map reason = (Map) errors.get(0);
-        Assertions.assertEquals("User with username alphabet already exists.", reason.get("defaultUserMessage"));
-        Assertions.assertEquals("error.msg.user.duplicate.username", reason.get("userMessageGlobalisationCode"));
+        final var failure = FeignUserHelper.updateUserExpectingError(userId2, "alphabet");
+        Assertions.assertEquals(403, failure.getStatus());
+        JsonObject reason = firstError(failure.getResponseBody());
+        Assertions.assertEquals("User with username alphabet already exists.", reason.get("defaultUserMessage").getAsString());
+        Assertions.assertEquals("error.msg.user.duplicate.username", reason.get("userMessageGlobalisationCode").getAsString());
     }
 
     @Test
     public void testModifySystemUser() {
-        final Integer userId = UserHelper.getUserId(requestSpec, responseSpec, AppUserConstants.SYSTEM_USER_NAME);
+        final Long userId = FeignUserHelper.getUserId(AppUserConstants.SYSTEM_USER_NAME);
         Assertions.assertNotNull(userId);
 
-        final List errors = (List) UserHelper.updateUser(this.requestSpec, expectStatusCode(403), userId, "systemtest", "errors");
+        final var failure = FeignUserHelper.updateUserExpectingError(userId, "systemtest");
+        Assertions.assertEquals(403, failure.getStatus());
     }
 
     @Test
@@ -164,7 +165,7 @@ public class UserAdministrationTest extends IntegrationTest {
                 .repeatPassword(originalPassword).sendPasswordToEmail(false).officeId(headOffice.getId())
                 .roles(List.of(Long.valueOf(roleId)));
 
-        PostUsersResponse userCreationResponse = UserHelper.createUser(requestSpec, responseSpec, createUserRequest);
+        PostUsersResponse userCreationResponse = FeignUserHelper.createUser(createUserRequest);
         Long userId = userCreationResponse.getResourceId();
         Assertions.assertNotNull(userId);
 
@@ -197,7 +198,7 @@ public class UserAdministrationTest extends IntegrationTest {
                 .repeatPassword(originalPassword).sendPasswordToEmail(false).officeId(headOffice.getId())
                 .roles(List.of(Long.valueOf(roleId)));
 
-        PostUsersResponse userCreationResponse = UserHelper.createUser(requestSpec, responseSpec, createUserRequest);
+        PostUsersResponse userCreationResponse = FeignUserHelper.createUser(createUserRequest);
         Long userId = userCreationResponse.getResourceId();
         Assertions.assertNotNull(userId);
 
@@ -230,7 +231,7 @@ public class UserAdministrationTest extends IntegrationTest {
                 .lastname(Utils.randomLastNameGenerator()).email("whatever@mifos.org").password(password).repeatPassword(password)
                 .sendPasswordToEmail(false).officeId(headOffice.getId()).roles(List.of(Long.valueOf(roleId)));
 
-        PostUsersResponse userCreationResponse = UserHelper.createUser(requestSpec, responseSpec, createUserRequest);
+        PostUsersResponse userCreationResponse = FeignUserHelper.createUser(createUserRequest);
         Long userId = userCreationResponse.getResourceId();
         Assertions.assertNotNull(userId);
 
@@ -251,8 +252,8 @@ public class UserAdministrationTest extends IntegrationTest {
     public void testUserCreationWithValidPassword() {
         String validPassword = "Abcdef1#2$3%XYZ";
 
-        PostUsersRequest createUserRequest = UserHelper.buildUserRequest(responseSpec, requestSpec, validPassword);
-        PostUsersResponse userCreationResponse = UserHelper.createUser(requestSpec, responseSpec, createUserRequest);
+        PostUsersRequest createUserRequest = FeignUserHelper.buildUserRequest(validPassword);
+        PostUsersResponse userCreationResponse = FeignUserHelper.createUser(createUserRequest);
 
         Assertions.assertNotNull(userCreationResponse.getResourceId());
     }
@@ -268,16 +269,16 @@ public class UserAdministrationTest extends IntegrationTest {
                 Map.entry("ContainsWhitespace", "Abcdefg1# 2$3%"), // Contains whitespace
                 Map.entry("RepeatedCharacters", "AAbbcc11##$$%%YY") // Contains repeated characters
         );
-        this.responseSpec = new ResponseSpecBuilder().build();
 
         invalidPasswords.forEach((description, password) -> {
-            PostUsersRequest createUserRequest = UserHelper.buildUserRequest(responseSpec, requestSpec, password);
-            JsonObject jsonResponse = UserHelper.createUserWithJsonResponse(requestSpec, responseSpec, createUserRequest);
-            Assertions.assertEquals("400", jsonResponse.get("httpStatusCode").getAsString(), "Expected HTTP 400 for: " + description);
+            PostUsersRequest createUserRequest = FeignUserHelper.buildUserRequest(password);
+            final var failure = FeignUserHelper.createUserExpectingError(createUserRequest);
+            Assertions.assertEquals(400, failure.getStatus(), "Expected HTTP 400 for: " + description);
+            JsonObject jsonResponse = JsonParser.parseString(failure.getResponseBody()).getAsJsonObject();
             Assertions.assertEquals("validation.msg.validation.errors.exist",
                     jsonResponse.get("userMessageGlobalisationCode").getAsString(), "Expected user message code for: " + description);
 
-            JsonObject errorDetails = jsonResponse.getAsJsonArray("errors").get(0).getAsJsonObject();
+            JsonObject errorDetails = firstError(failure.getResponseBody());
             Assertions.assertEquals("password", errorDetails.get("parameterName").getAsString(),
                     "Expected validation error parameter name for: " + description);
             Assertions.assertEquals("validation.msg.user.password.does.not.match.regexp",
