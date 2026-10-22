@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeSubmitPrompt": [
+      {
+        "command": "python3 .cursor/hooks/audit.py",
+        "matcher": "UserPromptSubmit",
+        "timeout": 5,
+        "failClosed": false
+      },
+      {
+        "command": "python3 .cursor/hooks/sensitive_prompt_guard.py",
+        "matcher": "UserPromptSubmit",
+        "timeout": 5,
+        "failClosed": true
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "python3 .cursor/hooks/audit.py",
+        "timeout": 5,
+        "failClosed": false
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "python3 .cursor/hooks/audit.py",
+        "timeout": 5,
+        "failClosed": false
+      }
+    ],
+    "stop": [
+      {
+        "command": "python3 .cursor/hooks/audit.py",
+        "timeout": 5,
+        "failClosed": false
+      }
+    ]
+  }
+}
