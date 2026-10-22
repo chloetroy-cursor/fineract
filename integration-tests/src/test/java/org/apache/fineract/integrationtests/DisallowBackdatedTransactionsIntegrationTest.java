@@ -26,6 +26,7 @@ import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -33,12 +34,15 @@ import java.util.List;
 import java.util.Locale;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsProductHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -53,6 +57,7 @@ public class DisallowBackdatedTransactionsIntegrationTest {
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private GlobalConfigurationHelper globalConfigurationHelper;
+    private FeignSavingsProductHelper savingsProductHelper;
     private SavingsAccountHelper savingsAccountHelper;
 
     @BeforeEach
@@ -62,6 +67,7 @@ public class DisallowBackdatedTransactionsIntegrationTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.globalConfigurationHelper = new GlobalConfigurationHelper();
+        this.savingsProductHelper = new FeignSavingsProductHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
     }
 
@@ -77,10 +83,12 @@ public class DisallowBackdatedTransactionsIntegrationTest {
         final String openedOnDate = dateFormatter.format(today.minusMonths(6));
 
         final Integer clientID = ClientHelper.createClient(this.requestSpec, this.responseSpec);
-        final String savingsProductJSON = new SavingsProductHelper().withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsQuarterly().withInterestCalculationPeriodTypeAsDailyBalance()
-                .withMinimumOpenningBalance("100").build();
-        final Integer savingsProductID = SavingsProductHelper.createSavingsProduct(savingsProductJSON, this.requestSpec, this.responseSpec);
+        final Integer savingsProductID = this.savingsProductHelper
+                .createSavingsProduct(SavingsRequestBuilders
+                        .savingsProduct(SavingsTestData.InterestCompoundingPeriodType.DAILY,
+                                SavingsTestData.InterestPostingPeriodType.QUARTERLY, SavingsTestData.InterestCalculationType.DAILY_BALANCE)
+                        .minRequiredOpeningBalance(new BigDecimal("100")))
+                .getResourceId().intValue();
         final Integer savingsId = this.savingsAccountHelper.applyForSavingsApplicationOnDate(clientID, savingsProductID,
                 ACCOUNT_TYPE_INDIVIDUAL, openedOnDate);
         this.savingsAccountHelper.approveSavingsOnDate(savingsId, openedOnDate);

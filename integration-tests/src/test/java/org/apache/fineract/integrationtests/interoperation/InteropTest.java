@@ -34,14 +34,18 @@ import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.client.models.PostSavingsProductsRequest;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsProductHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
 import org.apache.fineract.interoperation.domain.InteropActionState;
 import org.apache.fineract.interoperation.domain.InteropIdentifierType;
@@ -59,10 +63,7 @@ public class InteropTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(InteropTest.class);
 
-    private static final String MIN_INTEREST_CALCULATON_BALANCE = null;
-    private static final String MIN_REQUIRED_BALANCE = null;
-    private static final String MIN_OPENING_BALANCE = "100000.0";
-    private static final boolean ENFORCE_MIN_REQUIRED_BALANCE = false;
+    private static final BigDecimal MIN_OPENING_BALANCE = new BigDecimal("100000.0");
     private static final MathContext MATHCONTEXT = new MathContext(12, RoundingMode.HALF_EVEN);
 
     private RequestSpecification requestSpec;
@@ -72,6 +73,7 @@ public class InteropTest {
     private ResponseSpecification responseForbiddenErrorSpec;
 
     private AccountHelper accountHelper;
+    private FeignSavingsProductHelper savingsProductHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private InteropHelper interopHelper;
 
@@ -98,6 +100,7 @@ public class InteropTest {
         String transactionCode = UUID.randomUUID().toString();
 
         accountHelper = new AccountHelper(this.requestSpec, this.responseSpec);
+        savingsProductHelper = new FeignSavingsProductHelper(FineractFeignClientHelper.getFineractFeignClient());
         savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
         interopHelper = new InteropHelper(requestSpec, responseSpec, savingsExternalId, transactionCode);
     }
@@ -131,17 +134,17 @@ public class InteropTest {
     private void createSavingsProduct() {
         LOG.debug("------------------------------ Create Interoperable Saving Product ---------------------------------------");
 
-        Account[] accounts = { accountHelper.createAssetAccount(), accountHelper.createIncomeAccount(),
-                accountHelper.createExpenseAccount(), accountHelper.createLiabilityAccount() };
+        final Account assetAccount = accountHelper.createAssetAccount();
+        final Account incomeAccount = accountHelper.createIncomeAccount();
+        final Account expenseAccount = accountHelper.createExpenseAccount();
+        final Account liabilityAccount = accountHelper.createLiabilityAccount();
 
-        SavingsProductHelper savingsProductHelper = new SavingsProductHelper();
-        final String savingsProductJSON = savingsProductHelper.withCurrencyCode(interopHelper.getCurrency())
-                .withNominalAnnualInterestRate(BigDecimal.ZERO).withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsMonthly().withInterestCalculationPeriodTypeAsDailyBalance()
-                .withMinBalanceForInterestCalculation(MIN_INTEREST_CALCULATON_BALANCE).withMinRequiredBalance(MIN_REQUIRED_BALANCE)
-                .withEnforceMinRequiredBalance(Boolean.toString(ENFORCE_MIN_REQUIRED_BALANCE))
-                .withMinimumOpenningBalance(MIN_OPENING_BALANCE).withAccountingRuleAsCashBased(accounts).build();
-        savingsProductId = SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
+        final PostSavingsProductsRequest request = SavingsRequestBuilders.withCashBasedAccounting(SavingsRequestBuilders
+                .savingsProduct(SavingsTestData.InterestCompoundingPeriodType.DAILY, SavingsTestData.InterestPostingPeriodType.MONTHLY,
+                        SavingsTestData.InterestCalculationType.DAILY_BALANCE)
+                .currencyCode(interopHelper.getCurrency()).nominalAnnualInterestRate(0.0).minRequiredOpeningBalance(MIN_OPENING_BALANCE),
+                assetAccount, liabilityAccount, incomeAccount, expenseAccount);
+        savingsProductId = savingsProductHelper.createSavingsProduct(request).getResourceId().intValue();
         Assertions.assertNotNull(savingsProductId);
 
         LOG.debug("Sucessfully created Interoperable Saving Product (id: {})", savingsProductId);

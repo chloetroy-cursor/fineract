@@ -33,15 +33,18 @@ import java.util.Map;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutPermissionsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsProductHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.commands.MakercheckersHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
 import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
@@ -57,7 +60,7 @@ public class MakercheckerTest {
     private RequestSpecification requestSpec;
     private MakercheckersHelper makercheckersHelper;
     private RolesHelper rolesHelper;
-    private SavingsProductHelper savingsProductHelper;
+    private FeignSavingsProductHelper savingsProductHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private static final String START_DATE_STRING = "03 June 2023";
     private static final String TRANSACTION_DATE_STRING = "05 June 2023";
@@ -71,7 +74,7 @@ public class MakercheckerTest {
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.makercheckersHelper = new MakercheckersHelper(this.requestSpec, this.responseSpec);
         this.rolesHelper = new RolesHelper();
-        this.savingsProductHelper = new SavingsProductHelper();
+        this.savingsProductHelper = new FeignSavingsProductHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
         this.globalConfigurationHelper = new GlobalConfigurationHelper();
     }
@@ -368,9 +371,10 @@ public class MakercheckerTest {
     }
 
     private Integer createSavingsProductDailyPosting() {
-        final String savingsProductJSON = this.savingsProductHelper.withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance().build();
-        return SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
+        return this.savingsProductHelper
+                .createSavingsProduct(SavingsRequestBuilders.savingsProduct(SavingsTestData.InterestCompoundingPeriodType.DAILY,
+                        SavingsTestData.InterestPostingPeriodType.DAILY, SavingsTestData.InterestCalculationType.DAILY_BALANCE))
+                .getResourceId().intValue();
     }
 
     private Integer createApproveActivateSavingsAccountDailyPosting(final Integer clientID, final String startDate) {
