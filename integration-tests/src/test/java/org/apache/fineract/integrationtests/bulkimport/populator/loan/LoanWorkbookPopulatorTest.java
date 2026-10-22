@@ -28,14 +28,15 @@ import jakarta.ws.rs.core.MediaType;
 import java.io.IOException;
 import org.apache.fineract.client.models.PaymentTypeCreateRequest;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.PaymentTypeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.funds.FundsResourceHandler;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -79,10 +80,8 @@ public class LoanWorkbookPopulatorTest {
         Integer outcome_staff_creation = StaffHelper.createStaff(requestSpec, responseSpec);
         Assertions.assertNotNull(outcome_staff_creation, "Could not create staff");
 
-        LoanTransactionHelper loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-        LoanProductTestBuilder loanProductTestBuilder = new LoanProductTestBuilder();
-        String jsonLoanProduct = loanProductTestBuilder.build(null);
-        Integer outcome_lp_creaion = loanTransactionHelper.getLoanProductId(jsonLoanProduct);
+        FeignLoanHelper loanHelper = new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient());
+        Long outcome_lp_creaion = loanHelper.createLoanProduct(new LoanProductTestBuilder().buildRequest()).getResourceId();
         Assertions.assertNotNull(outcome_lp_creaion, "Could not create Loan Product");
 
         String jsonFund = "{\n" + "\t\"name\": \"" + Utils.uniqueRandomStringGenerator("Fund_Name", 9) + "\"\n" + "}";
@@ -98,7 +97,7 @@ public class LoanWorkbookPopulatorTest {
         Long outcome_payment_creation = paymentTypesResponse.getResourceId();
         Assertions.assertNotNull(outcome_payment_creation, "Could not create payment type");
 
-        Workbook workbook = loanTransactionHelper.getLoanWorkbook("dd MMMM yyyy");
+        Workbook workbook = loanHelper.getLoanWorkbook("dd MMMM yyyy");
 
         Sheet officeSheet = workbook.getSheet(TemplatePopulateImportConstants.OFFICE_SHEET_NAME);
         Row firstOfficeRow = officeSheet.getRow(1);

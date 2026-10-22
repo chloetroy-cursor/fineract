@@ -28,6 +28,7 @@ import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -41,15 +42,18 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.client.models.PostLoansRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositAccountHelper;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositProductHelper;
-import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.interoperation.InteropHelper;
 import org.apache.fineract.interoperation.domain.InteropInitiatorType;
 import org.apache.fineract.interoperation.domain.InteropTransactionRole;
@@ -70,7 +74,7 @@ public class DateValidationTest {
     private ResponseSpecification errorResponseSpec;
     private RequestSpecification requestSpec;
     private ClientHelper clientHelper;
-    private LoanTransactionHelper loanTransactionHelper;
+    private FeignLoanHelper loanHelper;
     private InteropHelper interopHelper;
     private AccountHelper accountHelper;
 
@@ -82,7 +86,7 @@ public class DateValidationTest {
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.errorResponseSpec = new ResponseSpecBuilder().expectStatusCode(400).build();
         this.clientHelper = new ClientHelper(this.requestSpec, this.responseSpec);
-        this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
+        this.loanHelper = new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.interopHelper = new InteropHelper(requestSpec, errorResponseSpec);
         this.accountHelper = new AccountHelper(requestSpec, responseSpec);
     }
@@ -97,24 +101,18 @@ public class DateValidationTest {
         PostClientsResponse client = clientHelper.createClient(postClientsRequest);
         Long clientId = client.getClientId();
 
-        final String loanProductJSON = new LoanProductTestBuilder().withPrincipal("1000").withRepaymentTypeAsMonth()
-                .withRepaymentAfterEvery("1").withNumberOfRepayments("1").withRepaymentTypeAsMonth().withinterestRatePerPeriod("0")
-                .withInterestRateFrequencyTypeAsMonths().withAmortizationTypeAsEqualPrincipalPayment().withInterestTypeAsDecliningBalance()
-                .withAccountingRuleAsNone().withInterestCalculationPeriodTypeAsRepaymentPeriod(true).withDaysInMonth("30")
-                .withDaysInYear("365").withMoratorium("0", "0").withInArrearsTolerance("1001").withMultiDisburse()
-                .withDisallowExpectedDisbursements(true).build(null);
-        final Integer loanProductID = loanTransactionHelper.getLoanProductId(loanProductJSON);
+        final Long loanProductID = loanHelper.createLoanProduct(new LoanProductTestBuilder().withPrincipal("1000")
+                .withRepaymentTypeAsMonth().withRepaymentAfterEvery("1").withNumberOfRepayments("1").withRepaymentTypeAsMonth()
+                .withinterestRatePerPeriod("0").withInterestRateFrequencyTypeAsMonths().withAmortizationTypeAsEqualPrincipalPayment()
+                .withInterestTypeAsDecliningBalance().withAccountingRuleAsNone().withInterestCalculationPeriodTypeAsRepaymentPeriod(true)
+                .withDaysInMonth("30").withDaysInYear("365").withMoratorium("0", "0").withInArrearsTolerance("1001").withMultiDisburse()
+                .withDisallowExpectedDisbursements(true).buildRequest()).getResourceId();
 
-        loanTransactionHelper = new LoanTransactionHelper(requestSpec, errorResponseSpec);
-
-        final String loanApplicationJSON = new LoanApplicationTestBuilder().withPrincipal("1000").withLoanTermFrequency("1")
-                .withLoanTermFrequencyAsMonths().withNumberOfRepayments("1").withRepaymentEveryAfter("1")
-                .withRepaymentFrequencyTypeAsMonths().withInterestRatePerPeriod("0").withInterestTypeAsFlatBalance()
-                .withAmortizationTypeAsEqualPrincipalPayments().withInterestCalculationPeriodTypeSameAsRepaymentPeriod()
-                .withExpectedDisbursementDate(invalidDate).withSubmittedOnDate("01 March 2022").withLoanType("individual")
-                .build(clientId.toString(), loanProductID.toString(), null);
-        HashMap<String, Object> response = (HashMap) loanTransactionHelper.createLoanAccount(loanApplicationJSON, "");
-        List<HashMap<String, Object>> errors = (List) response.get("errors");
+        final PostLoansRequest loanApplication = LoanRequestBuilders
+                .legacyIndividualApplication(clientId, loanProductID, "1000", 1, BigDecimal.ZERO, "01 March 2022")
+                .expectedDisbursementDate(invalidDate).interestType(LoanTestData.InterestType.FLAT)
+                .amortizationType(LoanTestData.AmortizationType.EQUAL_PRINCIPAL);
+        List<HashMap<String, Object>> errors = loanHelper.applyForLoanError(loanApplication, "errors");
         assertNotNull(errors);
         HashMap<String, Object> error = errors.get(0);
         assertNotNull(error);

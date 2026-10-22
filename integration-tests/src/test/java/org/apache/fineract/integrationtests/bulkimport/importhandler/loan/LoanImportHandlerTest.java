@@ -46,7 +46,10 @@ import org.apache.fineract.client.models.PaymentTypeCreateRequest;
 import org.apache.fineract.infrastructure.bulkimport.constants.LoanConstants;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
 import org.apache.fineract.integrationtests.bulkimport.importhandler.BulkImportOutputTemplateHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.PaymentTypeHelper;
@@ -55,7 +58,6 @@ import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.funds.FundsHelper;
 import org.apache.fineract.integrationtests.common.funds.FundsResourceHandler;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -148,13 +150,12 @@ public class LoanImportHandlerTest {
         Map<String, Object> staffMap = StaffHelper.getStaff(requestSpec, responseSpec, outcome_staff_creation);
         Assertions.assertNotNull(staffMap, "Could not retrieve created staff");
 
-        LoanTransactionHelper ltHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-        LoanProductTestBuilder loanProductTestBuilder = new LoanProductTestBuilder();
-        String jsonLoanProduct = loanProductTestBuilder.build(null);
-        Integer outcome_lp_creation = ltHelper.getLoanProductId(jsonLoanProduct);
+        FeignLoanHelper loanHelper = new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient());
+        Long outcome_lp_creation = loanHelper.createLoanProduct(new LoanProductTestBuilder().buildRequest()).getResourceId();
         Assertions.assertNotNull(outcome_lp_creation, "Could not create Loan Product");
 
-        String loanProductStr = ltHelper.getLoanProductDetails(requestSpec, responseSpec, outcome_lp_creation);
+        // Raw GET: the generated product DTO models enum options as code/description, not the value the sheet needs.
+        String loanProductStr = FeignRawHttpHelper.get("/loanproducts/" + outcome_lp_creation + "?associations=all");
         Assertions.assertNotNull("Could not get created Loan Product", loanProductStr);
         JsonPath loanProductJson = JsonPath.from(loanProductStr);
 
@@ -172,8 +173,7 @@ public class LoanImportHandlerTest {
 
         Assertions.assertNotNull(outcome_payment_creation, "Could not create payment type");
 
-        LoanTransactionHelper loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-        Workbook workbook = loanTransactionHelper.getLoanWorkbook(DATE_FORMAT);
+        Workbook workbook = loanHelper.getLoanWorkbook(DATE_FORMAT);
 
         // insert dummy data into loan Sheet
         Sheet loanSheet = workbook.getSheet(TemplatePopulateImportConstants.LOANS_SHEET_NAME);
@@ -236,7 +236,7 @@ public class LoanImportHandlerTest {
             workbook.write(outputStream);
         }
 
-        String importDocumentId = loanTransactionHelper.importLoanTemplate(file);
+        String importDocumentId = loanHelper.importLoanTemplate(file);
         file.delete();
         Assertions.assertNotNull(importDocumentId);
 
@@ -245,7 +245,7 @@ public class LoanImportHandlerTest {
 
         // check status column of output excel
         try (Workbook outputworkbook = BulkImportOutputTemplateHelper.waitForWorkbook(
-                () -> loanTransactionHelper.downloadOutputTemplate(importDocumentId), TemplatePopulateImportConstants.LOANS_SHEET_NAME, 1,
+                () -> loanHelper.downloadOutputTemplate(importDocumentId), TemplatePopulateImportConstants.LOANS_SHEET_NAME, 1,
                 LoanConstants.STATUS_COL)) {
             Sheet outputLoanSheet = outputworkbook.getSheet(TemplatePopulateImportConstants.LOANS_SHEET_NAME);
             Row row = outputLoanSheet.getRow(1);

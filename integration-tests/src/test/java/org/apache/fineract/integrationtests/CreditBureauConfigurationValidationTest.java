@@ -26,19 +26,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.builder.ResponseSpecBuilder;
-import io.restassured.http.ContentType;
-import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
 import java.util.HashMap;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.client.models.PostLoanProductsRequest;
 import org.apache.fineract.client.util.CallFailedRuntimeException;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
 import org.apache.fineract.integrationtests.common.CreditBureauConfigurationHelper;
-import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -182,15 +178,12 @@ public class CreditBureauConfigurationValidationTest {
     }
 
     private Long createTestLoanProduct() {
-        Utils.initializeRESTAssured();
-        final RequestSpecification requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        final ResponseSpecification responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        final LoanTransactionHelper loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-        final String loanProductJSON = new LoanProductTestBuilder().withPrincipal("1000").withRepaymentAfterEvery("1")
+        final FeignLoanHelper loanHelper = new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient());
+        final PostLoanProductsRequest loanProduct = new LoanProductTestBuilder().withPrincipal("1000").withRepaymentAfterEvery("1")
                 .withRepaymentTypeAsMonth().withNumberOfRepayments("1").withInterestRateFrequencyTypeAsMonths()
-                .withinterestRatePerPeriod("0").withInterestTypeAsDecliningBalance().withAmortizationTypeAsEqualInstallments().build(null);
-        return (long) loanTransactionHelper.getLoanProductId(loanProductJSON);
+                .withinterestRatePerPeriod("0").withInterestTypeAsDecliningBalance().withAmortizationTypeAsEqualInstallments()
+                .buildRequest();
+        return loanHelper.createLoanProduct(loanProduct).getResourceId();
     }
 
     private Map<String, Object> buildMappingJsonOmitting(String fieldToOmit) {

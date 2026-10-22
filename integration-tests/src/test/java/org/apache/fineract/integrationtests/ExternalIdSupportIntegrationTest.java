@@ -73,7 +73,6 @@ import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.products.DelinquencyBucketsHelper;
 import org.apache.fineract.integrationtests.common.products.DelinquencyRangesHelper;
 import org.junit.jupiter.api.Test;
@@ -123,8 +122,9 @@ public class ExternalIdSupportIntegrationTest extends FeignLoanTestBase {
             final String penaltyCharge1AddedDate = dateFormatter.format(targetDate);
 
             String penalty1LoanChargeExternalId = UUID.randomUUID().toString();
-            Integer penalty1LoanChargeId = addChargesForLoan(loanId, LoanTransactionHelper.getSpecifiedDueDateChargesForLoanAsJSON(
-                    String.valueOf(penalty), penaltyCharge1AddedDate, "10", penalty1LoanChargeExternalId)).intValue();
+            Integer penalty1LoanChargeId = addChargesForLoan(loanId.longValue(),
+                    LoanRequestBuilders.addLoanCharge(penalty, 10, penaltyCharge1AddedDate).externalId(penalty1LoanChargeExternalId))
+                    .getResourceId().intValue();
 
             // Get loan charges
             List<GetLoansLoanIdChargesChargeIdResponse> loanChargesResult = getLoanCharges((long) loanId);
@@ -493,18 +493,17 @@ public class ExternalIdSupportIntegrationTest extends FeignLoanTestBase {
             formattedDate = dateFormatter.format(aMonthBeforePlus3Days);
 
             String penalty3LoanChargeExternalId = UUID.randomUUID().toString();
-            Integer penalty3LoanChargeId = addChargesForLoan(loanWithInterestId, LoanTransactionHelper
-                    .getSpecifiedDueDateChargesForLoanAsJSON(String.valueOf(penalty), formattedDate, "10", penalty3LoanChargeExternalId))
+            Integer penalty3LoanChargeId = addChargesForLoan(loanWithInterestId.longValue(),
+                    LoanRequestBuilders.addLoanCharge(penalty, 10, formattedDate).externalId(penalty3LoanChargeExternalId)).getResourceId()
                     .intValue();
 
-            Integer penalty4LoanChargeId = addChargesForLoan(loanWithInterestId,
-                    LoanTransactionHelper.getSpecifiedDueDateChargesForLoanAsJSON(String.valueOf(penalty2), formattedDate, "1000"))
-                    .intValue();
+            Integer penalty4LoanChargeId = addChargesForLoan(loanWithInterestId.longValue(),
+                    LoanRequestBuilders.addLoanCharge(penalty2, 1000, formattedDate)).getResourceId().intValue();
 
             String penalty5LoanChargeExternalId = UUID.randomUUID().toString();
-            Integer penalty5LoanChargeId = addChargesForLoan(loanWithInterestId, LoanTransactionHelper
-                    .getSpecifiedDueDateChargesForLoanAsJSON(String.valueOf(penalty2), formattedDate, "1000", penalty5LoanChargeExternalId))
-                    .intValue();
+            Integer penalty5LoanChargeId = addChargesForLoan(loanWithInterestId.longValue(),
+                    LoanRequestBuilders.addLoanCharge(penalty2, 1000, formattedDate).externalId(penalty5LoanChargeExternalId))
+                    .getResourceId().intValue();
 
             // Check whether an external id was generated
             final PostLoansLoanIdTransactionsResponse waiveInterestResult = makeWaiveInterest(loanExternalIdStr,
@@ -700,8 +699,9 @@ public class ExternalIdSupportIntegrationTest extends FeignLoanTestBase {
             final String penaltyCharge1AddedDate = dateFormatter.format(targetDate);
 
             String penalty1LoanChargeExternalId = UUID.randomUUID().toString();
-            Integer penalty1LoanChargeId = addChargesForLoan(loan2Id, LoanTransactionHelper.getSpecifiedDueDateChargesForLoanAsJSON(
-                    String.valueOf(penalty), penaltyCharge1AddedDate, "10", penalty1LoanChargeExternalId)).intValue();
+            Integer penalty1LoanChargeId = addChargesForLoan(loan2Id.longValue(),
+                    LoanRequestBuilders.addLoanCharge(penalty, 10, penaltyCharge1AddedDate).externalId(penalty1LoanChargeExternalId))
+                    .getResourceId().intValue();
 
             // NEGATIVE SCENARIOS
 
