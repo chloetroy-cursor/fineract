@@ -29,11 +29,12 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import org.apache.fineract.integrationtests.common.CenterDomain;
-import org.apache.fineract.integrationtests.common.CenterHelper;
+import org.apache.fineract.client.models.GetCentersCenterIdResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCenterHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -76,6 +77,7 @@ public class AccountNumberPreferencesTest {
     private LoanTransactionHelper loanTransactionHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private AccountNumberPreferencesHelper accountNumberPreferencesHelper;
+    private final FeignCenterHelper centerHelper = new FeignCenterHelper(FineractFeignClientHelper.getFineractFeignClient());
     private Integer clientAccountNumberPreferenceId;
     private Integer loanAccountNumberPreferenceId;
     private Integer savingsAccountNumberPreferenceId;
@@ -315,19 +317,17 @@ public class AccountNumberPreferencesTest {
         Integer officeId = new OfficeHelper().createOffice(LocalDate.of(2007, 7, 1)).getResourceId().intValue();
 
         String name = "CenterCreation" + new Timestamp(new java.util.Date().getTime());
-        this.centerId = CenterHelper.createCenter(name, officeId, requestSpec, responseSpec);
-        CenterDomain center = CenterHelper.retrieveByID(centerId, requestSpec, responseSpec);
+        this.centerId = centerHelper.createCenter(name, officeId.longValue()).getResourceId().intValue();
+        GetCentersCenterIdResponse center = centerHelper.retrieveCenter(this.centerId.longValue());
         Assertions.assertNotNull(center);
-        Assertions.assertTrue(center.getName().equals(name));
+        Assertions.assertEquals(name, center.getName());
 
         if (isAccountPreferenceSetUp) {
             String centerPrefixName = (String) this.accountNumberPreferencesHelper
                     .getAccountNumberPreference(this.centerAccountNumberPreferenceId, "prefixType.value");
-            final String CENTER_URL = "/fineract-provider/api/v1/centers/" + this.centerId + "?" + Utils.TENANT_IDENTIFIER;
 
             if (centerPrefixName.equals(this.officeName)) {
-                final String centerOfficeName = Utils.performServerGet(requestSpec, responseSpec, CENTER_URL, "officeName");
-                this.validateAccountNumberLengthAndStartsWithPrefix(center.getAccountNo(), centerOfficeName);
+                this.validateAccountNumberLengthAndStartsWithPrefix(center.getAccountNo(), center.getOfficeName());
             }
         } else {
             validateAccountNumberLengthAndStartsWithPrefix(center.getAccountNo(), null);
