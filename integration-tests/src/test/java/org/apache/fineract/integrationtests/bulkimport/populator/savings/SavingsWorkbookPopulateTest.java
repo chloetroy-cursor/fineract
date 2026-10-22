@@ -29,8 +29,9 @@ import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import java.io.IOException;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignGroupHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.GroupHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
@@ -68,7 +69,8 @@ public class SavingsWorkbookPopulateTest {
         assertNotNull(outcome_client_creation, "Could not create client");
 
         // in order to populate helper sheets
-        Integer outcome_group_creation = GroupHelper.createGroup(requestSpec, responseSpec, true);
+        Long outcome_group_creation = new FeignGroupHelper(FineractFeignClientHelper.getFineractFeignClient()).createActiveGroup()
+                .getGroupId();
         assertNotNull(outcome_group_creation, "Could not create group");
 
         // in order to populate helper sheets

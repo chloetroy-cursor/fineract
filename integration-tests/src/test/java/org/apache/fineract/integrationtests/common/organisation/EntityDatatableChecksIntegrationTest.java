@@ -31,13 +31,17 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.GetEntityDatatableChecksResponse;
 import org.apache.fineract.client.models.PostClientsResponse;
 import org.apache.fineract.client.models.PostEntityDatatableChecksTemplateResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignGroupHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.FeignErrors;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
-import org.apache.fineract.integrationtests.common.GroupHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
@@ -66,6 +70,7 @@ public class EntityDatatableChecksIntegrationTest {
     private SavingsAccountHelper savingsAccountHelper;
     private LoanTransactionHelper loanTransactionHelper;
     private LoanTransactionHelper validationErrorHelper;
+    private final FeignGroupHelper groupHelper = new FeignGroupHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     private static final String CLIENT_APP_TABLE_NAME = "m_client";
     private static final String GROUP_APP_TABLE_NAME = "m_group";
@@ -206,8 +211,15 @@ public class EntityDatatableChecksIntegrationTest {
         assertNotNull(entityDatatableCheckId, "ERROR IN CREATING THE ENTITY DATATABLE CHECK");
 
         // creating group with datatables
-        final Integer groupId = GroupHelper.createGroupPendingWithDatatable(this.requestSpec, this.responseSpec, registeredTableName);
-        GroupHelper.verifyGroupCreatedOnServer(this.requestSpec, this.responseSpec, groupId);
+        final Map<String, Object> datatableRow = new HashMap<>();
+        datatableRow.put("locale", "en");
+        datatableRow.put("Spouse Name", Utils.randomStringGenerator("Spouse_name", 4));
+        datatableRow.put("Number of Dependents", 5);
+        datatableRow.put("Time of Visit", "01 December 2016 04:03");
+        datatableRow.put("dateFormat", DATE_TIME_FORMAT);
+        datatableRow.put("Date of Approval", "02 December 2016 00:00");
+        final Integer groupId = groupHelper.createGroupWithDatatable(registeredTableName, datatableRow).getGroupId().intValue();
+        assertEquals(groupId.longValue(), groupHelper.retrieveGroup(groupId.longValue()).getId(), "ERROR IN CREATING THE GROUP");
 
         // deleting entity datatable check
         EntityDatatableChecksHelper.deleteEntityDatatableCheck(entityDatatableCheckId);
@@ -222,13 +234,8 @@ public class EntityDatatableChecksIntegrationTest {
         assertEquals(registeredTableName, deletedDataTableName, "ERROR IN DELETING THE DATATABLE");
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void validateCreateGroupWithEntityDatatableCheckWithFailure() {
-        // building error response with status code 403
-        final ResponseSpecification errorResponse = new ResponseSpecBuilder().expectStatusCode(403).build();
-        final GroupHelper validationErrorHelper = new GroupHelper(this.requestSpec, errorResponse);
-
         // creating datatable
         String registeredTableName = this.datatableHelper.createDatatable(GROUP_APP_TABLE_NAME, false);
         DatatableHelper.verifyDatatableCreatedOnServer(this.requestSpec, this.responseSpec, registeredTableName);
@@ -238,11 +245,10 @@ public class EntityDatatableChecksIntegrationTest {
                 .createEntityDatatableCheck(GROUP_APP_TABLE_NAME, registeredTableName, 100L, null).getResourceId();
         assertNotNull(entityDatatableCheckId, "ERROR IN CREATING THE ENTITY DATATABLE CHECK");
 
-        // creating group with datatables with error
-        ArrayList<HashMap<Object, Object>> groupErrorData = (ArrayList<HashMap<Object, Object>>) validationErrorHelper
-                .createGroupWithError(CommonConstants.RESPONSE_ERROR);
-        assertEquals("error.msg.entry.required.in.datatable.[" + registeredTableName + "]",
-                groupErrorData.get(0).get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
+        // creating group without the datatable entry the check demands
+        CallFailedRuntimeException groupError = groupHelper.createGroupExpectingError(groupHelper.pendingGroupRequest());
+        assertEquals(403, groupError.getStatus());
+        assertEquals("error.msg.entry.required.in.datatable.[" + registeredTableName + "]", FeignErrors.errorGlobalisationCode(groupError));
 
         // deleting entity datatable check
         EntityDatatableChecksHelper.deleteEntityDatatableCheck(entityDatatableCheckId);
