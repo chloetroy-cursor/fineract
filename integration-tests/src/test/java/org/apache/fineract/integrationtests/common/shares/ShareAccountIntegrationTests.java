@@ -33,9 +33,12 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.fineract.client.models.ChargeRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignChargesHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.ChargeRequestBuilders;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,9 +49,11 @@ import org.slf4j.LoggerFactory;
 public class ShareAccountIntegrationTests {
 
     private static final Logger LOG = LoggerFactory.getLogger(ShareAccountIntegrationTests.class);
+    private static final double CHARGE_AMOUNT = 100.0;
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private ShareProductHelper shareProductHelper;
+    private FeignChargesHelper chargesHelper;
 
     @BeforeEach
     public void setup() {
@@ -57,6 +62,12 @@ public class ShareAccountIntegrationTests {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.requestSpec.header("Fineract-Platform-TenantId", "default");
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
+        this.chargesHelper = new FeignChargesHelper(FineractFeignClientHelper.getFineractFeignClient());
+    }
+
+    /** The share account helpers below still take Integer charge ids. */
+    private Integer createShareCharge(ChargeRequest request) {
+        return chargesHelper.createCharge(request).getResourceId().intValue();
     }
 
     @Test
@@ -147,12 +158,9 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
-        String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
-        Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
-        String purchaseCharge = ChargesHelper.getShareAccountPurchaseChargeJson();
-        Integer purchaseChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, purchaseCharge);
-        String redeemCharge = ChargesHelper.getShareAccountRedeemChargeJson();
-        Integer redeemChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, redeemCharge);
+        Integer activationChargeId = createShareCharge(ChargeRequestBuilders.shareAccountActivationCharge(CHARGE_AMOUNT));
+        Integer purchaseChargeId = createShareCharge(ChargeRequestBuilders.sharePurchaseCharge(CHARGE_AMOUNT));
+        Integer redeemChargeId = createShareCharge(ChargeRequestBuilders.shareRedeemCharge(CHARGE_AMOUNT));
         List<Map<String, Object>> charges = new ArrayList<>();
         charges.add(createCharge(activationChargeId, "2"));
         charges.add(createCharge(purchaseChargeId, "2"));
@@ -216,12 +224,9 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
-        String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
-        Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
-        String purchaseCharge = ChargesHelper.getShareAccountPurchaseChargeJson();
-        Integer purchaseChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, purchaseCharge);
-        String redeemCharge = ChargesHelper.getShareAccountRedeemChargeJson();
-        Integer redeemChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, redeemCharge);
+        Integer activationChargeId = createShareCharge(ChargeRequestBuilders.shareAccountActivationCharge(CHARGE_AMOUNT));
+        Integer purchaseChargeId = createShareCharge(ChargeRequestBuilders.sharePurchaseCharge(CHARGE_AMOUNT));
+        Integer redeemChargeId = createShareCharge(ChargeRequestBuilders.shareRedeemCharge(CHARGE_AMOUNT));
         List<Map<String, Object>> charges = new ArrayList<>();
         charges.add(createCharge(activationChargeId, "2"));
         charges.add(createCharge(purchaseChargeId, "2"));
@@ -284,12 +289,9 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
-        String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
-        Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
-        String purchaseCharge = ChargesHelper.getShareAccountPurchaseChargeJson();
-        Integer purchaseChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, purchaseCharge);
-        String redeemCharge = ChargesHelper.getShareAccountRedeemChargeJson();
-        Integer redeemChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, redeemCharge);
+        Integer activationChargeId = createShareCharge(ChargeRequestBuilders.shareAccountActivationCharge(CHARGE_AMOUNT));
+        Integer purchaseChargeId = createShareCharge(ChargeRequestBuilders.sharePurchaseCharge(CHARGE_AMOUNT));
+        Integer redeemChargeId = createShareCharge(ChargeRequestBuilders.shareRedeemCharge(CHARGE_AMOUNT));
         List<Map<String, Object>> charges = new ArrayList<>();
         charges.add(createCharge(activationChargeId, "2"));
         charges.add(createCharge(purchaseChargeId, "2"));
@@ -365,12 +367,9 @@ public class ShareAccountIntegrationTests {
         Assertions.assertNotNull(clientId);
         Integer savingsAccountId = SavingsAccountHelper.openSavingsAccount(requestSpec, responseSpec, clientId, "1000");
         Assertions.assertNotNull(savingsAccountId);
-        String activationCharge = ChargesHelper.getShareAccountActivationChargeJson();
-        Integer activationChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, activationCharge);
-        String purchaseCharge = ChargesHelper.getShareAccountPurchaseChargeJson();
-        Integer purchaseChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, purchaseCharge);
-        String redeemCharge = ChargesHelper.getShareAccountRedeemChargeJson();
-        Integer redeemChargeId = ChargesHelper.createCharges(requestSpec, responseSpec, redeemCharge);
+        Integer activationChargeId = createShareCharge(ChargeRequestBuilders.shareAccountActivationCharge(CHARGE_AMOUNT));
+        Integer purchaseChargeId = createShareCharge(ChargeRequestBuilders.sharePurchaseCharge(CHARGE_AMOUNT));
+        Integer redeemChargeId = createShareCharge(ChargeRequestBuilders.shareRedeemCharge(CHARGE_AMOUNT));
         List<Map<String, Object>> charges = new ArrayList<>();
         charges.add(createCharge(activationChargeId, "2"));
         charges.add(createCharge(purchaseChargeId, "2"));

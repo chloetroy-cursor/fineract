@@ -27,6 +27,7 @@ import org.apache.fineract.portfolio.charge.domain.ChargeAppliesTo;
 import org.apache.fineract.portfolio.charge.domain.ChargeCalculationType;
 import org.apache.fineract.portfolio.charge.domain.ChargePaymentMode;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
+import org.apache.fineract.portfolio.common.domain.PeriodFrequencyType;
 
 public final class ChargeRequestBuilders {
 
@@ -97,6 +98,25 @@ public final class ChargeRequestBuilders {
         return baseLoanCharge(amount, DEFAULT_CURRENCY)//
                 .chargeTimeType(ChargeTimeType.OVERDUE_INSTALLMENT.getValue())//
                 .penalty(true);
+    }
+
+    /** A flat overdue penalty that recurs every {@code feeInterval} units of {@code feeFrequency} while overdue. */
+    public static ChargeRequest loanOverdueFee(double amount, PeriodFrequencyType feeFrequency, int feeInterval) {
+        return loanOverdueFee(amount)//
+                .feeFrequency(String.valueOf(feeFrequency.getValue()))//
+                .feeInterval(String.valueOf(feeInterval));
+    }
+
+    public static ChargeRequest shareAccountActivationCharge(double amount) {
+        return baseShareCharge(amount, "Charge_Share_Activation_", ChargeTimeType.SHAREACCOUNT_ACTIVATION);
+    }
+
+    public static ChargeRequest sharePurchaseCharge(double amount) {
+        return baseShareCharge(amount, "Charge_Share_Purchase_", ChargeTimeType.SHARE_PURCHASE);
+    }
+
+    public static ChargeRequest shareRedeemCharge(double amount) {
+        return baseShareCharge(amount, "Charge_Share_Redeem_", ChargeTimeType.SHARE_REDEEM);
     }
 
     /** A disbursement-time loan charge with an explicit calculation type. */
@@ -183,6 +203,18 @@ public final class ChargeRequestBuilders {
                 .chargeCalculationType(ChargeCalculationType.FLAT.getValue())//
                 .chargePaymentMode(ChargePaymentMode.REGULAR.getValue())//
                 .currencyCode(currencyCode)//
+                .amount(amount)//
+                .active(true)//
+                .locale(DEFAULT_LOCALE);
+    }
+
+    private static ChargeRequest baseShareCharge(double amount, String namePrefix, ChargeTimeType chargeTimeType) {
+        return new ChargeRequest()//
+                .name(Utils.uniqueRandomStringGenerator(namePrefix, 8))//
+                .chargeAppliesTo(ChargeAppliesTo.SHARES.getValue())//
+                .chargeTimeType(chargeTimeType.getValue())//
+                .chargeCalculationType(ChargeCalculationType.FLAT.getValue())//
+                .currencyCode(DEFAULT_CURRENCY)//
                 .amount(amount)//
                 .active(true)//
                 .locale(DEFAULT_LOCALE);

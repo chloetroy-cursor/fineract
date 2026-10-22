@@ -41,17 +41,20 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.client.models.ChargeRequest;
 import org.apache.fineract.client.models.GetOfficesResponse;
 import org.apache.fineract.client.models.PaymentTypeCreateRequest;
 import org.apache.fineract.infrastructure.bulkimport.constants.LoanConstants;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
 import org.apache.fineract.integrationtests.bulkimport.importhandler.BulkImportOutputTemplateHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignChargesHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.ChargeRequestBuilders;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.PaymentTypeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.funds.FundsHelper;
 import org.apache.fineract.integrationtests.common.funds.FundsResourceHandler;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
@@ -77,6 +80,7 @@ public class LoanImportHandlerTest {
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
     private PaymentTypeHelper paymentTypeHelper;
+    private FeignChargesHelper chargesHelper;
 
     @BeforeEach
     public void setup() {
@@ -85,6 +89,7 @@ public class LoanImportHandlerTest {
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.paymentTypeHelper = new PaymentTypeHelper();
+        this.chargesHelper = new FeignChargesHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -129,11 +134,9 @@ public class LoanImportHandlerTest {
         collateralHashMap.put("quantity", "1");
         collaterals.add(collateralHashMap);
 
-        final String disbursementChargeJsonString = ChargesHelper.getLoanDisbursementJSON();
+        final ChargeRequest disbursementCharge = ChargeRequestBuilders.loanDisbursementFee(100.0);
 
-        final Integer disbursementChargeId = ChargesHelper.createCharges(this.requestSpec, this.responseSpec, disbursementChargeJsonString);
-
-        final JsonPath disbursementChargeJSON = JsonPath.from(disbursementChargeJsonString);
+        final Long disbursementChargeId = chargesHelper.createCharge(disbursementCharge).getResourceId();
 
         Assertions.assertNotNull(disbursementChargeId, "Could not create charge");
 
@@ -222,9 +225,10 @@ public class LoanImportHandlerTest {
         firstLoanRow.createCell(LoanConstants.REPAYMENT_TYPE_COL).setCellValue(paymentTypeName);
         firstLoanRow.createCell(LoanConstants.LOAN_COLLATERAL_ID).setCellValue(collaterals.get(0).get("clientCollateralId").toString());
         firstLoanRow.createCell(LoanConstants.LOAN_COLLATERAL_QUANTITY).setCellValue(collaterals.get(0).get("quantity").toString());
-        firstLoanRow.createCell(LoanConstants.CHARGE_NAME_1).setCellValue(disbursementChargeJSON.getString("name"));
-        firstLoanRow.createCell(LoanConstants.CHARGE_AMOUNT_1).setCellValue(disbursementChargeJSON.getFloat("amount"));
-        firstLoanRow.createCell(LoanConstants.CHARGE_AMOUNT_TYPE_1).setCellValue(disbursementChargeJSON.getString("chargeCalculationType"));
+        firstLoanRow.createCell(LoanConstants.CHARGE_NAME_1).setCellValue(disbursementCharge.getName());
+        firstLoanRow.createCell(LoanConstants.CHARGE_AMOUNT_1).setCellValue(disbursementCharge.getAmount());
+        firstLoanRow.createCell(LoanConstants.CHARGE_AMOUNT_TYPE_1)
+                .setCellValue(String.valueOf(disbursementCharge.getChargeCalculationType()));
 
         Path directory = Path.of("").toAbsolutePath().resolve("src").resolve("integrationTest").resolve("resources").resolve("bulkimport")
                 .resolve("importhandler").resolve("loan");
