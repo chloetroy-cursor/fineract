@@ -25,16 +25,17 @@ import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
-import org.apache.fineract.batch.domain.BatchRequest;
-import org.apache.fineract.batch.domain.BatchResponse;
-import org.apache.fineract.batch.domain.Header;
+import org.apache.fineract.client.models.BatchRequest;
+import org.apache.fineract.client.models.BatchResponse;
+import org.apache.fineract.client.models.Header;
 import org.apache.fineract.infrastructure.core.exception.AbstractIdempotentCommandException;
-import org.apache.fineract.integrationtests.common.BatchHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignBatchHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.BatchRequestBuilders;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
@@ -57,6 +58,7 @@ public class BatchRequestsIntegrationTest {
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
     private static final SecureRandom secureRandom = new SecureRandom();
+    private final FeignBatchHelper batchHelper = new FeignBatchHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     public BatchRequestsIntegrationTest() {
 
@@ -133,17 +135,15 @@ public class BatchRequestsIntegrationTest {
                     String.valueOf(clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))]), collateralId);
             Assertions.assertNotNull(clientCollateralId);
 
-            BatchRequest br = BatchHelper.applyLoanRequest((long) selClientsCount, null, loanProductID, clientCollateralId);
+            final BatchRequest br = BatchRequestBuilders.applyLoan((long) selClientsCount, null, loanProductID.longValue(),
+                    clientCollateralId.longValue());
             br.setBody(br.getBody().replace("$.clientId",
                     String.valueOf(clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))])));
             batchRequests.add(br);
         }
 
         // Send the request to Batch - API
-        final String jsonifiedRequest = BatchHelper.toJsonString(batchRequests);
-
-        final List<BatchResponse> response = BatchHelper.postBatchRequestsWithoutEnclosingTransaction(this.requestSpec, this.responseSpec,
-                jsonifiedRequest);
+        final List<BatchResponse> response = batchHelper.executeWithoutEnclosingTransaction(batchRequests);
 
         // Verify that each loan has been applied successfully
         for (BatchResponse res : response) {
@@ -204,19 +204,16 @@ public class BatchRequestsIntegrationTest {
                     String.valueOf(clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))]), collateralId);
             Assertions.assertNotNull(clientCollateralId);
 
-            BatchRequest br = BatchHelper.applyLoanRequest((long) selClientsCount, null, loanProductID, clientCollateralId);
+            final BatchRequest br = BatchRequestBuilders.applyLoan((long) selClientsCount, null, loanProductID.longValue(),
+                    clientCollateralId.longValue());
             br.setBody(br.getBody().replace("$.clientId",
                     String.valueOf(clientIDs[(int) Math.floor(secureRandom.nextDouble() * (clientsCount - 1))])));
-            br.setHeaders(new HashSet<>());
-            br.getHeaders().add(new Header("Idempotency-Key", UUID.randomUUID().toString()));
+            br.addHeadersItem(new Header().name("Idempotency-Key").value(UUID.randomUUID().toString()));
             batchRequests.add(br);
         }
 
         // Send the request to Batch - API
-        final String jsonifiedRequest = BatchHelper.toJsonString(batchRequests);
-
-        final List<BatchResponse> response = BatchHelper.postBatchRequestsWithoutEnclosingTransaction(this.requestSpec, this.responseSpec,
-                jsonifiedRequest);
+        final List<BatchResponse> response = batchHelper.executeWithoutEnclosingTransaction(batchRequests);
 
         // Verify that each loan has been applied successfully
         for (BatchResponse res : response) {
@@ -227,8 +224,8 @@ public class BatchRequestsIntegrationTest {
             Assertions.assertEquals(200L, (long) res.getStatusCode(), "Verify Status Code 200");
         }
 
-        final List<BatchResponse> secondResponse = BatchHelper.postBatchRequestsWithoutEnclosingTransaction(this.requestSpec,
-                this.responseSpec, jsonifiedRequest);
+        // Replaying the same batch (same Idempotency-Key per request) must be served from the idempotency cache
+        final List<BatchResponse> secondResponse = batchHelper.executeWithoutEnclosingTransaction(batchRequests);
 
         // Verify that each loan has been applied successfully
         for (BatchResponse res : secondResponse) {
