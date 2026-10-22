@@ -30,19 +30,22 @@ import io.restassured.specification.ResponseSpecification;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.fineract.client.models.PostDataTablesRequest;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutPermissionsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignDatatableHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.DatatableRequestBuilders;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.commands.MakercheckersHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
-import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
 import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.junit.jupiter.api.BeforeEach;
@@ -228,16 +231,13 @@ public class MakercheckerTest {
             String checker = Utils.uniqueRandomStringGenerator("user", 8);
             UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, checker, "A1b2c3d4e5f$", "resourceId");
 
-            RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
-
             // maker creates datatable with maker-checker enabled, this creates the physical table but queues for
             // approval
-            DatatableHelper makerDatatableHelper = new DatatableHelper(makerRequestSpec, this.responseSpec);
-            String datatableJson = DatatableHelper.getTestDatatableAsJSON(apptableName, false);
-            String datatableName = com.google.gson.JsonParser.parseString(datatableJson).getAsJsonObject().get("datatableName")
-                    .getAsString();
-            makerDatatableHelper.createDatatable(datatableJson, "");
+            FeignDatatableHelper makerDatatableHelper = new FeignDatatableHelper(
+                    FineractFeignClientHelper.createNewFineractFeignClient(maker, "A1b2c3d4e5f$"));
+            PostDataTablesRequest datatableRequest = DatatableRequestBuilders.testDatatable(apptableName, false);
+            String datatableName = datatableRequest.getDatatableName();
+            makerDatatableHelper.createDatatable(datatableRequest);
 
             // find the pending command
             List<Map<String, Object>> auditDetails = makercheckersHelper
@@ -253,8 +253,8 @@ public class MakercheckerTest {
             putPermissionsRequest = new PutPermissionsRequest().putPermissionsItem("CREATE_DATATABLE", false);
             rolesHelper.updatePermissions(putPermissionsRequest);
 
-            DatatableHelper adminDatatableHelper = new DatatableHelper(this.requestSpec, this.responseSpec);
-            String recreatedName = adminDatatableHelper.createDatatable(datatableJson, "resourceIdentifier");
+            FeignDatatableHelper adminDatatableHelper = new FeignDatatableHelper(FineractFeignClientHelper.getFineractFeignClient());
+            String recreatedName = adminDatatableHelper.createDatatable(datatableRequest).getResourceIdentifier();
             assertEquals(datatableName, recreatedName, "Error: Was not able to recreate datatable after rejection cleanup");
 
             // cleanup after test

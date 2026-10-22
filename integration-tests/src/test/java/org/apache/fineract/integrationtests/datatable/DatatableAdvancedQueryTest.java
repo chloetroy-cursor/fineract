@@ -27,19 +27,17 @@ import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiCon
 import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_FIELD_TYPE_DATE;
 import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_FIELD_TYPE_DECIMAL;
 import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_FIELD_TYPE_NUMBER;
-import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_FIELD_TYPE_STRING;
 import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_FIELD_TYPE_TEXT;
-import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_PARAM_APPTABLE_NAME;
-import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_PARAM_COLUMNS;
-import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_PARAM_DATATABLE_NAME;
-import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_PARAM_MULTIROW;
-import static org.apache.fineract.infrastructure.dataqueries.api.DataTableApiConstant.API_PARAM_SUBTYPE;
+import static org.apache.fineract.integrationtests.client.feign.modules.DatatableRequestBuilders.column;
+import static org.apache.fineract.integrationtests.client.feign.modules.DatatableRequestBuilders.stringColumn;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.google.gson.Gson;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
@@ -49,10 +47,10 @@ import io.restassured.specification.ResponseSpecification;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.fineract.client.feign.ObjectMapperFactory;
 import org.apache.fineract.client.models.AdvancedQueryData;
 import org.apache.fineract.client.models.AdvancedQueryRequest;
 import org.apache.fineract.client.models.ColumnFilterData;
@@ -60,7 +58,8 @@ import org.apache.fineract.client.models.FilterData;
 import org.apache.fineract.client.models.GetDataTablesResponse;
 import org.apache.fineract.client.models.PagedLocalRequestAdvancedQueryData;
 import org.apache.fineract.client.models.PagedLocalRequestAdvancedQueryRequest;
-import org.apache.fineract.client.models.PostDataTablesResponse;
+import org.apache.fineract.client.models.PostDataTablesAppTableIdResponse;
+import org.apache.fineract.client.models.PostDataTablesRequest;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.ResultsetColumnHeaderData;
 import org.apache.fineract.client.models.SortOrder;
@@ -69,15 +68,16 @@ import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.dataqueries.data.EntityTables;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignDatatableHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
-import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -105,7 +105,7 @@ public class DatatableAdvancedQueryTest {
 
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
-    private DatatableHelper datatableHelper;
+    private FeignDatatableHelper datatableHelper;
     private SavingsProductHelper savingsProductHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private GlobalConfigurationHelper globalConfigurationHelper;
@@ -116,7 +116,7 @@ public class DatatableAdvancedQueryTest {
         requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        datatableHelper = new DatatableHelper(requestSpec, responseSpec);
+        datatableHelper = new FeignDatatableHelper(FineractFeignClientHelper.getFineractFeignClient());
         savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
         savingsProductHelper = new SavingsProductHelper();
         globalConfigurationHelper = new GlobalConfigurationHelper();
@@ -165,7 +165,7 @@ public class DatatableAdvancedQueryTest {
             PagedLocalRequestAdvancedQueryData pagedQuery = new PagedLocalRequestAdvancedQueryData().page(0).size(3)
                     .addSortsItem(new SortOrder().property("created_at").direction(SortOrder.DirectionEnum.DESC))
                     .addSortsItem(new SortOrder().property(COLUMN_TRANSACTION_ID).direction(SortOrder.DirectionEnum.DESC)).request(query);
-            Map<String, Object> response = datatableHelper.queryDatatable(datatable, pagedQuery);
+            Map<String, Object> response = asMap(datatableHelper.advancedQuery(datatable, pagedQuery));
 
             assertEquals(1, response.get("total"));
             List content = (List) response.get("content");
@@ -177,14 +177,14 @@ public class DatatableAdvancedQueryTest {
             assertEquals(yesterdayIsoS, first.get(COLUMN_DATE));
             assertTrue((Boolean) first.get(COLUMN_BOOLEAN));
             assertEquals(1, first.get(COLUMN_INTEGER));
-            assertEquals(decValue1.floatValue(), first.get(COLUMN_DECIMAL));
+            assertEquals(0, decValue1.compareTo(new BigDecimal(first.get(COLUMN_DECIMAL).toString())));
 
             query.resultColumns(List.of(COLUMN_TRANSACTION_ID));
             query.columnFilters(List.of(
                     new ColumnFilterData().column(COLUMN_INTEGER).addFiltersItem(new FilterData().operator(GTE).values(List.of("1"))),
                     new ColumnFilterData().column(COLUMN_DATE)
                             .addFiltersItem(new FilterData().operator(BTW).values(List.of(yesterdayIsoS, todayIsoS)))));
-            response = datatableHelper.queryDatatable(datatable, pagedQuery);
+            response = asMap(datatableHelper.advancedQuery(datatable, pagedQuery));
 
             assertEquals(3, response.get("total"));
             content = (List) response.get("content");
@@ -312,31 +312,18 @@ public class DatatableAdvancedQueryTest {
 
     private String createAndVerifyDatatable(String apptable, String subType, boolean multiRow) {
         // creating datatable for apptable entity
-        final HashMap<String, Object> request = new HashMap<>();
-        request.put(API_PARAM_DATATABLE_NAME, Utils.uniqueRandomStringGenerator("dt_" + apptable + "_", 5));
-        request.put(API_PARAM_APPTABLE_NAME, apptable);
-        if (subType != null) {
-            request.put(API_PARAM_SUBTYPE, subType);
-        }
-        request.put(API_PARAM_MULTIROW, multiRow);
+        PostDataTablesRequest request = new PostDataTablesRequest()
+                .datatableName(Utils.uniqueRandomStringGenerator("dt_" + apptable + "_", 5)).apptableName(apptable).entitySubType(subType)
+                .multiRow(multiRow)
+                .columns(List.of(stringColumn(COLUMN_STRING, 50L, true).unique(!multiRow).indexed(true),
+                        column(COLUMN_TEXT, API_FIELD_TYPE_TEXT, false), column(COLUMN_DATE, API_FIELD_TYPE_DATE, true),
+                        column(COLUMN_BOOLEAN, API_FIELD_TYPE_BOOLEAN, false), column(COLUMN_INTEGER, API_FIELD_TYPE_NUMBER, false),
+                        column(COLUMN_DECIMAL, API_FIELD_TYPE_DECIMAL, false)));
+        LOG.info("request : {}", request);
 
-        final List<HashMap<String, Object>> datatableColumns = new ArrayList<>();
-        DatatableHelper.addDatatableColumnWithUniqueAndIndex(datatableColumns, COLUMN_STRING, API_FIELD_TYPE_STRING, true, 50, null,
-                !multiRow, true);
-        DatatableHelper.addDatatableColumn(datatableColumns, COLUMN_TEXT, API_FIELD_TYPE_TEXT, false, null, null);
-        DatatableHelper.addDatatableColumn(datatableColumns, COLUMN_DATE, API_FIELD_TYPE_DATE, true, null, null);
-        DatatableHelper.addDatatableColumn(datatableColumns, COLUMN_BOOLEAN, API_FIELD_TYPE_BOOLEAN, false, null, null);
-        DatatableHelper.addDatatableColumn(datatableColumns, COLUMN_INTEGER, API_FIELD_TYPE_NUMBER, false, null, null);
-        DatatableHelper.addDatatableColumn(datatableColumns, COLUMN_DECIMAL, API_FIELD_TYPE_DECIMAL, false, null, null);
-        request.put(API_PARAM_COLUMNS, datatableColumns);
-
-        String requestJson = new Gson().toJson(request);
-        LOG.info("map : {}", requestJson);
-
-        PostDataTablesResponse response = datatableHelper.createDatatable(requestJson);
-        String datatable = response.getResourceIdentifier();
+        String datatable = datatableHelper.createDatatable(request).getResourceIdentifier();
         assertNotNull(datatable);
-        GetDataTablesResponse dataTable = datatableHelper.getDataTableDetails(datatable);
+        GetDataTablesResponse dataTable = datatableHelper.getDatatable(datatable);
         List<ResultsetColumnHeaderData> columnHeaderData = dataTable.getColumnHeaderData();
         assertNotNull(columnHeaderData);
         // pk column and 2 audit columns were added automatically
@@ -345,8 +332,8 @@ public class DatatableAdvancedQueryTest {
     }
 
     @NonNull
-    private HashMap<String, Object> createDatatableEntry(String datatable, Integer apptableId, LocalDate dateValue, Boolean boolValue,
-            Integer intValue, BigDecimal decValue) {
+    private PostDataTablesAppTableIdResponse createDatatableEntry(String datatable, Integer apptableId, LocalDate dateValue,
+            Boolean boolValue, Integer intValue, BigDecimal decValue) {
         final HashMap<String, Object> request = new HashMap<>();
         request.put(COLUMN_STRING, Utils.uniqueRandomStringGenerator(apptableId.toString() + "_", 5));
         request.put(COLUMN_TEXT, apptableId);
@@ -358,18 +345,22 @@ public class DatatableAdvancedQueryTest {
         request.put("dateFormat", SAVINGS_DATE_FORMAT);
 
         String requestJson = new Gson().toJson(request);
-        HashMap<String, Object> response = datatableHelper.createDatatableEntry(datatable, apptableId, true, requestJson);
-        assertNotNull(response.get("resourceId"));
+        PostDataTablesAppTableIdResponse response = datatableHelper.createDatatableEntry(datatable, apptableId.longValue(), requestJson);
+        assertNotNull(response.getResourceId());
         return response;
     }
 
     private void deleteDatatable(String datatable, Integer... apptableIds) {
         for (Integer apptableId : apptableIds) {
-            String deletedId = (String) this.datatableHelper.deleteDatatableEntries(datatable, apptableId, "transactionId");
+            String deletedId = this.datatableHelper.deleteDatatableEntries(datatable, apptableId.longValue()).getTransactionId();
             assertEquals(apptableId, Integer.valueOf(deletedId), "ERROR IN DELETING THE DATATABLE ENTRY");
         }
-        String deletedDatatable = this.datatableHelper.deleteDatatable(datatable);
+        String deletedDatatable = this.datatableHelper.deleteDatatable(datatable).getResourceIdentifier();
         assertEquals(datatable, deletedDatatable, "ERROR IN DELETING THE DATATABLE");
+    }
+
+    private static Map<String, Object> asMap(JsonNode node) {
+        return ObjectMapperFactory.getShared().convertValue(node, new TypeReference<Map<String, Object>>() {});
     }
 
     private Integer createSavingsProductDailyPosting() {
