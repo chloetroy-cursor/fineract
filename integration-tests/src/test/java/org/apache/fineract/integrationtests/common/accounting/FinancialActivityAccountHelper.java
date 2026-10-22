@@ -19,8 +19,6 @@
 package org.apache.fineract.integrationtests.common.accounting;
 
 import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
-import java.util.HashMap;
 import java.util.List;
 import org.apache.fineract.client.models.DeleteFinancialActivityAccountsResponse;
 import org.apache.fineract.client.models.GetFinancialActivityAccountsResponse;
@@ -28,47 +26,12 @@ import org.apache.fineract.client.models.PostFinancialActivityAccountsRequest;
 import org.apache.fineract.client.models.PostFinancialActivityAccountsResponse;
 import org.apache.fineract.client.util.Calls;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
-import org.apache.fineract.integrationtests.common.Utils;
 
-@SuppressWarnings("rawtypes")
 public class FinancialActivityAccountHelper {
 
-    private static final String FINANCIAL_ACTIVITY_ACCOUNT_MAPPING_URL = "/fineract-provider/api/v1/financialactivityaccounts";
-    private final RequestSpecification requestSpec;
-
-    public FinancialActivityAccountHelper(final RequestSpecification requestSpec) {
-        this.requestSpec = requestSpec;
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public Object createFinancialActivityAccount(Integer financialActivityId, Integer glAccountId,
-            final ResponseSpecification responseSpecification, String jsonBack) {
-        String json = FinancialActivityAccountsMappingBuilder.build(financialActivityId, glAccountId);
-        return Utils.performServerPost(this.requestSpec, responseSpecification,
-                FINANCIAL_ACTIVITY_ACCOUNT_MAPPING_URL + "?" + Utils.TENANT_IDENTIFIER, json, jsonBack);
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public List<HashMap> getAllFinancialActivityAccounts(final ResponseSpecification responseSpecification) {
-        final String url = FINANCIAL_ACTIVITY_ACCOUNT_MAPPING_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(this.requestSpec, responseSpecification, url, "");
-    }
-
-    // TODO: Rewrite to use fineract-client instead!
-    // Example: org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper.disburseLoan(java.lang.Long,
-    // org.apache.fineract.client.models.PostLoansLoanIdRequest)
-    @Deprecated(forRemoval = true)
-    public Integer deleteFinancialActivityAccount(final Integer financialActivityAccountId,
-            final ResponseSpecification responseSpecification, String jsonBack) {
-        final String url = FINANCIAL_ACTIVITY_ACCOUNT_MAPPING_URL + "/" + financialActivityAccountId + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerDelete(this.requestSpec, responseSpecification, url, jsonBack);
-    }
+    // Existing tests still construct this helper with a REST Assured spec. The methods below use the
+    // generated client and ignore that spec, so the parameter stays to avoid touching those call sites.
+    public FinancialActivityAccountHelper(@SuppressWarnings("unused") final RequestSpecification requestSpec) {}
 
     public PostFinancialActivityAccountsResponse createFinancialActivityAccount(PostFinancialActivityAccountsRequest request) {
         return Calls.ok(FineractClientHelper.getFineractClient().financialActivyAccountMappings
