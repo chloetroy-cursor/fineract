@@ -62,9 +62,14 @@ field() {
 
 case "${1:-}" in
     build)
-        ./gradlew :fineract-provider:jibDockerBuild -Djib.to.image="$IMAGE" -x test -x cucumber --console=plain
+        # build.gradle always adds the "latest" tag; override it so a tagged build leaves fineract:latest alone
+        ./gradlew :fineract-provider:jibDockerBuild -Djib.to.image="$IMAGE" -Djib.to.tags="${IMAGE##*:}" -x test -x cucumber --console=plain
         ;;
     up | restart)
+        # the image has no MySQL JDBC driver (GPL); docker-compose-mysql-test.yml mounts it from build/fineract/plugins
+        if [[ "${FINERACT_DB:-postgresql}" == mysql ]] && ! ls build/fineract/plugins/mysql-connector-j-*.jar >/dev/null 2>&1; then
+            ./gradlew :fineract-provider:copyDatabaseDriverPlugins --console=plain -q
+        fi
         if [[ "$1" == up ]]; then
             "${COMPOSE[@]}" up -d
         else
