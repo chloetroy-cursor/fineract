@@ -64,6 +64,8 @@ import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.SqlValidator;
 import org.apache.fineract.organisation.office.data.OfficeData;
+import org.apache.fineract.organisation.office.data.OfficeExposureData;
+import org.apache.fineract.organisation.office.service.OfficeExposureReadService;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
@@ -86,6 +88,7 @@ public class OfficesApiResource {
     private final OfficeSwaggerMapper officeSwaggerMapper;
     private final PlatformSecurityContext context;
     private final OfficeReadPlatformService readPlatformService;
+    private final OfficeExposureReadService officeExposureReadService;
     private final DefaultToApiJsonSerializer<OfficeData> toApiJsonSerializer;
     private final ApiRequestParameterHelper apiRequestParameterHelper;
     private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
@@ -183,6 +186,16 @@ public class OfficesApiResource {
             office = OfficeData.appendedTemplate(office, allowedParents);
         }
         return officeSwaggerMapper.toGetOfficesResponse(office);
+    }
+
+    @GET
+    @Path("{officeId}/exposure")
+    @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Retrieve an Office's loan exposure", operationId = "retrieveOfficeExposure", description = "Outstanding balances of active loans for the office and all of its child offices, grouped by currency.\n"
+            + "\n" + "Example Request:\n" + "\n" + "offices/1/exposure")
+    public OfficeExposureData retrieveOfficeExposure(@PathParam("officeId") @Parameter(description = "officeId") final Long officeId) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+        return officeExposureReadService.retrieveExposure(officeId);
     }
 
     @PUT
