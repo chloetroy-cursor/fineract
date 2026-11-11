@@ -5,10 +5,20 @@ ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 cd "$ROOT"
 
 PROJECT="fineract-verify"
-COMPOSE=(docker compose -p "$PROJECT" -f docker-compose-postgresql.yml)
+SCRIPTS="$ROOT/.cursor/skills/verify-fineract/scripts"
+DEMO_COMPOSE="$ROOT/.cursor/skills/verify-fineract/compose"
+case "${FINERACT_DB:-postgresql}" in
+    postgresql) DB_COMPOSE=docker-compose-postgresql.yml ;;
+    mysql) DB_COMPOSE=docker-compose-mysql-test.yml ;;
+    *) echo "FINERACT_DB must be postgresql or mysql" >&2; exit 1 ;;
+esac
+COMPOSE=(docker compose -p "$PROJECT" -f "$DB_COMPOSE" -f "$DEMO_COMPOSE/fineract-demo.yml")
+OBSERVABILITY=(docker compose -f "$DEMO_COMPOSE/observability.yml")
+IMAGE="${FINERACT_IMAGE:-fineract:latest}"
+export FINERACT_IMAGE="$IMAGE"
 BASE_URL="${FINERACT_URL:-https://localhost:8443/fineract-provider}"
 EVIDENCE_DIR="${EVIDENCE_DIR:-/tmp/fineract-verify/$(date +%Y%m%d-%H%M%S)}"
-if [[ -z "${JAVA_HOME:-}" && -d /opt/homebrew/opt/openjdk@25 ]]; then
+if [[ "${JAVA_HOME:-}" != *25* && -d /opt/homebrew/opt/openjdk@25 ]]; then
     export JAVA_HOME=/opt/homebrew/opt/openjdk@25
 fi
 
@@ -16,13 +26,23 @@ usage() {
     cat <<'EOF'
 usage: fineract <command>
 
-  build              build the fineract:latest image from the current checkout
-  up                 start Postgres and Fineract, wait until healthy
+  build              build the image (default fineract:latest) from the current checkout
+  up                 start the database and Fineract, wait until healthy
+  restart            recreate only the Fineract container (new image or env), keep the database
   doctor             check health and which git commit the server runs
   api METHOD PATH [JSON]
                      call the REST API as mifos/password on tenant "default"
   seed-loan          create a client, product and disbursed loan; print the loan id
+  seed-loans N [--office-id ID]
+                     create N disbursed loans with the seed-loan terms, 20 per client
+  observe up|down    start or stop Prometheus (:9090) and Grafana (:3000)
   down               stop and delete the containers and database
+
+environment:
+  FINERACT_DB=postgresql|mysql          database to run (default postgresql)
+  FINERACT_IMAGE=fineract:<tag>         image to build or run (default fineract:latest)
+  FINERACT_STATEMENT_LOGGING_ENABLED=true  log every SQL statement (applied on up/restart)
+  FINERACT_LOGGING_JSON_ENABLED=true       JSON log lines (applied on up/restart)
 EOF
 }
 
@@ -42,13 +62,22 @@ field() {
 
 case "${1:-}" in
     build)
-        ./gradlew :fineract-provider:jibDockerBuild -Djib.to.image=fineract -x test -x cucumber --console=plain
+        # build.gradle always adds the "latest" tag; override it so a tagged build leaves fineract:latest alone
+        ./gradlew :fineract-provider:jibDockerBuild -Djib.to.image="$IMAGE" -Djib.to.tags="${IMAGE##*:}" -x test -x cucumber --console=plain
         ;;
-    up)
-        "${COMPOSE[@]}" up -d
+    up | restart)
+        # the image has no MySQL JDBC driver (GPL); docker-compose-mysql-test.yml mounts it from build/fineract/plugins
+        if [[ "${FINERACT_DB:-postgresql}" == mysql ]] && ! ls build/fineract/plugins/mysql-connector-j-*.jar >/dev/null 2>&1; then
+            ./gradlew :fineract-provider:copyDatabaseDriverPlugins --console=plain -q
+        fi
+        if [[ "$1" == up ]]; then
+            "${COMPOSE[@]}" up -d
+        else
+            "${COMPOSE[@]}" up -d --no-deps --force-recreate fineract
+        fi
         for _ in $(seq 1 90); do
             if curl -sk "$BASE_URL/actuator/health" | grep -q '"UP"'; then
-                echo "fineract is up at $BASE_URL"
+                echo "fineract ($IMAGE, ${FINERACT_DB:-postgresql}) is up at $BASE_URL"
                 exit 0
             fi
             sleep 5
@@ -56,9 +85,21 @@ case "${1:-}" in
         echo "fineract did not become healthy; see: ${COMPOSE[*]} logs fineract" >&2
         exit 1
         ;;
+    seed-loans)
+        shift
+        python3 "$SCRIPTS/seed_loans.py" "$@"
+        ;;
+    observe)
+        case "${2:-}" in
+            up) "${OBSERVABILITY[@]}" up -d && echo "prometheus: http://localhost:9090  grafana: http://localhost:3000" ;;
+            down) "${OBSERVABILITY[@]}" down ;;
+            *) usage; exit 1 ;;
+        esac
+        ;;
     doctor)
         echo "health:  $(curl -sk "$BASE_URL/actuator/health" || echo unreachable)"
         echo "server:  $(curl -sk "$BASE_URL/actuator/info" | python3 -c "import json,sys; c=json.load(sys.stdin).get('git',{}).get('commit',{}).get('id',{}); print(c.get('describe') or c.get('abbrev','unknown'))" 2>/dev/null || echo unknown)"
+        echo "image:   $IMAGE (${FINERACT_DB:-postgresql})"
         echo "head:    $(git rev-parse --short HEAD)$(git diff --quiet HEAD -- . ':!.cursor' || echo ' (uncommitted changes, rebuild to include them)')"
         "${COMPOSE[@]}" ps --format '{{.Service}} {{.State}}'
         ;;

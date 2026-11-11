@@ -14,6 +14,14 @@ All commands go through `.cursor/skills/verify-fineract/scripts/fineract`, run f
 1. Build the image from the current checkout: `fineract build` (about 5 minutes cold, faster warm). The server only contains code that was in the tree at build time, so rebuild after every code change you want to verify.
 2. Start Postgres and Fineract: `fineract up`. It returns once `actuator/health` reports `UP`, usually in 1 to 2 minutes. Ports 5432 and 8443 must be free.
 
+Options for the same commands:
+
+- MySQL instead of Postgres: prefix with `FINERACT_DB=mysql` (uses `docker-compose-mysql-test.yml`). Use the same prefix for `down`.
+- Another image: `FINERACT_IMAGE=fineract:<tag> fineract build` tags the build; `FINERACT_IMAGE=fineract:<tag> fineract restart` swaps the running server and keeps the database.
+- Metrics: `fineract observe up` starts Prometheus on :9090 and Grafana on :3000 (dashboard "Fineract Spring Boot"). The server always exports request-latency histograms.
+- SQL statements in the logs: `FINERACT_STATEMENT_LOGGING_ENABLED=true fineract restart`.
+- Bulk data: `fineract seed-loans 1000` creates 1,000 loans with the `seed-loan` terms.
+
 ## Doctor
 
 Run `fineract doctor` first, and again whenever a result looks wrong. It prints:
