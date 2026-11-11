@@ -18,21 +18,20 @@
  */
 package org.apache.fineract.organisation.office.service;
 
+import io.micrometer.core.annotation.Timed;
+import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
-import org.apache.fineract.organisation.monetary.domain.MonetaryCurrency;
-import org.apache.fineract.organisation.monetary.domain.Money;
+import org.apache.fineract.organisation.monetary.domain.MoneyHelper;
 import org.apache.fineract.organisation.office.data.CurrencyExposureData;
 import org.apache.fineract.organisation.office.data.OfficeExposureData;
 import org.apache.fineract.organisation.office.domain.Office;
 import org.apache.fineract.organisation.office.domain.OfficeRepositoryWrapper;
-import org.apache.fineract.portfolio.loanaccount.domain.Loan;
-import org.apache.fineract.portfolio.loanaccount.domain.LoanRepaymentScheduleInstallment;
-import org.apache.fineract.portfolio.loanaccount.domain.LoanRepository;
 import org.apache.fineract.portfolio.loanaccount.domain.LoanStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,58 +40,35 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class OfficeExposureReadServiceImpl implements OfficeExposureReadService {
 
+    static final String EXPOSURE_SQL = "SELECT l.currency_code AS currencyCode, l.currency_digits AS currencyDigits,"
+            + " COUNT(l.id) AS activeLoanCount, SUM(l.principal_outstanding_derived) AS principalOutstanding,"
+            + " SUM(l.interest_outstanding_derived) AS interestOutstanding, SUM(l.total_outstanding_derived) AS totalOutstanding"
+            + " FROM m_loan l JOIN m_client c ON c.id = l.client_id JOIN m_office o ON o.id = c.office_id"
+            + " WHERE o.hierarchy LIKE ? AND l.loan_status_id = ? GROUP BY l.currency_code, l.currency_digits ORDER BY l.currency_code";
+
+    private static final RowMapper<CurrencyExposureData> CURRENCY_EXPOSURE_MAPPER = OfficeExposureReadServiceImpl::mapCurrencyExposure;
+
     private final OfficeRepositoryWrapper officeRepositoryWrapper;
-    private final LoanRepository loanRepository;
     private final JdbcTemplate jdbcTemplate;
 
     @Override
+    @Timed(value = "fineract.office.exposure", description = "Time taken to aggregate an office's loan exposure", histogram = true)
     public OfficeExposureData retrieveExposure(final Long officeId) {
         final Office office = officeRepositoryWrapper.findOneWithNotFoundDetection(officeId);
-        final List<Long> officeIds = jdbcTemplate.queryForList("SELECT o.id FROM m_office o WHERE o.hierarchy LIKE ?", Long.class,
-                office.getHierarchy() + "%");
-
-        final List<Loan> loans = loanRepository.findByClientOfficeIdsAndLoanStatus(officeIds, List.of(LoanStatus.ACTIVE));
-
-        final Map<String, CurrencyTotals> totalsByCurrency = new TreeMap<>();
-        for (final Loan loan : loans) {
-            final MonetaryCurrency currency = loan.getCurrency();
-            totalsByCurrency.computeIfAbsent(currency.getCode(), code -> new CurrencyTotals(currency))
-                    .add(loan.getRepaymentScheduleInstallments());
-        }
-
-        final List<CurrencyExposureData> currencies = totalsByCurrency.values().stream().map(CurrencyTotals::toData).toList();
+        final List<CurrencyExposureData> currencies = jdbcTemplate.query(EXPOSURE_SQL, CURRENCY_EXPOSURE_MAPPER,
+                office.getHierarchy() + "%", LoanStatus.ACTIVE.getValue());
         return new OfficeExposureData(office.getId(), office.getName(), currencies);
     }
 
-    private static final class CurrencyTotals {
+    static CurrencyExposureData mapCurrencyExposure(final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
+        final int digits = rs.getInt("currencyDigits");
+        return new CurrencyExposureData(rs.getString("currencyCode"), rs.getLong("activeLoanCount"),
+                toCurrencyScale(rs.getBigDecimal("principalOutstanding"), digits),
+                toCurrencyScale(rs.getBigDecimal("interestOutstanding"), digits),
+                toCurrencyScale(rs.getBigDecimal("totalOutstanding"), digits));
+    }
 
-        private final MonetaryCurrency currency;
-        private long loanCount;
-        private Money principal;
-        private Money interest;
-        private Money total;
-
-        private CurrencyTotals(final MonetaryCurrency currency) {
-            this.currency = currency;
-            this.principal = Money.zero(currency);
-            this.interest = Money.zero(currency);
-            this.total = Money.zero(currency);
-        }
-
-        private void add(final List<LoanRepaymentScheduleInstallment> installments) {
-            loanCount++;
-            for (final LoanRepaymentScheduleInstallment installment : installments) {
-                final Money installmentPrincipal = installment.getPrincipalOutstanding(currency);
-                final Money installmentInterest = installment.getInterestOutstanding(currency);
-                principal = principal.plus(installmentPrincipal);
-                interest = interest.plus(installmentInterest);
-                total = total.plus(installmentPrincipal).plus(installmentInterest).plus(installment.getFeeChargesOutstanding(currency))
-                        .plus(installment.getPenaltyChargesOutstanding(currency));
-            }
-        }
-
-        private CurrencyExposureData toData() {
-            return new CurrencyExposureData(currency.getCode(), loanCount, principal.getAmount(), interest.getAmount(), total.getAmount());
-        }
+    private static BigDecimal toCurrencyScale(final BigDecimal amount, final int digits) {
+        return amount.setScale(digits, MoneyHelper.getRoundingMode());
     }
 }
