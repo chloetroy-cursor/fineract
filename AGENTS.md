@@ -21,4 +21,9 @@ declarations, and known non-findings before reporting issues.
   `verify-fineract` skill in `.cursor/skills/verify-fineract/`.
   Docker is started for you; run `fineract build` before
   `fineract up` so the server matches your checkout.
+- Demo COBOL late-fee batch lives under `legacy/cobol/`. To
+  port it into `fineract-loan`, follow
+  `.cursor/skills/migrate-cobol-to-java/`. Do not delete the
+  COBOL when migrating; fixtures in
+  `legacy/cobol/fixtures/cases.jsonl` are the parity contract.
 - Open pull requests against `addepar-demo`.

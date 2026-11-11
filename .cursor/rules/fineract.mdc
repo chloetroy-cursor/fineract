@@ -18,6 +18,7 @@ This is a fork of Apache Fineract used for demos. The working branch is `addepar
 - `fineract-provider` holds REST resources (`*ApiResource`), read and write platform services, and the Spring Boot app.
 - `fineract-db` holds Liquibase changelogs.
 - `integration-tests` drives a live server over HTTP. New tests extend the Feign bases in `integrationtests/client/feign/` (for loans, `FeignLoanTestBase`).
+- `legacy/cobol/` is a synthetic mainframe late-fee batch (`LNFEECALC`) for COBOL → Java demos. Migrate it with `.cursor/skills/migrate-cobol-to-java/`. Landing zone: `fineract-loan` … `domain/legacy/`.
 
 ## Testing
 
