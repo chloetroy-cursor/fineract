@@ -1,0 +1,26 @@
+# Prometheus and Grafana for a Fineract started by the fineract script.
+# Unlike config/docker/compose/observability.yml this needs no Loki logging driver.
+name: fineract-observability
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.47.2
+    command: --config.file=/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+
+  grafana:
+    image: grafana/grafana-oss:10.2.0
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+      - ../../../../config/docker/grafana/etc/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ../../../../config/docker/grafana/dashboards:/var/lib/grafana/dashboards:ro

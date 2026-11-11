@@ -19,3 +19,4 @@ Recipes for proving loan behavior through the REST API. Each feature file says h
 - [Loan onboarding](./loan-onboarding.md): create a client, a product, and a loan, then approve and disburse it.
 - [Interest waiver](./interest-waiver.md): waive interest on an active loan and see the balance drop.
 - [Repayment](./repayment.md): post a repayment and see it allocated and the balance reduced.
+- [Office exposure](./office-exposure.md): total outstanding on active loans for an office and its child offices, and how latency grows with loan count.

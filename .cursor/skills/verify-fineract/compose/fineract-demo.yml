@@ -1,0 +1,8 @@
+# Layered on top of docker-compose-postgresql.yml or docker-compose-mysql-test.yml by the fineract script.
+services:
+  fineract:
+    image: ${FINERACT_IMAGE:-fineract:latest}
+    environment:
+      FINERACT_MANAGEMENT_METRICS_DISTRIBUTION_HTTP_SERVER_REQUESTS: "true"
+      FINERACT_STATEMENT_LOGGING_ENABLED: ${FINERACT_STATEMENT_LOGGING_ENABLED:-false}
+      FINERACT_LOGGING_JSON_ENABLED: ${FINERACT_LOGGING_JSON_ENABLED:-false}
