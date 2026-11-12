@@ -300,20 +300,21 @@ tests:
                 minutes (threshold 500 ms). This rule needs no histogram, so it also works with the default
                 metrics configuration.
 
-  # COB failures. 100 loans a minute.
+  # COB failures. 1,000 loans a minute.
   #   LOAN_DELINQUENCY_CLASSIFICATION fails for the first time at minute 20: its failure series is created
-  #   with the value 1, which increase() cannot see. Two more loans fail at minute 24, so minute 30 reports 3.
-  #   3 failures in 3,000 loans is below the 1% of the critical rule.
+  #   with the value 1, which increase() cannot see. Two more attempts fail at minute 24, so minute 30 reports 3.
+  #   Each time the chunk of 100 loans is rolled back, so the loan failure counter moves by 100 at minute 20
+  #   and by 100 at minute 24. 200 unclosed loans in 30,000 is below the 5% of the critical rule.
   - interval: 1m
     input_series:
       - series: 'up{job="fineract-server",instance="fineract:8443"}'
         values: '1x60'
       - series: 'fineract_cob_loans_processed_total{job="fineract-server",instance="fineract:8443",application="fineract",outcome="success"}'
-        values: '0+100x60'
+        values: '0+1000x60'
       - series: 'fineract_cob_loans_processed_total{job="fineract-server",instance="fineract:8443",application="fineract",outcome="failure"}'
-        values: '0x19 1x3 3x37'
+        values: '0x19 100x3 200x37'
       - series: 'fineract_cob_step_execution_seconds_count{job="fineract-server",instance="fineract:8443",application="fineract",step="LOAN_DELINQUENCY_CLASSIFICATION",outcome="success"}'
-        values: '0+100x60'
+        values: '0+1000x60'
       - series: 'fineract_cob_step_execution_seconds_count{job="fineract-server",instance="fineract:8443",application="fineract",step="LOAN_DELINQUENCY_CLASSIFICATION",outcome="failure"}'
         values: '_x20 1x3 3x37'
     alert_rule_test:
@@ -332,7 +333,9 @@ tests:
               description: >-
                 Failed executions of COB business step LOAN_DELINQUENCY_CLASSIFICATION on fineract in the last
                 15 minutes: about 1. Each one ended one attempt at a loan's step chain. The batch job retries a
-                loan, so one loan can count more than once. The server log has the loan id and the exception.
+                loan, so one loan can count more than once. The chunk that held the loan is rolled back;
+                FineractCobLoanFailures counts the loans that leaves unclosed. The server log has the loan id
+                and the exception.
       - eval_time: 30m
         alertname: FineractCobStepFailures
         exp_alerts:
@@ -345,7 +348,9 @@ tests:
               description: >-
                 Failed executions of COB business step LOAN_DELINQUENCY_CLASSIFICATION on fineract in the last
                 15 minutes: about 3. Each one ended one attempt at a loan's step chain. The batch job retries a
-                loan, so one loan can count more than once. The server log has the loan id and the exception.
+                loan, so one loan can count more than once. The chunk that held the loan is rolled back;
+                FineractCobLoanFailures counts the loans that leaves unclosed. The server log has the loan id
+                and the exception.
       # no new failure for more than 15 minutes
       - eval_time: 50m
         alertname: FineractCobStepFailures
@@ -357,12 +362,13 @@ tests:
               severity: warning
               application: fineract
             exp_annotations:
-              summary: "Loans are failing close of business"
+              summary: "Loans are not being closed by close of business"
               description: >-
-                Failed attempts to take a loan through the COB step chain on fineract in the last 15 minutes:
-                about 1. The batch job retries a loan, so one loan can count more than once. When it gives up
-                on a loan it rolls back that loan's chunk, and every loan in the chunk keeps its old COB date
-                until a later run processes it.
+                Loans on fineract whose COB transaction did not commit in the last 15 minutes: about 100. One
+                failed loan rolls back its whole chunk and every loan in the chunk is counted, so many of them
+                may have had no error of their own. They keep their old COB date until a later run closes them.
+                An inline COB request that is retried counts its loans once for each attempt. See
+                FineractCobStepFailures for the step that failed.
       - eval_time: 50m
         alertname: FineractCobLoanFailures
         exp_alerts: []
@@ -370,7 +376,8 @@ tests:
         alertname: FineractCobLoanFailureRatioCritical
         exp_alerts: []
 
-  # Prometheus starts with an empty database while the server already has 3 step failures from an hour ago.
+  # Prometheus starts with an empty database while the server already has 3 step failures and 100 unclosed
+  # loans from an hour ago.
   # Nothing failed since, so the loan failure counter does not move and nothing fires.
   - interval: 1m
     input_series:
@@ -379,7 +386,7 @@ tests:
       - series: 'fineract_cob_loans_processed_total{job="fineract-server",instance="fineract:8443",application="fineract",outcome="success"}'
         values: '5000+100x40'
       - series: 'fineract_cob_loans_processed_total{job="fineract-server",instance="fineract:8443",application="fineract",outcome="failure"}'
-        values: '3x40'
+        values: '100x40'
       - series: 'fineract_cob_step_execution_seconds_count{job="fineract-server",instance="fineract:8443",application="fineract",step="LOAN_DELINQUENCY_CLASSIFICATION",outcome="failure"}'
         values: '3x40'
     alert_rule_test:
@@ -401,15 +408,16 @@ tests:
 
   # Prometheus has scraped the server for 4 minutes when the first batch job fails 6 step executions at once
   # (seen on a live server: one loan failed once, the next one five times through retries). The step series
-  # is created at 6. The step alert fires without 15 minutes of history, and stops 15 minutes later.
+  # is created at 6, and the 24 loans of the rolled back chunk count as failures. The step alert fires without
+  # 15 minutes of history, and stops 15 minutes later.
   - interval: 1m
     input_series:
       - series: 'up{job="fineract-server",instance="fineract:8443"}'
         values: '1x40'
       - series: 'fineract_cob_loans_processed_total{job="fineract-server",instance="fineract:8443",application="fineract",outcome="success"}'
-        values: '0 0 0 1000 1423x36'
+        values: '0 0 0 1000 1400x36'
       - series: 'fineract_cob_loans_processed_total{job="fineract-server",instance="fineract:8443",application="fineract",outcome="failure"}'
-        values: '0 0 0 0 6x36'
+        values: '0 0 0 0 24x36'
       - series: 'fineract_cob_step_execution_seconds_count{job="fineract-server",instance="fineract:8443",application="fineract",step="LOAN_DELINQUENCY_CLASSIFICATION",outcome="failure"}'
         values: '_ _ _ _ 6x36'
     alert_rule_test:
@@ -428,18 +436,69 @@ tests:
               description: >-
                 Failed executions of COB business step LOAN_DELINQUENCY_CLASSIFICATION on fineract in the last
                 15 minutes: about 6. Each one ended one attempt at a loan's step chain. The batch job retries a
-                loan, so one loan can count more than once. The server log has the loan id and the exception.
+                loan, so one loan can count more than once. The chunk that held the loan is rolled back;
+                FineractCobLoanFailures counts the loans that leaves unclosed. The server log has the loan id
+                and the exception.
       - eval_time: 25m
         alertname: FineractCobStepFailures
         exp_alerts: []
+      - eval_time: 5m
+        alertname: FineractCobLoanFailures
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              application: fineract
+            exp_annotations:
+              summary: "Loans are not being closed by close of business"
+              description: >-
+                Loans on fineract whose COB transaction did not commit in the last 15 minutes: about 24. One
+                failed loan rolls back its whole chunk and every loan in the chunk is counted, so many of them
+                may have had no error of their own. They keep their old COB date until a later run closes them.
+                An inline COB request that is retried counts its loans once for each attempt. See
+                FineractCobStepFailures for the step that failed.
+      # 24 unclosed loans in 1,424 are below the 5% and the 150 loans of the critical rule
+      - eval_time: 15m
+        alertname: FineractCobLoanFailureRatioCritical
+        exp_alerts: []
 
-  # COB failure ratio and step latency. 5% of loans fail; one step has p95 = 0.81 s, the other is fast.
+  # One conflict in a small run: 1,000 loans in 10 minutes, one chunk of 100 rolled back at minute 5. 10% of the
+  # loans are not closed, but one chunk stays under the 150 loans of the critical rule. The warning fires.
   - interval: 1m
     input_series:
       - series: 'fineract_cob_loans_processed_total{application="fineract",outcome="success"}'
-        values: '0+95x30'
+        values: '0+100x4 400 500+100x4 900x30'
       - series: 'fineract_cob_loans_processed_total{application="fineract",outcome="failure"}'
-        values: '0+5x30'
+        values: '0x4 100x36'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: FineractCobLoanFailures
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              application: fineract
+            exp_annotations:
+              summary: "Loans are not being closed by close of business"
+              description: >-
+                Loans on fineract whose COB transaction did not commit in the last 15 minutes: about 100. One
+                failed loan rolls back its whole chunk and every loan in the chunk is counted, so many of them
+                may have had no error of their own. They keep their old COB date until a later run closes them.
+                An inline COB request that is retried counts its loans once for each attempt. See
+                FineractCobStepFailures for the step that failed.
+      - eval_time: 12m
+        alertname: FineractCobLoanFailureRatioCritical
+        exp_alerts: []
+      - eval_time: 30m
+        alertname: FineractCobLoanFailureRatioCritical
+        exp_alerts: []
+
+  # COB failure ratio and step latency. 10% of the loans are not closed, 10 a minute, so the 150 loans of the
+  # critical rule are reached after 15 minutes. One step has p95 = 0.81 s, the other is fast.
+  - interval: 1m
+    input_series:
+      - series: 'fineract_cob_loans_processed_total{application="fineract",outcome="success"}'
+        values: '0+90x30'
+      - series: 'fineract_cob_loans_processed_total{application="fineract",outcome="failure"}'
+        values: '0+10x30'
       - series: 'fineract_cob_step_execution_seconds_bucket{application="fineract",step="ADD_PERIODIC_ACCRUAL_ENTRIES",outcome="success",le="0.1"}'
         values: '0+50x30'
       - series: 'fineract_cob_step_execution_seconds_bucket{application="fineract",step="ADD_PERIODIC_ACCRUAL_ENTRIES",outcome="success",le="0.25"}'
@@ -456,18 +515,23 @@ tests:
       - eval_time: 4m
         alertname: FineractCobLoanFailureRatioCritical
         exp_alerts: []
+      # above 5%, but only about 100 loans so far
       - eval_time: 10m
+        alertname: FineractCobLoanFailureRatioCritical
+        exp_alerts: []
+      - eval_time: 25m
         alertname: FineractCobLoanFailureRatioCritical
         exp_alerts:
           - exp_labels:
               severity: critical
               application: fineract
             exp_annotations:
-              summary: "More than 1% of loans fail close of business"
+              summary: "More than 5% of loans are not closed by close of business"
               description: >-
-                5% of the loans processed by COB on fineract in the last 30 minutes failed (threshold 1%). That
-                is a broken step or broken data across many loans, not one bad loan. See the alert
-                FineractCobStepFailures for the step.
+                10% of the loans that went through COB on fineract in the last 30 minutes were not closed,
+                because their transaction did not commit (threshold 5%, and more than 150 loans). That is more
+                than one rolled back chunk: a step or data that is broken for many loans, or repeated conflicts
+                with API traffic during the run. See the alert FineractCobStepFailures for the step.
       - eval_time: 20m
         alertname: FineractCobStepLatencyHigh
         exp_alerts:
@@ -483,15 +547,21 @@ tests:
                 at most 4 loans per second, and the nightly run may not finish in time.
 
   # COB stall. One sample every 5 minutes.
-  #   fineract:     processes loans during the first hour, then nothing    -> fires 25 hours after the last loan
-  #   fineract-new: first scraped at hour 24, has not processed a loan yet -> quiet, it is younger than the window
-  #   fineract-ok:  processes loans every hour                             -> quiet
+  #   fineract:          closes loans during the first hour, then nothing    -> fires 25 hours after the last loan
+  #   fineract-rollback: the same, but the job keeps running and every chunk
+  #                      is rolled back, so only the failure counter moves   -> fires as well
+  #   fineract-new:      first scraped at hour 24, has not closed a loan yet -> quiet, it is younger than the window
+  #   fineract-ok:       closes loans every hour                             -> quiet
   - interval: 5m
     input_series:
       - series: 'fineract_cob_loans_processed_total{application="fineract",outcome="success"}'
         values: '0+100x12 1200x400'
       - series: 'fineract_cob_loans_processed_total{application="fineract",outcome="failure"}'
         values: '0x412'
+      - series: 'fineract_cob_loans_processed_total{application="fineract-rollback",outcome="success"}'
+        values: '0+100x12 1200x400'
+      - series: 'fineract_cob_loans_processed_total{application="fineract-rollback",outcome="failure"}'
+        values: '0+100x412'
       - series: 'fineract_cob_loans_processed_total{application="fineract-new",outcome="success"}'
         values: '_x288 0x124'
       - series: 'fineract_cob_loans_processed_total{application="fineract-new",outcome="failure"}'
@@ -514,9 +584,21 @@ tests:
               severity: critical
               application: fineract
             exp_annotations:
-              summary: "No loan has gone through close of business for 25 hours"
+              summary: "No loan has been closed by close of business for 25 hours"
               description: >-
-                fineract_cob_loans_processed_total on fineract has not moved for 25 hours. The default schedule
-                of the Loan COB job is once a day, so the job did not run, is stuck before its first loan, or
-                had no loans to process. Check the job history (GET /v1/jobs) and the batch manager and worker
-                logs.
+                fineract_cob_loans_processed_total{outcome="success"} on fineract has not moved for 25 hours, so
+                COB closed no loan. The default schedule of the Loan COB job is once a day, so the job did not
+                run, is stuck before its first loan, had no loans to process, or rolled back every chunk (then
+                FineractCobLoanFailures fires too). Check the job history (GET /v1/jobs) and the batch manager
+                and worker logs.
+          - exp_labels:
+              severity: critical
+              application: fineract-rollback
+            exp_annotations:
+              summary: "No loan has been closed by close of business for 25 hours"
+              description: >-
+                fineract_cob_loans_processed_total{outcome="success"} on fineract-rollback has not moved for 25
+                hours, so COB closed no loan. The default schedule of the Loan COB job is once a day, so the
+                job did not run, is stuck before its first loan, had no loans to process, or rolled back every
+                chunk (then FineractCobLoanFailures fires too). Check the job history (GET /v1/jobs) and the
+                batch manager and worker logs.

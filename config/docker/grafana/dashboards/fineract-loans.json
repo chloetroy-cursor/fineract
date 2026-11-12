@@ -312,7 +312,7 @@
       "type": "stat",
       "id": 6,
       "title": "COB loans processed",
-      "description": "Loans that completed the COB business step chain in the selected time range. Source: fineract_cob_loans_processed_total{outcome=\"success\"}.",
+      "description": "Loans closed by COB in the selected time range: every step returned and the transaction committed. Source: fineract_cob_loans_processed_total{outcome=\"success\"}.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -376,7 +376,7 @@
       "type": "stat",
       "id": 7,
       "title": "COB loans failed",
-      "description": "Failed attempts to take a loan through the COB step chain in the selected time range. The batch job retries a loan, so one loan can count more than once. Any value above zero is red; the alert FineractCobLoanFailures fires on the same condition.",
+      "description": "Loans whose COB transaction did not commit in the selected time range. One failed loan rolls back its whole chunk (100 loans by default) and every loan in the chunk is counted, so this can be far more than the number of loans with an error. An inline COB request that is retried counts its loans once for each attempt. Any value above zero is red; the alert FineractCobLoanFailures fires on the same condition.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2399,7 +2399,7 @@
       "type": "stat",
       "id": 26,
       "title": "Loans processed, last 24 h",
-      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. Only what Prometheus scraped counts: hours for which Prometheus holds no data add nothing. Inline COB calls count too.",
+      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. Only what Prometheus scraped counts: hours for which Prometheus holds no data add nothing. Counts loans that were closed: every step returned and the transaction committed. Inline COB calls count too.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2463,7 +2463,7 @@
       "type": "stat",
       "id": 27,
       "title": "Loans failed, last 24 h",
-      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. Only what Prometheus scraped counts: hours for which Prometheus holds no data add nothing. Counts failed attempts: the batch job retries a loan, so one loan can count more than once. A failed loan stays on its old COB date until it is processed again.",
+      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. Only what Prometheus scraped counts: hours for which Prometheus holds no data add nothing. Counts loans whose transaction did not commit: a rolled back chunk counts every loan it carried. Such a loan stays on its old COB date until a later run closes it.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2531,7 +2531,7 @@
       "type": "stat",
       "id": 28,
       "title": "Loan failure ratio, last 24 h",
-      "description": "Failed attempts over all attempts in the last 24 hours. Red from 1%, the threshold of the alert FineractCobLoanFailureRatioCritical (which looks at 30 minutes).",
+      "description": "Loans whose transaction did not commit over all loans counted in the last 24 hours. Red from 5%, the ratio of the alert FineractCobLoanFailureRatioCritical (which looks at 30 minutes and also needs more than 150 such loans).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2558,7 +2558,7 @@
               },
               {
                 "color": "red",
-                "value": 0.01
+                "value": 0.05
               }
             ]
           },
@@ -2599,7 +2599,7 @@
       "type": "stat",
       "id": 29,
       "title": "COB step time per loan",
-      "description": "Time spent inside business steps divided by loans processed, over the selected time range: what one loan costs in COB, without reading and writing the loan.",
+      "description": "Time spent inside business steps divided by loans counted, closed or not, over the selected time range: what one loan costs in COB, without reading and writing the loan. Attempts that are retried add step time and no loan.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2663,7 +2663,7 @@
       "type": "timeseries",
       "id": 30,
       "title": "Loans processed per run, by outcome",
-      "description": "Loans that went through the COB step chain in each interval (one minute or longer), stacked by outcome; failures are red. A run shows as a block of bars and its size is the sum of the block, shown as Total in the legend. Each bar is the counter now minus the counter one interval ago, which is exact where increase() would estimate; an interval in which the server restarted shows as zero. A loan that is behind by several days is counted once for each COB day.",
+      "description": "Loans counted in each interval (one minute or longer), stacked by outcome. A loan is counted when its transaction completes: success when it committed and the loan is closed, failure (red) when it did not. A run shows as a block of bars and its size is the sum of the block, shown as Total in the legend. Each bar is the counter now minus the counter one interval ago, which is exact where increase() would estimate; an interval in which the server restarted shows as zero. A loan that is behind by several days is counted once for each COB day.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -3279,7 +3279,7 @@
       "type": "timeseries",
       "id": 36,
       "title": "Step failures by step, since server start",
-      "description": "Running count of step executions that threw, for each step; a loan that is retried counts each time. It is the raw counter and not a rate, because a step's failure series is created by its first failure and a rate cannot see that first sample. Every jump is a failure; the count returns to zero when the server restarts.",
+      "description": "Running count of step executions that threw, for each step. This meter counts attempts, so a loan that is retried counts each time, unlike the loan counter above. It is the raw counter and not a rate, because a step's failure series is created by its first failure and a rate cannot see that first sample. Every jump is a failure; the count returns to zero when the server restarts.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
