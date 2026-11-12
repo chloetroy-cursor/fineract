@@ -46,6 +46,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.fineract.cob.domain.BatchBusinessStepRepository;
@@ -61,13 +65,28 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.ApplicationContext;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionManager;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.TransactionSystemException;
+import org.springframework.transaction.UnexpectedRollbackException;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Pins the COB business step meters to the "Metric naming and cardinality" chapter of the architecture documentation,
  * through {@link COBBusinessStepServiceImpl#run}, the only place that records them.
+ *
+ * The first half runs without a transaction, where every item is counted at once. The second half runs inside
+ * transactions of {@link InMemoryTransactionManager}, where the counter follows the transaction: {@code success} is a
+ * chain that returned in a transaction that committed, and everything else is {@code failure}.
  */
 class COBBusinessStepMetricsTest {
 
@@ -85,6 +104,7 @@ class COBBusinessStepMetricsTest {
     private final ConfigurationDomainService configurationDomainService = mock(ConfigurationDomainService.class);
     private final BusinessEventNotifierService businessEventNotifierService = mock(BusinessEventNotifierService.class);
     private final COBBusinessStepServiceImpl service = serviceRecordingTo(registry);
+    private final InMemoryTransactionManager transactionManager = new InMemoryTransactionManager();
 
     @AfterEach
     void tearDown() {
@@ -340,15 +360,403 @@ class COBBusinessStepMetricsTest {
         assertEquals(2, timer("CHECK_LOAN_REPAYMENT_DUE", "success").count());
         assertEquals(2.0, counter("success"));
         assertEquals(3, registry.getMeters().size(), "two counters and the one timer");
-        for (Meter meter : registry.getMeters()) {
-            Set<String> expectedKeys = meter instanceof Timer ? Set.of("step", "outcome") : Set.of("outcome");
-            assertEquals(expectedKeys, tagKeys(meter), "tag keys of " + meter.getId());
-            for (String identifier : identifiers) {
-                assertFalse(meter.getId().getName().contains(identifier), meter.getId() + " carries " + identifier);
-                assertTrue(meter.getId().getTags().stream().noneMatch(tag -> tag.getValue().contains(identifier)),
-                        meter.getId() + " carries " + identifier);
+        assertNoMeterCarries(identifiers);
+    }
+
+    @Test
+    void outsideATransactionEveryCallIsCountedAtOnce() {
+        stepFailingTheFirst(1, "flakyBean", "STEP_FLAKY", 10);
+        assertFalse(TransactionSynchronizationManager.isSynchronizationActive());
+
+        assertThrows(BusinessStepException.class, () -> service.run(steps("flakyBean"), item(7L)));
+        assertEquals(1.0, counter("failure"));
+        assertEquals(0.0, counter("success"));
+
+        service.run(steps("flakyBean"), item(7L));
+        assertEquals(1.0, counter("failure"), "without a transaction a retry is a second count, not a correction of the first");
+        assertEquals(1.0, counter("success"));
+    }
+
+    @Test
+    void insideATransactionTheCounterWaitsForCompletionAndTheTimerDoesNot() {
+        step("aBean", "STEP_A", 10);
+        failingStep("bBean", "STEP_B", 20, new IllegalStateException("boom"));
+
+        transaction().executeWithoutResult(status -> {
+            service.run(steps("aBean"), item(1L));
+            assertThrows(BusinessStepException.class, () -> service.run(steps("aBean", "bBean"), item(2L)));
+
+            assertEquals(2, timer("STEP_A", "success").count(), "the timer is recorded as each step ends");
+            assertEquals(1, timer("STEP_B", "failure").count());
+            assertEquals(0.0, counter("success"), "nothing is counted before the transaction completes");
+            assertEquals(0.0, counter("failure"), "nothing is counted before the transaction completes");
+        });
+
+        assertEquals(1.0, counter("success"));
+        assertEquals(1.0, counter("failure"));
+        assertEquals(2, timer("STEP_A", "success").count(), "completion adds no timer sample");
+        assertEquals(1, timer("STEP_B", "failure").count());
+    }
+
+    @Test
+    void aCommittedTransactionCountsEachOfItsItemsAsOneSuccess() {
+        step("aBean", "STEP_A", 10);
+        step("bBean", "STEP_B", 20);
+        AtomicReference<Integer> completionStatus = new AtomicReference<>();
+
+        transaction().executeWithoutResult(status -> {
+            recordCompletionStatusOfCurrentTransaction(completionStatus);
+            for (long id : new long[] { 4711, 9302, 8801 }) {
+                service.run(steps("aBean", "bBean"), item(id));
             }
-        }
+        });
+
+        assertEquals(TransactionSynchronization.STATUS_COMMITTED, completionStatus.get());
+        assertEquals(3.0, counter("success"));
+        assertEquals(0.0, counter("failure"));
+        assertEquals(3, timer("STEP_A", "success").count());
+        assertEquals(3, timer("STEP_B", "success").count());
+        assertEquals(4, registry.getMeters().size(), "two counters and two timers: the ids that tell the items apart are no series");
+        assertNoMeterCarries(List.of("4711", "9302", "8801", "aBean", "bBean"));
+    }
+
+    @Test
+    void anItemRetriedInsideOneTransactionIsCountedOnceByItsLastAttempt() {
+        stepFailingTheFirst(2, "flakyBean", "STEP_FLAKY", 10);
+
+        transaction().executeWithoutResult(status -> {
+            // Every attempt gets an instance of its own, as if the loan had been read again: the id makes it one loan.
+            assertThrows(BusinessStepException.class, () -> service.run(steps("flakyBean"), item(7L)));
+            assertThrows(BusinessStepException.class, () -> service.run(steps("flakyBean"), item(7L)));
+            service.run(steps("flakyBean"), item(7L));
+        });
+
+        assertEquals(1.0, counter("success"));
+        assertEquals(0.0, counter("failure"), "the two failed attempts were made up for inside the transaction");
+        assertEquals(2, timer("STEP_FLAKY", "failure").count(), "the timer keeps one sample for each attempt");
+        assertEquals(1, timer("STEP_FLAKY", "success").count());
+    }
+
+    @Test
+    void anItemWhoseLastAttemptFailedIsOneFailureEvenThoughAnEarlierAttemptReturned() {
+        step("aBean", "STEP_A", 10);
+        failingStep("bBean", "STEP_B", 20, new IllegalStateException("boom"));
+
+        transaction().executeWithoutResult(status -> {
+            service.run(steps("aBean"), item(7L));
+            assertThrows(BusinessStepException.class, () -> service.run(steps("bBean"), item(7L)));
+        });
+
+        assertEquals(0.0, counter("success"));
+        assertEquals(1.0, counter("failure"));
+    }
+
+    @Test
+    void aRolledBackTransactionCountsEveryItemAsOneFailureWhateverItsChainDid() {
+        step("aBean", "STEP_A", 10);
+        failingStep("bBean", "STEP_B", 20, new IllegalStateException("boom"));
+
+        transaction().executeWithoutResult(status -> {
+            service.run(steps("aBean"), item(1L));
+            service.run(steps("aBean"), item(2L));
+            assertThrows(BusinessStepException.class, () -> service.run(steps("bBean"), item(3L)));
+            status.setRollbackOnly();
+        });
+
+        assertEquals(0.0, counter("success"), "a chain that returned is no success when its transaction is rolled back");
+        assertEquals(3.0, counter("failure"));
+    }
+
+    @Test
+    void aSuccessfulRetryInATransactionThatIsRollbackOnlyIsOneFailure() {
+        stepFailingTheFirst(1, "flakyBean", "STEP_FLAKY", 10);
+
+        transaction().executeWithoutResult(status -> {
+            assertThrows(BusinessStepException.class, () -> service.run(steps("flakyBean"), item(7L)));
+            service.run(steps("flakyBean"), item(7L));
+            status.setRollbackOnly();
+        });
+
+        assertEquals(0.0, counter("success"));
+        assertEquals(1.0, counter("failure"), "the loan is one failure, not one for each attempt");
+        assertEquals(1, timer("STEP_FLAKY", "failure").count());
+        assertEquals(1, timer("STEP_FLAKY", "success").count());
+    }
+
+    @Test
+    void anExceptionThatRollsTheTransactionBackReachesTheCallerAsTheSameInstance() {
+        IllegalStateException thrownByStep = new IllegalStateException("boom");
+        step("aBean", "STEP_A", 10);
+        failingStep("bBean", "STEP_B", 20, thrownByStep);
+        AtomicReference<RuntimeException> thrownInside = new AtomicReference<>();
+
+        RuntimeException actual = assertThrows(RuntimeException.class, () -> transaction().executeWithoutResult(status -> {
+            service.run(steps("aBean"), item(1L));
+            try {
+                service.run(steps("bBean"), item(2L));
+            } catch (RuntimeException e) {
+                thrownInside.set(e);
+                throw e;
+            }
+        }));
+
+        assertSame(thrownInside.get(), actual);
+        assertInstanceOf(BusinessStepException.class, actual);
+        assertSame(thrownByStep, actual.getCause());
+        assertEquals(0, actual.getSuppressed().length);
+        assertEquals(0.0, counter("success"));
+        assertEquals(2.0, counter("failure"), "the item that failed and the one before it in the same transaction");
+    }
+
+    @Test
+    void aFailedChainInATransactionThatStillCommitsIsTheOnlyFailure() {
+        step("aBean", "STEP_A", 10);
+        failingStep("bBean", "STEP_B", 20, new IllegalStateException("boom"));
+
+        transaction().executeWithoutResult(status -> {
+            service.run(steps("aBean"), item(1L));
+            assertThrows(BusinessStepException.class, () -> service.run(steps("aBean", "bBean"), item(2L)));
+            service.run(steps("aBean"), item(3L));
+        });
+
+        assertEquals(2.0, counter("success"));
+        assertEquals(1.0, counter("failure"));
+    }
+
+    @Test
+    void aTransactionWhoseCommitFailsCountsItsItemsAsFailure() {
+        step("aBean", "STEP_A", 10);
+        transactionManager.failCommits();
+        AtomicReference<Integer> completionStatus = new AtomicReference<>();
+
+        assertThrows(TransactionSystemException.class, () -> transaction().executeWithoutResult(status -> {
+            recordCompletionStatusOfCurrentTransaction(completionStatus);
+            service.run(steps("aBean"), item(1L));
+            service.run(steps("aBean"), item(2L));
+        }));
+
+        assertEquals(TransactionSynchronization.STATUS_UNKNOWN, completionStatus.get(),
+                "a failed commit leaves it unknown whether the transaction went through");
+        assertEquals(0.0, counter("success"));
+        assertEquals(2.0, counter("failure"));
+    }
+
+    @Test
+    void anInnerTransactionOfItsOwnIsCountedWhenItCompletesWhateverBecomesOfTheOuterOne() {
+        step("aBean", "STEP_A", 10);
+
+        transaction().executeWithoutResult(outer -> {
+            service.run(steps("aBean"), item(1L));
+
+            transaction(TransactionDefinition.PROPAGATION_REQUIRES_NEW)
+                    .executeWithoutResult(inner -> service.run(steps("aBean"), item(2L)));
+            assertEquals(1.0, counter("success"), "the inner transaction committed, the outer one is still open");
+            assertEquals(0.0, counter("failure"));
+
+            transaction(TransactionDefinition.PROPAGATION_REQUIRES_NEW).executeWithoutResult(inner -> {
+                service.run(steps("aBean"), item(3L));
+                inner.setRollbackOnly();
+            });
+            assertEquals(1.0, counter("success"));
+            assertEquals(1.0, counter("failure"), "the inner transaction was rolled back, the outer one is still open");
+
+            // back in the outer transaction, which must still know about item 1
+            service.run(steps("aBean"), item(4L));
+            outer.setRollbackOnly();
+        });
+
+        assertEquals(1.0, counter("success"));
+        assertEquals(3.0, counter("failure"), "items 1 and 4 of the outer transaction and item 3 of the inner one");
+    }
+
+    @Test
+    void aScopeWithoutAnActualTransactionCountsAtOnceAndLeavesASuspendedTransactionAlone() {
+        step("aBean", "STEP_A", 10);
+
+        transaction(TransactionDefinition.PROPAGATION_SUPPORTS).executeWithoutResult(status -> {
+            assertTrue(TransactionSynchronizationManager.isSynchronizationActive());
+            assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
+            service.run(steps("aBean"), item(1L));
+            assertEquals(1.0, counter("success"), "there is no transaction to wait for");
+        });
+
+        transaction().executeWithoutResult(outer -> {
+            transaction(TransactionDefinition.PROPAGATION_NOT_SUPPORTED).executeWithoutResult(suspending -> {
+                service.run(steps("aBean"), item(2L));
+                assertEquals(2.0, counter("success"));
+            });
+            outer.setRollbackOnly();
+        });
+
+        assertEquals(2.0, counter("success"));
+        assertEquals(0.0, counter("failure"), "item 2 did not run in the transaction that was rolled back");
+    }
+
+    @Test
+    void theNextTransactionOnTheSameThreadStartsEmpty() {
+        step("aBean", "STEP_A", 10);
+
+        transaction().executeWithoutResult(status -> {
+            service.run(steps("aBean"), item(1L));
+            service.run(steps("aBean"), item(2L));
+        });
+        assertEquals(2.0, counter("success"));
+
+        transaction().executeWithoutResult(status -> assertTrue(TransactionSynchronizationManager.isActualTransactionActive()));
+        transaction().executeWithoutResult(TransactionStatus::setRollbackOnly);
+        assertEquals(2.0, counter("success"), "a transaction without items counts nothing");
+        assertEquals(0.0, counter("failure"), "the items of an earlier transaction are not counted again");
+
+        transaction().executeWithoutResult(status -> service.run(steps("aBean"), item(1L)));
+        assertEquals(3.0, counter("success"), "the same loan in a new transaction is counted again");
+
+        transaction().executeWithoutResult(status -> {
+            service.run(steps("aBean"), item(2L));
+            status.setRollbackOnly();
+        });
+        assertEquals(3.0, counter("success"));
+        assertEquals(1.0, counter("failure"));
+        assertFalse(TransactionSynchronizationManager.isSynchronizationActive());
+    }
+
+    @Test
+    void itemsWithoutAnIdAreToldApartByInstance() {
+        step("aBean", "STEP_A", 10);
+        failingStep("bBean", "STEP_B", 20, new IllegalStateException("boom"));
+        AbstractPersistableCustom<Long> unsaved = item(null);
+        AbstractPersistableCustom<Long> alsoUnsaved = item(null);
+
+        transaction().executeWithoutResult(status -> {
+            assertThrows(BusinessStepException.class, () -> service.run(steps("bBean"), unsaved));
+            service.run(steps("aBean"), unsaved);
+            service.run(steps("aBean"), alsoUnsaved);
+        });
+
+        assertEquals(2.0, counter("success"), "two items, the first of them retried");
+        assertEquals(0.0, counter("failure"));
+    }
+
+    @Test
+    void theSameIdOfAnotherEntityTypeIsAnotherItem() {
+        step("aBean", "STEP_A", 10);
+        failingStep("bBean", "STEP_B", 20, new IllegalStateException("boom"));
+
+        transaction().executeWithoutResult(status -> {
+            service.run(steps("aBean"), new FirstEntity(5L));
+            assertThrows(BusinessStepException.class, () -> service.run(steps("bBean"), new SecondEntity(5L)));
+        });
+
+        assertEquals(1.0, counter("success"));
+        assertEquals(1.0, counter("failure"));
+    }
+
+    @Test
+    void twoMetricsInOneTransactionEachCountTheirOwnItems() {
+        SimpleMeterRegistry otherRegistry = new SimpleMeterRegistry(SimpleConfig.DEFAULT, clock);
+        COBBusinessStepServiceImpl otherService = serviceRecordingTo(otherRegistry);
+        step("aBean", "STEP_A", 10);
+
+        transaction().executeWithoutResult(status -> {
+            service.run(steps("aBean"), item(1L));
+            otherService.run(steps("aBean"), item(2L));
+            otherService.run(steps("aBean"), item(3L));
+        });
+
+        assertEquals(1.0, counter("success"));
+        assertEquals(2.0, otherRegistry.get(COUNTER).tag("outcome", "success").counter().count());
+    }
+
+    @Test
+    void aCounterThatFailsChangesNeitherTheResultOfARunNorTheOutcomeOfTheTransaction() {
+        SimpleMeterRegistry refusingCounts = new SimpleMeterRegistry() {
+
+            @Override
+            protected Counter newCounter(Meter.Id id) {
+                return new Counter() {
+
+                    @Override
+                    public void increment(double amount) {
+                        throw new IllegalStateException("registry refuses counts");
+                    }
+
+                    @Override
+                    public double count() {
+                        return 0;
+                    }
+
+                    @Override
+                    public Id getId() {
+                        return id;
+                    }
+                };
+            }
+        };
+        COBBusinessStepServiceImpl failingMetrics = serviceRecordingTo(refusingCounts);
+        IllegalArgumentException thrownByStep = new IllegalArgumentException("boom");
+        step("aBean", "STEP_A", 1);
+        failingStep("bBean", "STEP_B", 1, thrownByStep);
+        AbstractPersistableCustom<Long> loan = item();
+
+        assertSame(loan, failingMetrics.run(steps("aBean"), loan));
+        BusinessStepException outside = assertThrows(BusinessStepException.class, () -> failingMetrics.run(steps("bBean"), item()));
+        assertSame(thrownByStep, outside.getCause());
+        assertEquals(0, outside.getSuppressed().length);
+
+        AtomicReference<Integer> completionStatus = new AtomicReference<>();
+        AbstractPersistableCustom<Long> result = transaction().execute(status -> {
+            recordCompletionStatusOfCurrentTransaction(completionStatus);
+            return failingMetrics.run(steps("aBean"), loan);
+        });
+
+        assertSame(loan, result);
+        assertEquals(TransactionSynchronization.STATUS_COMMITTED, completionStatus.get());
+    }
+
+    /**
+     * Spring Batch calls the service through its {@code @Transactional} proxy inside the chunk transaction. A run that
+     * fails there marks the chunk transaction rollback-only before the retry, so the retry cannot save the chunk.
+     */
+    @Test
+    void aFailedRunThatJoinsATransactionThroughTheProxyMakesEveryItemOfItAFailure() {
+        COBBusinessStepService proxied = behindItsTransactionalProxy(service);
+        step("aBean", "STEP_A", 10);
+        stepFailingTheFirst(1, "flakyBean", "STEP_FLAKY", 10);
+
+        assertThrows(UnexpectedRollbackException.class, () -> transaction().executeWithoutResult(status -> {
+            proxied.run(steps("aBean"), item(1L));
+            assertThrows(BusinessStepException.class, () -> proxied.run(steps("flakyBean"), item(2L)));
+            assertTrue(status.isRollbackOnly(), "the failed run marked the transaction it joined");
+            proxied.run(steps("flakyBean"), item(2L));
+            assertEquals(0.0, counter("failure"), "joining a transaction completes nothing");
+        }));
+
+        assertEquals(0.0, counter("success"));
+        assertEquals(2.0, counter("failure"), "the loan whose retry returned and the loan that never failed");
+    }
+
+    @Test
+    void throughTheProxyARunWithoutASurroundingTransactionIsCountedWhenItsOwnTransactionCompletes() {
+        COBBusinessStepService proxied = behindItsTransactionalProxy(service);
+        AtomicBoolean ranInATransaction = new AtomicBoolean();
+        AtomicReference<Double> countedDuringTheRun = new AtomicReference<>();
+        registerStep("aBean", "STEP_A", 10, item -> {
+            ranInATransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
+            countedDuringTheRun.set(counter("success") + counter("failure"));
+            return null;
+        });
+        failingStep("bBean", "STEP_B", 20, new IllegalStateException("boom"));
+
+        proxied.run(steps("aBean"), item(1L));
+
+        assertTrue(ranInATransaction.get());
+        assertEquals(0.0, countedDuringTheRun.get());
+        assertEquals(1.0, counter("success"), "the transaction of the run committed when it returned");
+
+        assertThrows(BusinessStepException.class, () -> proxied.run(steps("aBean", "bBean"), item(2L)));
+
+        assertEquals(1.0, counter("success"));
+        assertEquals(1.0, counter("failure"), "the transaction of the run was rolled back by its exception");
+        assertFalse(TransactionSynchronizationManager.isSynchronizationActive());
     }
 
     private COBBusinessStepServiceImpl serviceRecordingTo(MeterRegistry meterRegistry) {
@@ -361,21 +769,30 @@ class COBBusinessStepMetricsTest {
     }
 
     private COBBusinessStep<AbstractPersistableCustom<Long>> step(String beanName, String enumStyledName, long millis) {
-        return registerStep(beanName, enumStyledName, millis, null);
+        return registerStep(beanName, enumStyledName, millis, item -> null);
     }
 
     private COBBusinessStep<AbstractPersistableCustom<Long>> failingStep(String beanName, String enumStyledName, long millis,
             RuntimeException failure) {
-        return registerStep(beanName, enumStyledName, millis, failure);
+        return registerStep(beanName, enumStyledName, millis, item -> failure);
+    }
+
+    /** A step that throws on its first {@code failures} calls and returns from then on, as a retried step does. */
+    private COBBusinessStep<AbstractPersistableCustom<Long>> stepFailingTheFirst(int failures, String beanName, String enumStyledName,
+            long millis) {
+        AtomicInteger calls = new AtomicInteger();
+        return registerStep(beanName, enumStyledName, millis,
+                item -> calls.incrementAndGet() <= failures ? new IllegalStateException("attempt " + calls.get()) : null);
     }
 
     @SuppressWarnings("unchecked")
     private COBBusinessStep<AbstractPersistableCustom<Long>> registerStep(String beanName, String enumStyledName, long millis,
-            RuntimeException failure) {
+            Function<AbstractPersistableCustom<Long>, RuntimeException> failureOf) {
         COBBusinessStep<AbstractPersistableCustom<Long>> step = mock(COBBusinessStep.class);
         when(step.getEnumStyledName()).thenReturn(enumStyledName);
         when(step.execute(any())).thenAnswer(invocation -> {
             clock.add(millis, TimeUnit.MILLISECONDS);
+            RuntimeException failure = failureOf.apply(invocation.getArgument(0));
             if (failure != null) {
                 throw failure;
             }
@@ -421,5 +838,66 @@ class COBBusinessStepMetricsTest {
 
     private static Set<String> tagKeys(Meter meter) {
         return meter.getId().getTags().stream().map(Tag::getKey).collect(Collectors.toSet());
+    }
+
+    private void assertNoMeterCarries(List<String> identifiers) {
+        for (Meter meter : registry.getMeters()) {
+            Set<String> expectedKeys = meter instanceof Timer ? Set.of("step", "outcome") : Set.of("outcome");
+            assertEquals(expectedKeys, tagKeys(meter), "tag keys of " + meter.getId());
+            for (String identifier : identifiers) {
+                assertFalse(meter.getId().getName().contains(identifier), meter.getId() + " carries " + identifier);
+                assertTrue(meter.getId().getTags().stream().noneMatch(tag -> tag.getValue().contains(identifier)),
+                        meter.getId() + " carries " + identifier);
+            }
+        }
+    }
+
+    private TransactionTemplate transaction() {
+        return new TransactionTemplate(transactionManager);
+    }
+
+    private TransactionTemplate transaction(int propagation) {
+        TransactionTemplate template = transaction();
+        template.setPropagationBehavior(propagation);
+        return template;
+    }
+
+    private static void recordCompletionStatusOfCurrentTransaction(AtomicReference<Integer> completionStatus) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+
+            @Override
+            public void afterCompletion(int status) {
+                completionStatus.set(status);
+            }
+        });
+    }
+
+    /**
+     * Puts the service behind the transaction interceptor that Spring builds for the {@code @Transactional} on
+     * {@link COBBusinessStepServiceImpl#run}, without an application context.
+     */
+    private COBBusinessStepService behindItsTransactionalProxy(COBBusinessStepServiceImpl target) {
+        ProxyFactory proxyFactory = new ProxyFactory(target);
+        proxyFactory
+                .addAdvice(new TransactionInterceptor((TransactionManager) transactionManager, new AnnotationTransactionAttributeSource()));
+        return (COBBusinessStepService) proxyFactory.getProxy();
+    }
+
+    private static final class FirstEntity extends AbstractPersistableCustom<Long> {
+
+        private static final long serialVersionUID = 1L;
+
+        private FirstEntity(Long id) {
+            setId(id);
+        }
+    }
+
+    private static final class SecondEntity extends AbstractPersistableCustom<Long> {
+
+        private static final long serialVersionUID = 1L;
+
+        private SecondEntity(Long id) {
+            setId(id);
+        }
     }
 }
