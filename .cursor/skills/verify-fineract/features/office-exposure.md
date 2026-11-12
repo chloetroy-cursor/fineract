@@ -12,6 +12,17 @@ A risk or finance user asks how much is outstanding on active loans in an office
 
 - `GET offices/<officeId>/exposure`. It does not exist on `addepar-demo`. It exists on the `demo/office-exposure-slow` and `demo/office-exposure-fast` branches.
 
+## Demo vocabulary
+
+The Addepar demo always runs on MySQL (`FINERACT_DB=mysql`). Short phrases in prompts mean:
+
+- "staging", "the slow version": branch `demo/office-exposure-slow`, image `fineract:exposure-slow`.
+- "the backup fix", "the fast version": branch `demo/office-exposure-fast`, image `fineract:exposure-fast`.
+- "load test it": `fineract load offices/1/exposure`.
+- "the demo state": MySQL, `fineract:exposure-slow`, 1,000 loans from `fineract seed-loans 1000`, `fineract observe up`, `doctor` server matching the slow branch head.
+- "reset the demo": switch to `demo/addepar-prep`, delete local `live/*` branches, reset `demo/office-exposure-slow` to `origin/demo/office-exposure-slow`, `fineract down`, then bring back the demo state.
+- A fix built live: tag it `fineract:exposure-live` so the pre-built images stay untouched.
+
 ## Driving it with the fineract script
 
 Preconditions:

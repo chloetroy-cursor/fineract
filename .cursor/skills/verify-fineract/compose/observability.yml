@@ -24,3 +24,5 @@ services:
       - ./grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
       - ../../../../config/docker/grafana/etc/dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
       - ../../../../config/docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/demo.yaml:ro
+      - ./dashboards:/var/lib/grafana/demo-dashboards:ro

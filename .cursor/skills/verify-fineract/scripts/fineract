@@ -35,6 +35,8 @@ usage: fineract <command>
   seed-loan          create a client, product and disbursed loan; print the loan id
   seed-loans N [--office-id ID]
                      create N disbursed loans with the seed-loan terms, 20 per client
+  load PATH [SECONDS] [CONNECTIONS]
+                     load test GET PATH with autocannon (default 30 s, 10 connections)
   observe up|down    start or stop Prometheus (:9090) and Grafana (:3000)
   down               stop and delete the containers and database
 
@@ -88,6 +90,12 @@ case "${1:-}" in
     seed-loans)
         shift
         python3 "$SCRIPTS/seed_loans.py" "$@"
+        ;;
+    load)
+        [[ -n "${2:-}" ]] || { usage; exit 1; }
+        NODE_TLS_REJECT_UNAUTHORIZED=0 npx -y autocannon -c "${4:-10}" -d "${3:-30}" \
+            -H "Authorization=Basic $(printf 'mifos:password' | base64)" -H "Fineract-Platform-TenantId=default" \
+            "$BASE_URL/api/v1/$2" 2>&1 | grep -v NODE_TLS_REJECT_UNAUTHORIZED
         ;;
     observe)
         case "${2:-}" in
