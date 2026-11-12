@@ -18,15 +18,12 @@
  */
 package org.apache.fineract.integrationtests;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import io.restassured.RestAssured;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
-import io.restassured.response.Response;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.ArrayList;
@@ -36,6 +33,9 @@ import org.apache.fineract.client.models.PostUsersResponse;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper.RawResponse;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
@@ -52,9 +52,8 @@ public class PasswordResetIntegrationTest extends IntegrationTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.globalConfigurationHelper = new GlobalConfigurationHelper();
     }
@@ -83,15 +82,15 @@ public class PasswordResetIntegrationTest extends IntegrationTest {
         this.transientUsers.add(userId.intValue());
         String username = userRequest.getUsername();
 
-        Response loginResponse = attemptLogin(username, password);
-        assertEquals(403, loginResponse.getStatusCode(), "User should be forced to change password");
+        RawResponse loginResponse = attemptLogin(username, password);
+        assertEquals(403, loginResponse.status(), "User should be forced to change password");
 
         String newPassword = "Abcdef1#2$3%XYZ_NEW";
-        Response changePasswordResponse = changePassword(username, password, userId, newPassword);
-        assertEquals(200, changePasswordResponse.getStatusCode(), "Password change should succeed");
+        RawResponse changePasswordResponse = changePassword(username, password, userId, newPassword);
+        assertEquals(200, changePasswordResponse.status(), "Password change should succeed");
 
         loginResponse = attemptLogin(username, newPassword);
-        assertEquals(200, loginResponse.getStatusCode(), "User should be able to login after reset");
+        assertEquals(200, loginResponse.status(), "User should be able to login after reset");
     }
 
     @Test
@@ -106,21 +105,18 @@ public class PasswordResetIntegrationTest extends IntegrationTest {
         this.transientUsers.add(userResponse.getResourceId().intValue());
         String username = userRequest.getUsername();
 
-        Response loginResponse = attemptLogin(username, password);
-        assertEquals(200, loginResponse.getStatusCode(), "User should login normally when feature is disabled");
+        RawResponse loginResponse = attemptLogin(username, password);
+        assertEquals(200, loginResponse.status(), "User should login normally when feature is disabled");
     }
 
-    private Response attemptLogin(String username, String password) {
-        return RestAssured.given().contentType(ContentType.JSON)
-                .body("{\"username\":\"" + username + "\", \"password\":\"" + password + "\"}")
-                .post("/fineract-provider/api/v1/authentication?" + Utils.TENANT_IDENTIFIER);
+    private RawResponse attemptLogin(String username, String password) {
+        return FeignRawHttpHelper.anonymous().response("POST", "/fineract-provider/api/v1/authentication?" + Utils.TENANT_IDENTIFIER,
+                "{\"username\":\"" + username + "\", \"password\":\"" + password + "\"}");
     }
 
-    private Response changePassword(String username, String password, Long userId, String newPassword) {
-        String authKey = java.util.Base64.getEncoder().encodeToString((username + ":" + password).getBytes(UTF_8));
-        return RestAssured.given().contentType(ContentType.JSON).header("Authorization", "Basic " + authKey)
-                .header("Fineract-Platform-TenantId", "default")
-                .body("{\"password\":\"" + newPassword + "\", \"repeatPassword\":\"" + newPassword + "\"}")
-                .post("/fineract-provider/api/v1/users/" + userId + "/pwd?" + Utils.TENANT_IDENTIFIER);
+    private RawResponse changePassword(String username, String password, Long userId, String newPassword) {
+        return FeignRawHttpHelper.callAcceptingAnyStatus(FeignRawHttpHelper.basicAuthorization(username, password)).response("POST",
+                "/fineract-provider/api/v1/users/" + userId + "/pwd?" + Utils.TENANT_IDENTIFIER,
+                "{\"password\":\"" + newPassword + "\", \"repeatPassword\":\"" + newPassword + "\"}");
     }
 }

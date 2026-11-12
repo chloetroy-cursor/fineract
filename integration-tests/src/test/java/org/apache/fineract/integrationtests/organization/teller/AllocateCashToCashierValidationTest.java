@@ -29,7 +29,7 @@ import io.restassured.specification.ResponseSpecification;
 import java.util.Map;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
 import org.apache.fineract.client.models.PostFinancialActivityAccountsRequest;
-import org.apache.fineract.integrationtests.common.Utils;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.accounting.FinancialActivityAccountHelper;
@@ -53,10 +53,9 @@ public class AllocateCashToCashierValidationTest {
 
     @BeforeAll
     public static void ensureCashierFinancialActivityAccountsExist() {
-        Utils.initializeRESTAssured();
 
         final RequestSpecification requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         final ResponseSpecification responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
 
         final AccountHelper accountHelper = new AccountHelper(requestSpec, responseSpec);
@@ -84,10 +83,9 @@ public class AllocateCashToCashierValidationTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
 
         requestSpecification = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        requestSpecification.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        requestSpecification.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         responseSpecification = new ResponseSpecBuilder().expectStatusCode(200).build();
 
         final Integer staffId = StaffHelper.createStaff(requestSpecification, responseSpecification);

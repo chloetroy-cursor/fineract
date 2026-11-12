@@ -35,8 +35,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
@@ -85,9 +85,8 @@ public class InteropTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
 
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         responseClientErrorSpec = new ResponseSpecBuilder().expectStatusCode(400).build();

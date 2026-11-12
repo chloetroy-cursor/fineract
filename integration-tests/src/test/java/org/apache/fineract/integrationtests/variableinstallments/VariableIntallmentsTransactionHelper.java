@@ -49,7 +49,7 @@ public class VariableIntallmentsTransactionHelper {
     @Deprecated(forRemoval = true)
     public Map retrieveSchedule(Integer loanId) {
         String url = URL + loanId + "?associations=repaymentSchedule&exclude=guarantors&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerGet(requestSpec, responseSpec, url, "");
+        return Utils.feign(requestSpec, responseSpec).get(url, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -58,7 +58,7 @@ public class VariableIntallmentsTransactionHelper {
     @Deprecated(forRemoval = true)
     public HashMap validateVariations(final String exceptions, Integer loanId) {
         String url = URL + loanId + "/schedule?command=calculateLoanSchedule&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, url, exceptions, "");
+        return Utils.feign(this.requestSpec, this.responseSpec).post(url, exceptions, "");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -67,6 +67,6 @@ public class VariableIntallmentsTransactionHelper {
     @Deprecated(forRemoval = true)
     public HashMap submitVariations(final String exceptions, Integer loanId) {
         String url = URL + loanId + "/schedule?command=addVariations&" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, this.responseSpec, url, exceptions, "");
+        return Utils.feign(this.requestSpec, this.responseSpec).post(url, exceptions, "");
     }
 }

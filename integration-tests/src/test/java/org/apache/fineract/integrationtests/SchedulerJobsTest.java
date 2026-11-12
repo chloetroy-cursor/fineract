@@ -33,10 +33,10 @@ import org.apache.fineract.client.models.GetJobsResponse;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.jobs.service.JobName;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.ParallelExecutionHelper;
 import org.apache.fineract.integrationtests.common.SchedulerJobHelper;
-import org.apache.fineract.integrationtests.common.Utils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Order;
@@ -52,9 +52,8 @@ public class SchedulerJobsTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         requestSpec.header("Fineract-Platform-TenantId", "default");
         originalSchedulerStatus = SchedulerJobHelper.getSchedulerStatus();
         ParallelExecutionHelper.runInParallel(SchedulerJobHelper.getAllSchedulerJobIds(), (jobId) -> {

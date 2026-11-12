@@ -21,16 +21,19 @@ package org.apache.fineract.integrationtests.campaigns;
 import static org.apache.fineract.integrationtests.client.IntegrationTest.assertThat;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
-import io.restassured.path.json.JsonPath;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignRawHttpHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
@@ -47,9 +50,8 @@ public class EmailTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
     }
 
@@ -71,40 +73,37 @@ public class EmailTest {
         createRequest.put("locale", "en");
 
         // Act: CREATE
-        Long emailId = ((Number) Utils.performServerPost(requestSpec, responseSpec, emailUrl(), GSON.toJson(createRequest), "resourceId"))
-                .longValue();
+        Long emailId = ((Number) FeignRawHttpHelper.post(emailUrl(), GSON.toJson(createRequest), "resourceId")).longValue();
 
         // Assert: RETRIEVE after create
-        JsonPath created = retrieveEmail(emailId);
-        assertThat(created.getLong("id")).isEqualTo(emailId);
-        assertThat(created.getLong("clientId")).isEqualTo(client.getClientId().longValue());
-        assertThat(created.getString("emailSubject")).isEqualTo(initialSubject);
-        assertThat(created.getString("emailMessage")).isEqualTo(initialMessage);
+        JsonObject created = retrieveEmail(emailId);
+        assertThat(created.get("id").getAsLong()).isEqualTo(emailId);
+        assertThat(created.get("clientId").getAsLong()).isEqualTo(client.getClientId().longValue());
+        assertThat(created.get("emailSubject").getAsString()).isEqualTo(initialSubject);
+        assertThat(created.get("emailMessage").getAsString()).isEqualTo(initialMessage);
 
         // Act: UPDATE (only emailMessage is a supported update param)
         String updatedMessage = Utils.randomStringGenerator("UpdatedMessage_", 20);
         Map<String, Object> updateRequest = new LinkedHashMap<>();
         updateRequest.put("emailMessage", updatedMessage);
 
-        JsonPath updateResponse = JsonPath
-                .from(Utils.performServerPut(requestSpec, responseSpec, emailUrl(emailId), GSON.toJson(updateRequest)));
-        assertThat(updateResponse.getLong("resourceId")).isEqualTo(emailId);
-        assertThat(updateResponse.getString("changes.emailMessage")).isEqualTo(updatedMessage);
+        JsonObject updateResponse = JsonParser.parseString(FeignRawHttpHelper.put(emailUrl(emailId), GSON.toJson(updateRequest)))
+                .getAsJsonObject();
+        assertThat(updateResponse.get("resourceId").getAsLong()).isEqualTo(emailId);
+        assertThat(updateResponse.getAsJsonObject("changes").get("emailMessage").getAsString()).isEqualTo(updatedMessage);
 
         // Assert: RETRIEVE after update
-        JsonPath updated = retrieveEmail(emailId);
-        assertThat(updated.getString("emailMessage")).isEqualTo(updatedMessage);
+        JsonObject updated = retrieveEmail(emailId);
+        assertThat(updated.get("emailMessage").getAsString()).isEqualTo(updatedMessage);
         // subject is untouched by update, since UPDATE_REQUEST_DATA_PARAMETERS only allows emailMessage
-        assertThat(updated.getString("emailSubject")).isEqualTo(initialSubject);
+        assertThat(updated.get("emailSubject").getAsString()).isEqualTo(initialSubject);
 
         // Act: DELETE
-        Long deletedResourceId = ((Number) Utils.performServerDelete(requestSpec, responseSpec, emailUrl(emailId), "resourceId"))
-                .longValue();
+        Long deletedResourceId = ((Number) FeignRawHttpHelper.delete(emailUrl(emailId), "resourceId")).longValue();
         assertThat(deletedResourceId).isEqualTo(emailId);
 
-        // Assert: RETRIEVE after delete should 404 -- use a 404-expecting response spec
-        ResponseSpecification notFoundSpec = new ResponseSpecBuilder().expectStatusCode(404).build();
-        Utils.performServerGet(requestSpec, notFoundSpec, emailUrl(emailId), null);
+        // Assert: RETRIEVE after delete should 404
+        FeignRawHttpHelper.call(404).get(emailUrl(emailId));
     }
 
     @Test
@@ -128,10 +127,9 @@ public class EmailTest {
         createRequest.put("emailMessage", Utils.randomStringGenerator("Message_", 20));
         createRequest.put("locale", "en");
 
-        Long emailId = ((Number) Utils.performServerPost(requestSpec, responseSpec, emailUrl(), GSON.toJson(createRequest), "resourceId"))
-                .longValue();
+        Long emailId = ((Number) FeignRawHttpHelper.post(emailUrl(), GSON.toJson(createRequest), "resourceId")).longValue();
 
-        assertThat(retrieveEmail(emailId).getLong("staffId")).isEqualTo(staffId.longValue());
+        assertThat(retrieveEmail(emailId).get("staffId").getAsLong()).isEqualTo(staffId.longValue());
     }
 
     @Test
@@ -141,13 +139,11 @@ public class EmailTest {
         createRequest.put("emailMessage", Utils.randomStringGenerator("Message_", 20));
         createRequest.put("locale", "en");
 
-        ResponseSpecification badRequestSpec = new ResponseSpecBuilder().expectStatusCode(400).build();
-        Utils.performServerPost(requestSpec, badRequestSpec, emailUrl(), GSON.toJson(createRequest), "");
+        FeignRawHttpHelper.call(400).post(emailUrl(), GSON.toJson(createRequest));
     }
 
-    private JsonPath retrieveEmail(final Long emailId) {
-        String response = Utils.performServerGet(requestSpec, responseSpec, emailUrl(emailId), null);
-        return JsonPath.from(response);
+    private JsonObject retrieveEmail(final Long emailId) {
+        return JsonParser.parseString(FeignRawHttpHelper.get(emailUrl(emailId))).getAsJsonObject();
     }
 
     private String emailUrl() {

@@ -64,6 +64,7 @@ import org.apache.fineract.client.models.PutJobsJobIDRequest;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.BusinessStepHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
@@ -142,9 +143,8 @@ public class SchedulerJobsTestResults extends IntegrationTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         requestSpec.header("Fineract-Platform-TenantId", "default");
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.accountHelper = new AccountHelper(requestSpec, responseSpec);

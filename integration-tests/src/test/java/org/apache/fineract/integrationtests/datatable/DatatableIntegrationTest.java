@@ -52,6 +52,7 @@ import org.apache.fineract.client.models.PutDataTablesResponse;
 import org.apache.fineract.client.models.ResultsetColumnHeaderData;
 import org.apache.fineract.client.util.Calls;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
@@ -94,9 +95,8 @@ public class DatatableIntegrationTest extends IntegrationTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.datatableHelper = new DatatableHelper(this.requestSpec, this.responseSpec);
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);

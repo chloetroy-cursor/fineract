@@ -55,7 +55,7 @@ public class AccountNumberPreferencesHelper {
 
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "?" + Utils.TENANT_IDENTIFIER;
 
-        return Utils.performServerPost(this.requestSpec, responseSpec, URL, requestJSON, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, responseSpec).post(URL, requestJSON, jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -68,7 +68,7 @@ public class AccountNumberPreferencesHelper {
         final String requestJSON = new AccountNumberPreferencesTestBuilder().loanBuild();
 
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, responseSpec, URL, requestJSON, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, responseSpec).post(URL, requestJSON, jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -81,7 +81,7 @@ public class AccountNumberPreferencesHelper {
         final String requestJSON = new AccountNumberPreferencesTestBuilder().savingsBuild();
 
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, responseSpec, URL, requestJSON, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, responseSpec).post(URL, requestJSON, jsonAttributeToGetBack);
 
     }
 
@@ -95,7 +95,7 @@ public class AccountNumberPreferencesHelper {
         final String requestJSON = new AccountNumberPreferencesTestBuilder().groupsBuild();
 
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, responseSpec, URL, requestJSON, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, responseSpec).post(URL, requestJSON, jsonAttributeToGetBack);
 
     }
 
@@ -109,7 +109,7 @@ public class AccountNumberPreferencesHelper {
         final String requestJSON = new AccountNumberPreferencesTestBuilder().centerBuild();
 
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, responseSpec, URL, requestJSON, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, responseSpec).post(URL, requestJSON, jsonAttributeToGetBack);
 
     }
 
@@ -123,7 +123,7 @@ public class AccountNumberPreferencesHelper {
         final String requestJSON = new AccountNumberPreferencesTestBuilder().invalidDataBuild(accountType, prefixType);
 
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "?" + Utils.TENANT_IDENTIFIER;
-        return Utils.performServerPost(this.requestSpec, responseSpec, URL, requestJSON, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, responseSpec).post(URL, requestJSON, jsonAttributeToGetBack);
 
     }
 
@@ -138,7 +138,7 @@ public class AccountNumberPreferencesHelper {
 
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "/" + accountNumberFormatId + "?" + Utils.TENANT_IDENTIFIER;
 
-        return Utils.performServerPut(this.requestSpec, responseSpec, URL, requestJSON, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, responseSpec).put(URL, requestJSON, jsonAttributeToGetBack);
 
     }
 
@@ -153,7 +153,7 @@ public class AccountNumberPreferencesHelper {
 
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "/" + accountNumberFormatId + "?" + Utils.TENANT_IDENTIFIER;
 
-        return Utils.performServerDelete(this.requestSpec, responseSpec, URL, jsonAttributeToGetBack);
+        return Utils.feign(this.requestSpec, responseSpec).delete(URL, jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -163,7 +163,7 @@ public class AccountNumberPreferencesHelper {
     public Object getAccountNumberPreference(final Integer accountNumberFormatId, final String jsonAttributeToGetBack) {
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "/" + accountNumberFormatId + "?" + Utils.TENANT_IDENTIFIER;
 
-        return Utils.performServerGet(requestSpec, responseSpec, URL, jsonAttributeToGetBack);
+        return Utils.feign(requestSpec, responseSpec).get(URL, jsonAttributeToGetBack);
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -172,7 +172,7 @@ public class AccountNumberPreferencesHelper {
     @Deprecated(forRemoval = true)
     public ArrayList<HashMap<String, Object>> getAllAccountNumberPreferences() {
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "?" + Utils.TENANT_IDENTIFIER;
-        final ArrayList<HashMap<String, Object>> response = Utils.performServerGet(requestSpec, responseSpec, URL, "");
+        final ArrayList<HashMap<String, Object>> response = Utils.feign(requestSpec, responseSpec).get(URL, "");
         return response;
     }
 
@@ -187,24 +187,24 @@ public class AccountNumberPreferencesHelper {
 
         final String clientURL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "/" + clientAccountNumberPreferenceId + "?" + Utils.TENANT_IDENTIFIER;
 
-        Utils.performServerGet(requestSpec, responseSpec, clientURL, "id");
+        Utils.feign(requestSpec, responseSpec).get(clientURL, "id");
 
         final String loanURL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "/" + loanAccountNumberPreferenceId + "?" + Utils.TENANT_IDENTIFIER;
 
-        Utils.performServerGet(requestSpec, responseSpec, loanURL, "id");
+        Utils.feign(requestSpec, responseSpec).get(loanURL, "id");
 
         final String savingsURL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "/" + savingsAccountNumberPreferenceId + "?"
                 + Utils.TENANT_IDENTIFIER;
 
-        Utils.performServerGet(requestSpec, responseSpec, savingsURL, "id");
+        Utils.feign(requestSpec, responseSpec).get(savingsURL, "id");
 
         final String groupsURL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "/" + groupsAccountNumberPreferenceId + "?" + Utils.TENANT_IDENTIFIER;
 
-        Utils.performServerGet(requestSpec, responseSpec, groupsURL, "id");
+        Utils.feign(requestSpec, responseSpec).get(groupsURL, "id");
 
         final String centerURL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "/" + centerAccountNumberPreferenceId + "?" + Utils.TENANT_IDENTIFIER;
 
-        Utils.performServerGet(requestSpec, responseSpec, centerURL, "id");
+        Utils.feign(requestSpec, responseSpec).get(centerURL, "id");
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -215,7 +215,7 @@ public class AccountNumberPreferencesHelper {
             RequestSpecification requestSpec) {
 
         final String URL = ACCOUNT_NUMBER_FORMATS_REQUEST_URL + "/" + accountNumberPreferenceId + "?" + Utils.TENANT_IDENTIFIER;
-        Utils.performServerGet(requestSpec, responseSpec, URL, "id");
+        Utils.feign(requestSpec, responseSpec).get(URL, "id");
 
     }
 }

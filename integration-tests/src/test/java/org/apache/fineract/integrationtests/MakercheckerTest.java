@@ -33,6 +33,7 @@ import java.util.Map;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutPermissionsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
@@ -65,9 +66,8 @@ public class MakercheckerTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.makercheckersHelper = new MakercheckersHelper(this.requestSpec, this.responseSpec);
         this.rolesHelper = new RolesHelper();
@@ -111,7 +111,7 @@ public class MakercheckerTest {
 
             // create client - maker-checker disabled
             RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
+                    .header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
             Integer clientId = ClientHelper.createClient(makerRequestSpec, this.responseSpec);
             assertNotNull(clientId);
             ClientHelper.verifyClientCreatedOnServer(requestSpec, this.responseSpec, clientId);
@@ -158,7 +158,7 @@ public class MakercheckerTest {
             final Integer checkerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, checker,
                     "A1b2c3d4e5f$", "resourceId");
             RequestSpecification checkerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(checker, "A1b2c3d4e5f$"));
+                    .header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey(checker, "A1b2c3d4e5f$"));
 
             // check by another checker user should succeed
             HashMap<?, ?> response = MakercheckersHelper.approveMakerCheckerEntry(checkerRequestSpec, responseSpec, clientCommandId);
@@ -229,7 +229,7 @@ public class MakercheckerTest {
             UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, checker, "A1b2c3d4e5f$", "resourceId");
 
             RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
+                    .header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
 
             // maker creates datatable with maker-checker enabled, this creates the physical table but queues for
             // approval
@@ -292,9 +292,9 @@ public class MakercheckerTest {
             UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker2, "A1b2c3d4e5f$", "resourceId");
 
             RequestSpecification maker1RequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker1, "A1b2c3d4e5f$"));
+                    .header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey(maker1, "A1b2c3d4e5f$"));
             RequestSpecification maker2RequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker2, "A1b2c3d4e5f$"));
+                    .header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey(maker2, "A1b2c3d4e5f$"));
 
             ClientHelper.createClient(maker1RequestSpec, this.responseSpec);
             ClientHelper.createClient(maker2RequestSpec, this.responseSpec);
@@ -341,7 +341,7 @@ public class MakercheckerTest {
             final Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,
                     "A1b2c3d4e5f$", "resourceId");
             RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
+                    .header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
 
             ClientHelper.createClient(makerRequestSpec, this.responseSpec);
 

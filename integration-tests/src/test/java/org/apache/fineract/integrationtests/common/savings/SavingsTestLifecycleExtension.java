@@ -40,6 +40,7 @@ import org.apache.fineract.client.models.PostSavingsAccountsAccountIdRequest;
 import org.apache.fineract.client.models.SavingsAccountData;
 import org.apache.fineract.client.util.Calls;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
 import org.apache.fineract.integrationtests.common.SchedulerJobHelper;
@@ -59,7 +60,7 @@ public class SavingsTestLifecycleExtension implements AfterAllCallback {
     public void afterAll(ExtensionContext context) {
         BusinessDateHelper.runAt(DateTimeFormatter.ofPattern(DATE_FORMAT).format(Utils.getLocalDateOfTenant()), () -> {
             RequestSpecification requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-            requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+            requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
             requestSpec.header("Fineract-Platform-TenantId", "default");
             ResponseSpecification responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
             this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);

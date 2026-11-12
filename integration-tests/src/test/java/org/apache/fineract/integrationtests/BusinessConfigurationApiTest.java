@@ -33,8 +33,8 @@ import org.apache.fineract.cob.data.BusinessStep;
 import org.apache.fineract.cob.data.JobBusinessStepConfigData;
 import org.apache.fineract.cob.data.JobBusinessStepDetail;
 import org.apache.fineract.infrastructure.core.data.ApiParameterError;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAuthenticationHelper;
 import org.apache.fineract.integrationtests.common.BusinessStepConfigurationHelper;
-import org.apache.fineract.integrationtests.common.Utils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,9 +51,8 @@ public class BusinessConfigurationApiTest {
 
     @BeforeEach
     public void setup() {
-        Utils.initializeRESTAssured();
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
+        this.requestSpec.header("Authorization", "Basic " + FeignAuthenticationHelper.base64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
     }
 
