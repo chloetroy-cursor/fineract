@@ -51,15 +51,27 @@
 #   fineract_cob_step_execution_seconds counts attempts: one sample for each execution of a step, so a loan
 #   that the batch job retries adds one failure for each failed attempt.
 #   fineract_cob_loans_processed_total follows the transaction: outcome="success" is a loan whose step chain
-#   returned and whose transaction committed, so the loan is closed for that COB day. outcome="failure" is a
-#   loan whose transaction did not commit. A failed step rolls back the whole chunk (LOAN_COB_CHUNK_SIZE, 100
-#   by default), and every loan the chunk carried counts as a failure, also the loans that had no error. A
-#   chunk can also be rolled back after every step returned, for example when an API call changed one of its
-#   loans during the run: then the loan counter moves and no step failure is recorded, so
-#   FineractCobLoanFailures can fire without FineractCobStepFailures.
-#   Attempts on one loan inside one chunk count once. An inline COB request is different: its chunk stops at
-#   the first failure and the request is retried, up to three times. Each attempt counts the loans it had taken
-#   through the steps, so the count can be lower or higher than the number of loans the request left unclosed.
+#   returned and whose transaction committed. outcome="failure" is a loan whose transaction did not commit.
+#   For the batch job, and for an inline COB request that is not retried, success is the number of loans
+#   closed for a COB day. A failed step rolls back the whole chunk (LOAN_COB_CHUNK_SIZE, 100 by default), and
+#   every loan the chunk carried counts as a failure, also the loans that had no error. A chunk can also be
+#   rolled back after every step returned, for example when an API call changed one of its loans during the
+#   run: then the loan counter moves and no step failure is recorded, so FineractCobLoanFailures can fire
+#   without FineractCobStepFailures.
+#   Attempts on one loan inside one chunk count once. An inline COB request is different in two ways. Its
+#   chunk stops at the first failure, so a failed attempt counts as failure only the loans that chunk had
+#   taken through the steps. And a failed request is retried as a whole, up to three attempts: each attempt
+#   runs every loan of the request again, also the loans of chunks that an earlier attempt committed, and
+#   counts those as success again. So after a retried inline request of more than one chunk, success is higher
+#   than the number of loans closed (measured in one request of three attempts: 600 counted, 200 loans
+#   closed), and failure can be lower or higher than the number of loans left unclosed (same request: 63
+#   counted, 50 unclosed). A request that fits in one chunk cannot count success twice, because a failed
+#   attempt commits nothing.
+#   For the rules below this means: a retry follows a failed attempt, and in every measured case that attempt
+#   also added to failure, so FineractCobLoanFailures fired. The critical ratio has the repeated success in
+#   its denominator, so after such requests it reads lower than the share of loans left unclosed. The batch
+#   job counts each loan once and does not have this effect. FineractCobStalled is not affected: success is
+#   only counted again in a request that closed loans in an earlier attempt.
 #   Any failure warns: a loan that is not closed stays on its old COB date until a later run closes it.
 #   Critical when more than 5% of the loans counted in 30 minutes were not closed and they are more than 150.
 #   One failed loan costs up to 100 loans, so 1% is already reached by one rolled back chunk in a run of

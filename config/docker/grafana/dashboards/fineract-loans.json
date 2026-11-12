@@ -312,7 +312,7 @@
       "type": "stat",
       "id": 6,
       "title": "COB loans processed",
-      "description": "Loans closed by COB in the selected time range: every step returned and the transaction committed. Source: fineract_cob_loans_processed_total{outcome=\"success\"}.",
+      "description": "Loans whose COB transaction committed in the selected time range: every step returned and the loan is closed for that COB day. For the batch job, and for an inline COB request that is not retried, this is the number of loans closed. When an inline request of more than one chunk fails and is retried, each attempt runs the chunks that had already committed again and counts their loans again, so the value is then higher than the number of loans closed. Source: fineract_cob_loans_processed_total{outcome=\"success\"}.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2399,7 +2399,7 @@
       "type": "stat",
       "id": 26,
       "title": "Loans processed, last 24 h",
-      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. Only what Prometheus scraped counts: hours for which Prometheus holds no data add nothing. Counts loans that were closed: every step returned and the transaction committed. Inline COB calls count too.",
+      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. Only what Prometheus scraped counts: hours for which Prometheus holds no data add nothing. Counts loans whose transaction committed: every step returned and the loan is closed for that COB day. Inline COB calls count too. For the batch job, and for an inline request that is not retried, this is the number of loans closed. A failed inline request of more than one chunk is retried as a whole, and each attempt counts the loans of chunks that had already committed again, so the value is then higher than the number of loans closed.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2663,7 +2663,7 @@
       "type": "timeseries",
       "id": 30,
       "title": "Loans processed per run, by outcome",
-      "description": "Loans counted in each interval (one minute or longer), stacked by outcome. A loan is counted when its transaction completes: success when it committed and the loan is closed, failure (red) when it did not. A run shows as a block of bars and its size is the sum of the block, shown as Total in the legend. Each bar is the counter now minus the counter one interval ago, which is exact where increase() would estimate; an interval in which the server restarted shows as zero. A loan that is behind by several days is counted once for each COB day.",
+      "description": "Loans counted in each interval (one minute or longer), stacked by outcome. A loan is counted when its transaction completes: success when it committed, failure (red) when it did not. For the batch job, and for an inline COB request that is not retried, success is the number of loans closed. When an inline request of more than one chunk fails and is retried, each attempt counts the loans of chunks that had already committed as success again, so success is then higher than the number of loans closed. A run shows as a block of bars and its size is the sum of the block, shown as Total in the legend. Each bar is the counter now minus the counter one interval ago, which is exact where increase() would estimate; an interval in which the server restarted shows as zero. A loan that is behind by several days is counted once for each COB day.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
