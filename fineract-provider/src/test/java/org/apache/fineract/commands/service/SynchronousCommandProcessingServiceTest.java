@@ -21,7 +21,10 @@ package org.apache.fineract.commands.service;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atLeast;
@@ -35,10 +38,21 @@ import static org.mockito.Mockito.when;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.MockClock;
+import io.micrometer.core.instrument.Tag;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleConfig;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 import org.apache.fineract.batch.exception.ErrorInfo;
 import org.apache.fineract.commands.configuration.RetryConfigurationAssembler;
 import org.apache.fineract.commands.domain.CommandProcessingResultType;
@@ -52,9 +66,13 @@ import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.config.FineractProperties;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
 import org.apache.fineract.infrastructure.core.domain.BatchRequestContextHolder;
+import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
 import org.apache.fineract.infrastructure.core.domain.FineractRequestContextHolder;
+import org.apache.fineract.infrastructure.core.exception.ErrorHandler;
+import org.apache.fineract.infrastructure.core.exception.IdempotentCommandProcessSucceedException;
 import org.apache.fineract.infrastructure.core.exception.IdempotentCommandProcessUnderProcessingException;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
+import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.core.service.TransactionBoundApplicationEventPublisher;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.useradministration.domain.AppUser;
@@ -104,6 +122,15 @@ public class SynchronousCommandProcessingServiceTest {
 
     @Spy
     private FineractRequestContextHolder fineractRequestContextHolder;
+
+    private final MockClock clock = new MockClock();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry(SimpleConfig.DEFAULT, clock);
+    private final ErrorHandler errorHandler = mock(ErrorHandler.class);
+
+    // A real instance on a registry the tests can read. As a spy it is a candidate for the constructor of the
+    // service under test; without it the service would be built with no metrics at all.
+    @Spy
+    private LoanCommandMetrics loanCommandMetrics = new LoanCommandMetrics(meterRegistry, errorHandler);
 
     @InjectMocks
     private SynchronousCommandProcessingService underTest;
@@ -714,5 +741,319 @@ public class SynchronousCommandProcessingServiceTest {
 
         // The deferred path was not taken: no TransactionSynchronization should have been registered.
         assertFalse(TransactionSynchronizationManager.isSynchronizationActive());
+    }
+
+    @Test
+    public void loanRepaymentThatSucceedsRecordsOneRepaySuccessSampleAndReturnsTheHandlerResult() {
+        CommandWrapper repayment = new CommandWrapperBuilder().loanRepaymentTransaction(4711L).build();
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        CommandProcessingResult handlerResult = Mockito.mock(CommandProcessingResult.class);
+        NewCommandSourceHandler commandHandler = stubCommandThatReachesItsHandler(jsonCommand);
+        when(commandHandler.processCommand(jsonCommand)).thenAnswer(invocation -> {
+            clock.add(120, TimeUnit.MILLISECONDS);
+            return handlerResult;
+        });
+
+        CommandProcessingResult actual = underTest.executeCommand(repayment, jsonCommand, false);
+
+        assertSame(handlerResult, actual);
+        verify(commandHandlerProvider).getHandler("LOAN", "REPAYMENT");
+        assertEquals(1, loanCommandTimer("repay", "success").count());
+        assertEquals(120.0, loanCommandTimer("repay", "success").totalTime(TimeUnit.MILLISECONDS));
+        assertEquals(1.0, loanCommandCounter("repay", "success"));
+        assertOnlyRecordedLoanCommandSample("repay", "success");
+        verify(errorHandler, never()).handle(any());
+    }
+
+    @Test
+    public void loanCommandThatFailsWithA500RecordsServerErrorAndRethrowsTheSameException() {
+        CommandWrapper disbursal = new CommandWrapperBuilder().disburseLoanApplication(4711L).build();
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        NewCommandSourceHandler commandHandler = stubCommandThatReachesItsHandler(jsonCommand);
+        IllegalStateException thrownByHandler = new IllegalStateException("handler failed");
+        when(commandHandler.processCommand(jsonCommand)).thenAnswer(invocation -> {
+            clock.add(30, TimeUnit.MILLISECONDS);
+            throw thrownByHandler;
+        });
+
+        IllegalStateException actual = assertThrows(IllegalStateException.class,
+                () -> underTest.executeCommand(disbursal, jsonCommand, false));
+
+        assertSame(thrownByHandler, actual);
+        assertEquals("handler failed", actual.getMessage());
+        assertEquals(0, actual.getSuppressed().length);
+        assertEquals(1, loanCommandTimer("disburse", "server_error").count());
+        assertEquals(30.0, loanCommandTimer("disburse", "server_error").totalTime(TimeUnit.MILLISECONDS));
+        assertOnlyRecordedLoanCommandSample("disburse", "server_error");
+        // The status comes from the ErrorInfo the audit result was already built from, so the exception is mapped once.
+        verify(commandSourceService, times(1)).generateErrorInfo(thrownByHandler);
+        verify(errorHandler, never()).handle(any());
+    }
+
+    @Test
+    public void loanCommandThatFailsWithA403RecordsClientErrorAndRethrowsTheSameException() {
+        CommandWrapper approval = new CommandWrapperBuilder().approveLoanApplication(4711L).build();
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        NewCommandSourceHandler commandHandler = stubCommandThatReachesItsHandler(jsonCommand);
+        IllegalArgumentException thrownByHandler = new IllegalArgumentException("domain rule violated");
+        when(commandHandler.processCommand(jsonCommand)).thenThrow(thrownByHandler);
+        ErrorInfo forbidden = mock(ErrorInfo.class);
+        when(forbidden.getMessage()).thenReturn("Forbidden");
+        when(forbidden.getStatusCode()).thenReturn(403);
+        when(commandSourceService.generateErrorInfo(thrownByHandler)).thenReturn(forbidden);
+
+        IllegalArgumentException actual = assertThrows(IllegalArgumentException.class,
+                () -> underTest.executeCommand(approval, jsonCommand, false));
+
+        assertSame(thrownByHandler, actual);
+        assertEquals(0, actual.getSuppressed().length);
+        assertOnlyRecordedLoanCommandSample("approve", "client_error");
+        verify(commandSourceService, times(1)).generateErrorInfo(thrownByHandler);
+        verify(errorHandler, never()).handle(any());
+    }
+
+    @Test
+    public void loanCommandThatFailsBeforeItsAuditRowExistsIsClassifiedByTheErrorHandler() {
+        CommandWrapper submission = new CommandWrapperBuilder().createLoanApplication().build();
+        JsonCommand jsonCommand = newCommandWithoutAuditRow();
+        IllegalStateException thrownBeforeAudit = new IllegalStateException("no idempotency key");
+        when(idempotencyKeyResolver.resolve(submission)).thenThrow(thrownBeforeAudit);
+        when(errorHandler.handle(thrownBeforeAudit)).thenReturn(new ErrorInfo(400, 1001, "Bad request", null));
+
+        IllegalStateException actual = assertThrows(IllegalStateException.class,
+                () -> underTest.executeCommand(submission, jsonCommand, false));
+
+        assertSame(thrownBeforeAudit, actual);
+        assertOnlyRecordedLoanCommandSample("submit", "client_error");
+        verify(commandSourceService, never()).generateErrorInfo(any());
+        verify(errorHandler, times(1)).handle(thrownBeforeAudit);
+    }
+
+    @Test
+    public void loanCommandThatThrowsAnErrorRecordsServerErrorAndRethrowsTheSameError() {
+        CommandWrapper repayment = new CommandWrapperBuilder().loanRepaymentTransaction(4711L).build();
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        NewCommandSourceHandler commandHandler = stubCommandThatReachesItsHandler(jsonCommand);
+        StackOverflowError thrownByHandler = new StackOverflowError("deep");
+        when(commandHandler.processCommand(jsonCommand)).thenThrow(thrownByHandler);
+
+        StackOverflowError actual = assertThrows(StackOverflowError.class, () -> underTest.executeCommand(repayment, jsonCommand, false));
+
+        assertSame(thrownByHandler, actual);
+        assertOnlyRecordedLoanCommandSample("repay", "server_error");
+        verify(errorHandler, never()).handle(any());
+    }
+
+    @Test
+    public void threeAttemptsUnderRetryRecordOneSampleThatCoversAllOfThem() {
+        CommandWrapper repayment = new CommandWrapperBuilder().loanRepaymentTransaction(4711L).build();
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        CommandProcessingResult handlerResult = Mockito.mock(CommandProcessingResult.class);
+        NewCommandSourceHandler commandHandler = stubCommandThatReachesItsHandler(jsonCommand);
+        when(commandHandler.processCommand(jsonCommand)).thenAnswer(invocation -> {
+            clock.add(40, TimeUnit.MILLISECONDS);
+            throw new RetryException();
+        }).thenAnswer(invocation -> {
+            clock.add(40, TimeUnit.MILLISECONDS);
+            throw new RetryException();
+        }).thenAnswer(invocation -> {
+            clock.add(40, TimeUnit.MILLISECONDS);
+            return handlerResult;
+        });
+
+        CommandProcessingResult actual = underTest.executeCommand(repayment, jsonCommand, false);
+
+        assertSame(handlerResult, actual);
+        verify(commandHandler, times(3)).processCommand(jsonCommand);
+        assertEquals(1, loanCommandTimer("repay", "success").count());
+        assertEquals(120.0, loanCommandTimer("repay", "success").totalTime(TimeUnit.MILLISECONDS));
+        assertOnlyRecordedLoanCommandSample("repay", "success");
+    }
+
+    @Test
+    public void retriesThatRunOutRecordOneFailureSample() {
+        CommandWrapper repayment = new CommandWrapperBuilder().loanRepaymentTransaction(4711L).build();
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        NewCommandSourceHandler commandHandler = stubCommandThatReachesItsHandler(jsonCommand);
+        RetryException persistent = new RetryException();
+        when(commandHandler.processCommand(jsonCommand)).thenThrow(persistent);
+
+        RetryException actual = assertThrows(RetryException.class, () -> underTest.executeCommand(repayment, jsonCommand, false));
+
+        assertSame(persistent, actual);
+        verify(commandHandler, times(3)).processCommand(jsonCommand);
+        assertOnlyRecordedLoanCommandSample("repay", "server_error");
+    }
+
+    @Test
+    public void makerCheckerRollbackOfALoanCommandRecordsAwaitingApproval() {
+        CommandWrapper approval = new CommandWrapperBuilder().approveLoanApplication(4711L).build();
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        stubCommandThatReachesItsHandler(jsonCommand);
+        RollbackTransactionNotApprovedException rollback = new RollbackTransactionNotApprovedException(1L, 4711L);
+        ErrorInfo makerCheckerErrorInfo = mock(ErrorInfo.class);
+        when(makerCheckerErrorInfo.getMessage()).thenReturn("maker-checker-result");
+        when(makerCheckerErrorInfo.getStatusCode()).thenReturn(200);
+        when(commandSourceService.processCommandAndSaveResult(any(NewCommandSourceHandler.class), any(JsonCommand.class),
+                any(CommandSource.class), any(AppUser.class), Mockito.anyBoolean(),
+                Mockito.<BiConsumer<CommandSource, CommandProcessingResult>>any())).thenThrow(rollback);
+        when(commandSourceService.generateErrorInfo(rollback)).thenReturn(makerCheckerErrorInfo);
+
+        RollbackTransactionNotApprovedException actual = assertThrows(RollbackTransactionNotApprovedException.class,
+                () -> underTest.executeCommand(approval, jsonCommand, false));
+
+        assertSame(rollback, actual);
+        assertOnlyRecordedLoanCommandSample("approve", "awaiting_approval");
+        verify(errorHandler, never()).handle(any());
+    }
+
+    @Test
+    public void idempotentReplayOfALoanCommandRecordsDuplicateAndDoesNotRunTheHandler() {
+        CommandWrapper repayment = new CommandWrapperBuilder().loanRepaymentTransaction(4711L).build();
+        JsonCommand jsonCommand = newCommandWithoutAuditRow();
+        String idempotencyKey = "already-seen";
+        when(idempotencyKeyResolver.resolve(repayment)).thenReturn(idempotencyKey);
+        CommandSource processedEarlier = Mockito.mock(CommandSource.class);
+        when(processedEarlier.getStatus()).thenReturn(CommandProcessingResultType.PROCESSED.getValue());
+        when(processedEarlier.getResult()).thenReturn("{\"resourceId\":99}");
+        when(processedEarlier.getResultStatusCode()).thenReturn(200);
+        when(commandSourceService.findCommandSource(repayment, idempotencyKey)).thenReturn(processedEarlier);
+
+        IdempotentCommandProcessSucceedException actual = assertThrows(IdempotentCommandProcessSucceedException.class,
+                () -> underTest.executeCommand(repayment, jsonCommand, false));
+
+        assertEquals("{\"resourceId\":99}", actual.getResponse());
+        assertOnlyRecordedLoanCommandSample("repay", "duplicate");
+        verify(commandHandlerProvider, never()).getHandler(any(), any());
+        verify(errorHandler, never()).handle(any());
+    }
+
+    @Test
+    public void commandThatIsNotALoanCommandRecordsNothing() {
+        CommandWrapper clientCreation = new CommandWrapperBuilder().createClient().build();
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        CommandProcessingResult handlerResult = Mockito.mock(CommandProcessingResult.class);
+        NewCommandSourceHandler commandHandler = stubCommandThatReachesItsHandler(jsonCommand);
+        when(commandHandler.processCommand(jsonCommand)).thenReturn(handlerResult);
+
+        CommandProcessingResult actual = underTest.executeCommand(clientCreation, jsonCommand, false);
+
+        assertSame(handlerResult, actual);
+        verify(commandHandlerProvider).getHandler("CLIENT", "CREATE");
+        assertNoLoanCommandSample();
+        verify(loanCommandMetrics, never()).start();
+    }
+
+    @Test
+    public void loanCommandOutsideTheRecordedSetRecordsNothingEvenWhenItFails() {
+        CommandWrapper interestWaiver = new CommandWrapperBuilder().waiveInterestPortionTransaction(4711L).build();
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        NewCommandSourceHandler commandHandler = stubCommandThatReachesItsHandler(jsonCommand);
+        IllegalStateException thrownByHandler = new IllegalStateException("handler failed");
+        when(commandHandler.processCommand(jsonCommand)).thenThrow(thrownByHandler);
+
+        IllegalStateException actual = assertThrows(IllegalStateException.class,
+                () -> underTest.executeCommand(interestWaiver, jsonCommand, false));
+
+        assertSame(thrownByHandler, actual);
+        assertNoLoanCommandSample();
+    }
+
+    /**
+     * The cardinality guard: whatever identifies the loan, the client, the request or the tenant stays out of the
+     * meters, so two repayments on different loans of different clients are two samples of one series.
+     */
+    @Test
+    public void repaymentsOnDifferentLoansClientsAndTenantsLandInOneSeriesWithoutIdentifyingTags() {
+        List<String> identifiers = List.of("4711", "9302", "8801", "8802", "acme-bank", "globex-bank", "loans", "idempotency-key");
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        CommandProcessingResult handlerResult = Mockito.mock(CommandProcessingResult.class);
+        when(handlerResult.getLoanId()).thenReturn(4711L);
+        when(handlerResult.getClientId()).thenReturn(8801L);
+        NewCommandSourceHandler commandHandler = stubCommandThatReachesItsHandler(jsonCommand);
+        when(commandHandler.processCommand(jsonCommand)).thenReturn(handlerResult);
+        CommandWrapper repaymentOnLoan4711 = new CommandWrapperBuilder().loanRepaymentTransaction(4711L).withClientId(8801L)
+                .build("idempotency-key-1");
+        CommandWrapper repaymentOnLoan9302 = new CommandWrapperBuilder().loanRepaymentTransaction(9302L).withClientId(8802L)
+                .build("idempotency-key-2");
+
+        try {
+            ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(1L, "acme-bank", "Acme Bank", "UTC", null));
+            underTest.executeCommand(repaymentOnLoan4711, jsonCommand, false);
+            ThreadLocalContextUtil.setTenant(new FineractPlatformTenant(2L, "globex-bank", "Globex Bank", "UTC", null));
+            underTest.executeCommand(repaymentOnLoan9302, jsonCommand, false);
+        } finally {
+            ThreadLocalContextUtil.reset();
+        }
+
+        assertEquals(1, meterRegistry.find(LOAN_COMMAND_TIMER).timers().size(), "two loans must not create two timer series");
+        assertEquals(2, loanCommandTimer("repay", "success").count());
+        assertEquals(2.0, loanCommandCounter("repay", "success"));
+        assertEquals(21, meterRegistry.getMeters().size(), "20 counters registered at startup and the one timer");
+        for (Meter meter : meterRegistry.getMeters()) {
+            assertEquals(Set.of("command", "outcome"), meter.getId().getTags().stream().map(Tag::getKey).collect(Collectors.toSet()),
+                    "tag keys of " + meter.getId());
+            for (String identifier : identifiers) {
+                assertFalse(meter.getId().getName().contains(identifier), meter.getId() + " carries " + identifier);
+                assertTrue(meter.getId().getTags().stream().noneMatch(tag -> tag.getValue().contains(identifier)),
+                        meter.getId() + " carries " + identifier);
+            }
+        }
+    }
+
+    private static final String LOAN_COMMAND_TIMER = "fineract.loan.command.execution";
+    private static final String LOAN_COMMAND_COUNTER = "fineract.loan.commands";
+
+    /**
+     * Stubs everything a command needs to get from {@code executeCommand} to its handler and back, and returns that
+     * handler for the test to script.
+     */
+    private NewCommandSourceHandler stubCommandThatReachesItsHandler(JsonCommand jsonCommand) {
+        long commandId = 1L;
+        when(jsonCommand.commandId()).thenReturn(commandId);
+        CommandSource commandSource = Mockito.mock(CommandSource.class);
+        when(commandSource.getId()).thenReturn(commandId);
+        when(commandSourceService.getCommandSource(commandId)).thenReturn(commandSource);
+        when(commandSourceService.saveResult(commandSource)).thenReturn(commandSource);
+        AppUser appUser = Mockito.mock(AppUser.class);
+        when(context.authenticatedUser(Mockito.any(CommandWrapper.class))).thenReturn(appUser);
+        NewCommandSourceHandler commandHandler = Mockito.mock(NewCommandSourceHandler.class);
+        when(commandHandlerProvider.getHandler(Mockito.any(), Mockito.any())).thenReturn(commandHandler);
+        return commandHandler;
+    }
+
+    private static JsonCommand newCommandWithoutAuditRow() {
+        JsonCommand jsonCommand = Mockito.mock(JsonCommand.class);
+        // a mocked Long getter answers 0, which the service would take for the id of an existing audit row
+        when(jsonCommand.commandId()).thenReturn(null);
+        return jsonCommand;
+    }
+
+    private Timer loanCommandTimer(String command, String outcome) {
+        Timer timer = meterRegistry.find(LOAN_COMMAND_TIMER).tag("command", command).tag("outcome", outcome).timer();
+        assertNotNull(timer, "no " + LOAN_COMMAND_TIMER + " timer for " + command + "/" + outcome);
+        return timer;
+    }
+
+    private double loanCommandCounter(String command, String outcome) {
+        return meterRegistry.get(LOAN_COMMAND_COUNTER).tag("command", command).tag("outcome", outcome).counter().count();
+    }
+
+    private double sumOfLoanCommandCounters() {
+        return meterRegistry.find(LOAN_COMMAND_COUNTER).counters().stream().mapToDouble(Counter::count).sum();
+    }
+
+    private void assertOnlyRecordedLoanCommandSample(String command, String outcome) {
+        assertEquals(1, meterRegistry.find(LOAN_COMMAND_TIMER).timers().size(), "exactly one timer series must exist");
+        assertEquals(1, loanCommandTimer(command, outcome).count());
+        assertEquals(1.0, loanCommandCounter(command, outcome));
+        assertEquals(1.0, sumOfLoanCommandCounters(), "no other counter may move");
+    }
+
+    private void assertNoLoanCommandSample() {
+        assertEquals(20, meterRegistry.getMeters().size(), "only the counters registered at startup may exist");
+        assertEquals(20, meterRegistry.find(LOAN_COMMAND_COUNTER).counters().size());
+        assertEquals(0.0, sumOfLoanCommandCounters());
+        assertTrue(meterRegistry.find(LOAN_COMMAND_TIMER).meters().isEmpty());
     }
 }
