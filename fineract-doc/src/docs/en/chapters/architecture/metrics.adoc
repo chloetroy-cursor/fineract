@@ -1,0 +1,272 @@
+= Metric naming and cardinality
+
+This section is normative. It fixes how Fineract names its Micrometer meters, which tags a meter may carry, and the exact meters for loan commands, COB business steps and HTTP requests. The words MUST, MUST NOT and SHOULD are requirements on code that registers meters. A name, tag key or tag value listed here is a contract with dashboards and alerts: changing one requires changing this section in the same pull request.
+
+The Prometheus names shown are what `/fineract-provider/actuator/prometheus` exposes. The OTLP and CloudWatch registries, when enabled, receive the same meters and tags under their own naming conventions.
+
+== The cardinality rule
+
+This rule binds every meter that Fineract code registers: the meters in this section and any meter added later. Meters that a framework registers are not bound by it. See <<metrics-framework-meters,Framework meters>>.
+
+A tag value MUST come from a set that is closed in code (an enum, a constant, or the registered Spring beans of one type) and whose size is stated in this section. A value that identifies one loan, client, account, user, request or point in time MUST NOT be a tag value and MUST NOT be part of a meter name. A value outside the closed set MUST NOT be passed through: either the sample is not recorded, or the meter's table below names the fixed value to use instead.
+
+== Naming
+
+[cols="1,2,3"]
+|===
+|Meter type |Micrometer name |Prometheus series
+
+|Timer
+|`fineract.loan.command.execution`
+|`fineract_loan_command_execution_seconds_count`, `..._seconds_sum`, `..._seconds_max`, and `..._seconds_bucket` when buckets are configured
+
+|Counter
+|`fineract.loan.commands`
+|`fineract_loan_commands_total`
+|===
+
+* A meter name MUST start with `fineract.`, followed by the functional area and the thing measured: `fineract.<area>.<thing>`. Segments are lowercase ASCII letters and digits separated by dots. No camel case, underscores or hyphens.
+* A meter name MUST be a compile-time constant. It MUST NOT be built from runtime data.
+* A meter name MUST NOT carry a unit or a type suffix (`seconds`, `millis`, `total`, `count`, `sum`, `max`, `bucket`). The registry adds `_seconds` to timers, `_total` to counters and `_<base unit>` to gauges and summaries that declare a base unit.
+* A duration MUST be recorded with a `Timer`. The timer is named for the operation in the singular and ends in `.execution`. Prometheus always reports it in seconds, whatever unit the code records.
+* A count of events MUST be recorded with a `Counter`, named with a plural noun for what is counted.
+* One name is one meter type with one fixed set of tag keys. A timer and a counter cannot share a name, and every sample MUST carry every tag key listed for its meter. A key is never omitted.
+* Micrometer values are `double`. A monetary amount MUST NOT be recorded as a meter value.
+
+== Tags
+
+Tag keys are single lowercase words. A tag value invented for metrics is `lower_snake_case`. A tag value that mirrors an existing Fineract identifier is emitted verbatim.
+
+=== Allowed tag keys
+
+These are the only tag keys Fineract code may put on a meter it registers. Adding a key, or a value to a closed set, requires changing this table.
+
+[cols="1,3,2"]
+|===
+|Key |Values |Maximum
+
+|`application`
+|Common tag on every meter, from `management.metrics.tags.application` (default `fineract`).
+|1 for each deployment
+
+|`command`
+|`submit`, `approve`, `disburse`, `repay`
+|4
+
+|`step`
+|`getEnumStyledName()` of a registered `COBBusinessStep` bean, verbatim, for example `CHECK_LOAN_REPAYMENT_DUE`.
+|Number of `COBBusinessStep` beans in the application: 21 in this source tree, including the custom module example.
+
+|`outcome`
+|A closed set defined for each meter below.
+|5
+|===
+
+The tags that Spring Boot puts on `http.server.requests` (`method`, `status`, `outcome`, `exception`, `error`, `uri`) keep their framework-defined keys and values. Only `uri` is constrained here, in <<metrics-http-requests,HTTP requests>>.
+
+Two groups of meters predate this section and keep their tags: `fineract.report.execution` (`component`, plus `class`, `method` and `exception` added by `TimedAspect`) and the connection pool meters described in <<metrics-tenant,Tenant>>. `@Timed` always adds those three tags, so the meters in this section are registered through `MeterRegistry` and not with `@Timed`.
+
+=== Forbidden tag values
+
+None of the following may be a tag value or part of a meter name on a meter that Fineract code registers:
+
+* Loan id, client id, group id, office id, staff id, user id or username.
+* Account numbers and external ids of any entity.
+* Transaction ids, command ids (`m_portfolio_command_source`), idempotency keys, correlation or request ids, job execution ids.
+* Product ids or names, charge ids, currency codes, datatable names, and any other value read from a tenant's database.
+* Tenant identifier, tenant name or tenant schema name. See <<metrics-tenant,Tenant>>.
+* Raw request URIs, resolved paths, query strings and `CommandWrapper` hrefs.
+* `CommandWrapper` entity and action names passed through unmapped. There are several hundred combinations, and a datatable command uses the user-defined datatable name as its entity name.
+* Exception messages, stack traces and, on meters registered by Fineract, exception class names. Use `outcome`.
+* Dates, business dates, timestamps and amounts.
+* Thread names and Spring Batch partition or step execution names.
+
+[#metrics-framework-meters]
+=== Framework meters
+
+Meters registered by Spring Boot, Spring Batch and other libraries keep their own names and tags, and this section does not vouch for their cardinality. One group is known to break the rule above today. Spring Batch's `spring_batch_*` meters carry the step execution name as a label value, for example in `spring_batch_step_name`, and each partition of a COB worker step has its own name, such as `loanCOBWorkerStep:partition_7`. The number of partitions grows with the number of loans, so these meters gain series with every new partition name. They predate this section and are not changed by it. A later change could drop or rewrite that tag with a `MeterFilter`. Until then, dashboards and alerts SHOULD aggregate that label away and MUST NOT rely on its values.
+
+[#metrics-tenant]
+=== Tenant
+
+Tenants are rows of the `tenants` table in the tenant store database. A request selects one with the `Fineract-Platform-TenantId` header, and `JdbcTenantDetailsService` loads it. The set of tenants is deployment data: the code does not know it, it grows at runtime, and an identifier can name a customer.
+
+* The tenant MUST NOT be a tag on any meter in this section, MUST NOT be added as a common tag (`management.metrics.tags.*` or a `MeterFilter`), and MUST NOT be part of a meter name. Every meter in this section aggregates over all tenants served by the instance.
+* A question about one tenant is answered from the logs (the log pattern carries the tenant identifier) and the command audit table `m_portfolio_command_source` in that tenant's database.
+* The one existing exception is the per-tenant connection pool meters `fineract.tenants.<tenant identifier>.hikaricp.connections.*`, tagged `pool`, registered by `TenantConnectionPoolMetricsTracker`. They predate this section, they MUST NOT be used as a pattern, and they cost 16 series for each tenant connection pool.
+
+== Meters
+
+=== Loan commands
+
+Recorded in `SynchronousCommandProcessingService#executeCommand`, once for each invocation, around the whole call. Retries made inside that call are part of the same sample.
+
+[cols="1,2,2,2"]
+|===
+|Type |Micrometer name |Prometheus name |Tags
+
+|Timer
+|`fineract.loan.command.execution`
+|`fineract_loan_command_execution_seconds`
+|`command`, `outcome`
+
+|Counter
+|`fineract.loan.commands`
+|`fineract_loan_commands_total`
+|`command`, `outcome`
+|===
+
+Both meters are recorded for the same invocations with the same tag values, so the counter equals the timer's `_count`. The counter is the source for rates and error ratios, the timer for latency. The counter SHOULD be registered at startup for all 20 tag combinations so that every series exists at zero.
+
+The `command` value is derived from the `CommandWrapper`. A command that matches no row is not recorded by these meters.
+
+[cols="1,1,3,3"]
+|===
+|`command` |`entityName` |`actionName` |API call
+
+|`submit`
+|`LOAN`
+|`CREATE`
+|`POST /v1/loans`
+
+|`approve`
+|`LOAN`
+|`APPROVE`
+|`POST /v1/loans/{loanId}?command=approve`
+
+|`disburse`
+|`LOAN`
+|`DISBURSE`, `DISBURSETOSAVINGS`, `DISBURSEWITHOUTAUTODOWNPAYMENT`
+|`POST /v1/loans/{loanId}?command=disburse`, `disburseToSavings`, `disburseWithoutAutoDownPayment`
+
+|`repay`
+|`LOAN`
+|`REPAYMENT`
+|`POST /v1/loans/{loanId}/transactions?command=repayment`
+|===
+
+The entity name MUST equal `LOAN`. `GLIMLOAN`, `WORKINGCAPITALLOAN` and every other entity are not recorded. The same commands sent through `/v1/batches` or by external id are recorded, because they reach the same method.
+
+The `outcome` value is the first row that matches:
+
+[cols="1,4"]
+|===
+|`outcome` |Condition
+
+|`success`
+|`executeCommand` returned a result.
+
+|`awaiting_approval`
+|It threw `RollbackTransactionNotApprovedException`: maker-checker stored the command for a checker. The later approval is a separate invocation with its own sample.
+
+|`duplicate`
+|It threw an `AbstractIdempotentCommandException`: the idempotency key was already seen and the handler did not run.
+
+|`client_error`
+|It threw any other exception that `ErrorHandler#handle` maps to an HTTP status from 400 to 499.
+
+|`server_error`
+|It threw anything else.
+|===
+
+A request rejected before it reaches the command service, for example with `409` by `COBApiFilter` for a hard-locked loan, is not counted here. It is visible on `http.server.requests`.
+
+=== COB business steps
+
+Recorded in `COBBusinessStepServiceImpl#executeBusinessSteps`. That method serves every caller of `COBBusinessStepService#run`: Loan COB and Working Capital Loan COB, batch and inline. The meters do not distinguish a batch run from an inline run. A step belongs to exactly one of the two jobs, so `step` identifies the job.
+
+[cols="1,2,2,2"]
+|===
+|Type |Micrometer name |Prometheus name |Tags
+
+|Timer
+|`fineract.cob.step.execution`
+|`fineract_cob_step_execution_seconds`
+|`step`, `outcome`
+
+|Counter
+|`fineract.cob.loans.processed`
+|`fineract_cob_loans_processed_total`
+|`outcome`
+|===
+
+* The timer records one sample for each call to `businessStepBean.execute(item)` and times that call only, not the bean lookup or the reload before it. A step that is retried records one sample for each attempt. A sample is recorded at once and stays when the transaction rolls back.
+* The counter counts an item once for each transaction that takes it through `executeBusinessSteps`, when that transaction completes. Attempts on the same item inside one transaction, which is how the batch job retries, count as one item with the result of the last attempt. It has no `step` tag. Every item today is a loan or a working capital loan, and both are counted. It SHOULD be registered at startup for both outcomes.
+* `step` is `businessStepBean.getEnumStyledName()`, the name stored in `m_batch_business_steps.step_name` and shown by the job step configuration API. The Spring bean name and the class name MUST NOT be used.
+
+[cols="1,2,2"]
+|===
+|`outcome` |Timer |Counter
+
+|`success`
+|`execute` returned.
+|Every configured step returned for this item and the transaction committed.
+
+|`failure`
+|`execute` threw.
+|The chain ended early for this item with a `BusinessStepException`, or the transaction did not commit.
+|===
+
+The counter follows the transaction and the timer does not. A loan whose chunk rolls back is counted as `failure`, also when all of its own steps returned, and is counted as `success` when a later run processes it and commits. `failure` is not the number of failed steps: one rolled back chunk counts every loan it took through the chain, and five failed attempts on one loan in one chunk count once. When `executeBusinessSteps` runs outside a transaction, the counter is incremented at once for each call.
+
+For the batch job, and for an inline request that is not retried, `success` grows by the number of loans closed for a COB day. Two cases differ:
+
+* A failed inline request is retried as a whole, up to `fineract.retry.instances.inlineCob.max-attempts` attempts (default 3). Each attempt takes the full loan list through the chain again, in new transactions. Loans whose chunk committed in a failed attempt are therefore counted as `success` again in every later attempt, and `success` exceeds the number of loans closed. This needs an attempt that fails after a chunk has committed, so a request of more than one chunk (100 loans by default). Loans that went through the chain in a chunk that rolled back are counted as `failure` once for each attempt. The step timer records the repeated executions as well.
+* When a chunk write fails and Spring Batch then writes the items of that chunk again one by one, the chain is not run again. A loan that such a write commits stays counted as `failure`.
+
+[#metrics-http-requests]
+=== HTTP requests
+
+`http.server.requests` is the existing Spring Boot timer, exposed as `http_server_requests_seconds`. Its name and tag keys stay as they are. This section fixes the value of `uri` for requests served by Jersey, which is every request under `/api`.
+
+* When Jersey matched a resource method, `uri` MUST be the route template: `/api`, then the class-level `@Path`, then the method-level `@Path`, joined with single slashes and with no trailing slash. Examples: `/api/v1/loans`, `/api/v1/loans/{loanId}`, `/api/v1/loans/{loanId}/transactions`, `/api/v1/loans/external-id/{loanExternalId}`.
+* A path variable is reported exactly as `@Path` declares it, including a regular expression: `/api/v1/{resourceType:.+}/{resourceId}/notes`.
+* The template is reported whatever the response status. `GET /api/v1/loans/999999` for a loan that does not exist reports `uri="/api/v1/loans/{loanId}"` with `status="404"`.
+* `uri` MUST NOT contain the resolved path, the servlet context path (`/fineract-provider`), a query string, or a host. `uri` values are relative to the context path, as they already are for `/actuator/prometheus`.
+* When Jersey matched no resource method, `uri` MUST be one of three fixed values: `NOT_FOUND` for a `404`, which here means the path matches no route; `REDIRECTION` for a `3xx`; and `UNKNOWN` otherwise.
+* `UNKNOWN` covers two cases: a `405`, where the path matches a resource but no method of it accepts the HTTP verb, and a request that a servlet filter answered before Jersey ran, such as a `401`. A request for which Jersey matched a resource method MUST NOT report `UNKNOWN`.
+* Each request MUST produce exactly one `http.server.requests` sample. A second instrumentation of the same requests MUST NOT be added next to the existing one.
+* `management.metrics.web.server.max-uri-tags` MUST be set to `1000`. Spring Boot's default of `100` drops samples for every route template after the first hundred, and this source tree declares fewer than 1,000 templates.
+
+The query parameter `command` is not part of `uri`, so `POST /api/v1/loans/{loanId}` covers approval, disbursal and every other state transition. The loan command meters exist to tell them apart.
+
+The route template rule applies to `http_server_requests_seconds` only. `http.server.requests.active`, Spring's long task timer of requests in flight, exposed as `http_server_requests_active_seconds`, is tagged when a request starts, before Jersey matches a route. It is expected to report `uri="UNKNOWN"` for every Jersey request, one series for each HTTP method. Dashboards and alerts MUST NOT break it down or filter it by `uri`.
+
+== Histograms
+
+* Percentiles computed in the application (`publishPercentiles`, `management.metrics.distribution.percentiles.*`) MUST NOT be used. They cannot be aggregated across instances.
+* `percentiles-histogram` MUST NOT be enabled for a meter registered by Fineract. It publishes about 70 bucket series for each tag combination.
+* A timer registered by Fineract publishes a histogram only as explicit service level objective buckets. The buckets are set in `application.properties` and not in the timer builder, so an operator can change them without a code change:
+
+[source,properties]
+----
+management.metrics.distribution.slo.fineract.loan.command.execution=50ms,100ms,250ms,500ms,1s,2500ms,5s,10s
+management.metrics.distribution.slo.fineract.cob.step.execution=5ms,10ms,25ms,50ms,100ms,250ms,1s,5s
+----
+
+* `http.server.requests` publishes no histogram by default (`FINERACT_MANAGEMENT_METRICS_DISTRIBUTION_HTTP_SERVER_REQUESTS` is `false`), and SHOULD stay that way in production: with route templates as `uri`, the percentile histogram costs about 70 series for each route, method and status that is requested. A deployment that needs request latency buckets SHOULD set `management.metrics.distribution.slo.http.server.requests` to at most five boundaries.
+
+A timer costs 3 series for each tag combination (`_count`, `_sum`, `_max`), plus one for each bucket and one for `+Inf`. The ceilings for one application instance are:
+
+[cols="3,3,1"]
+|===
+|Meter |Tag combinations |Series
+
+|`fineract_loan_commands_total`
+|4 commands x 5 outcomes
+|20
+
+|`fineract_loan_command_execution_seconds`
+|4 commands x 5 outcomes, 12 series each
+|240
+
+|`fineract_cob_step_execution_seconds`
+|21 steps x 2 outcomes, 12 series each
+|504
+
+|`fineract_cob_loans_processed_total`
+|2 outcomes
+|2
+|===
+
+Timer series appear when a tag combination is first recorded, so a running instance stays well below these ceilings.
