@@ -376,7 +376,7 @@
       "type": "stat",
       "id": 7,
       "title": "COB loans failed",
-      "description": "Loans whose COB step chain ended with an exception in the selected time range. Any value above zero is red; the alert FineractCobLoanFailures fires on the same condition.",
+      "description": "Failed attempts to take a loan through the COB step chain in the selected time range. The batch job retries a loan, so one loan can count more than once. Any value above zero is red; the alert FineractCobLoanFailures fires on the same condition.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2399,7 +2399,7 @@
       "type": "stat",
       "id": 26,
       "title": "Loans processed, last 24 h",
-      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. Inline COB calls count too.",
+      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. Only what Prometheus scraped counts: hours for which Prometheus holds no data add nothing. Inline COB calls count too.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2463,7 +2463,7 @@
       "type": "stat",
       "id": 27,
       "title": "Loans failed, last 24 h",
-      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. A failed loan stays on its old COB date until it is processed again.",
+      "description": "The meters carry no run identifier, because a job execution id is not a bounded label. With the Loan COB job scheduled once a day, the last 24 hours are one run. Only what Prometheus scraped counts: hours for which Prometheus holds no data add nothing. Counts failed attempts: the batch job retries a loan, so one loan can count more than once. A failed loan stays on its old COB date until it is processed again.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -2531,7 +2531,7 @@
       "type": "stat",
       "id": 28,
       "title": "Loan failure ratio, last 24 h",
-      "description": "Failed loans over all loans processed in the last 24 hours. Red from 1%, the threshold of the alert FineractCobLoanFailureRatioCritical (which looks at 30 minutes).",
+      "description": "Failed attempts over all attempts in the last 24 hours. Red from 1%, the threshold of the alert FineractCobLoanFailureRatioCritical (which looks at 30 minutes).",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -3279,7 +3279,7 @@
       "type": "timeseries",
       "id": 36,
       "title": "Step failures by step, since server start",
-      "description": "Running count of loans for which a step threw, for each step. It is the raw counter and not a rate, because a step's failure series is created by its first failure and a rate cannot see that first sample. Every jump is a failure; the count returns to zero when the server restarts.",
+      "description": "Running count of step executions that threw, for each step; a loan that is retried counts each time. It is the raw counter and not a rate, because a step's failure series is created by its first failure and a rate cannot see that first sample. Every jump is a failure; the count returns to zero when the server restarts.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

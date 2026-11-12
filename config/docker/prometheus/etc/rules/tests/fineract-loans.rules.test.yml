@@ -331,8 +331,8 @@ tests:
               summary: "COB step LOAN_DELINQUENCY_CLASSIFICATION is failing"
               description: >-
                 Failed executions of COB business step LOAN_DELINQUENCY_CLASSIFICATION on fineract in the last
-                15 minutes: about 1. Each one ends the step chain for one loan, which then stays behind on its
-                COB date. The server log has the loan id and the exception.
+                15 minutes: about 1. Each one ended one attempt at a loan's step chain. The batch job retries a
+                loan, so one loan can count more than once. The server log has the loan id and the exception.
       - eval_time: 30m
         alertname: FineractCobStepFailures
         exp_alerts:
@@ -344,8 +344,8 @@ tests:
               summary: "COB step LOAN_DELINQUENCY_CLASSIFICATION is failing"
               description: >-
                 Failed executions of COB business step LOAN_DELINQUENCY_CLASSIFICATION on fineract in the last
-                15 minutes: about 3. Each one ends the step chain for one loan, which then stays behind on its
-                COB date. The server log has the loan id and the exception.
+                15 minutes: about 3. Each one ended one attempt at a loan's step chain. The batch job retries a
+                loan, so one loan can count more than once. The server log has the loan id and the exception.
       # no new failure for more than 15 minutes
       - eval_time: 50m
         alertname: FineractCobStepFailures
@@ -359,9 +359,10 @@ tests:
             exp_annotations:
               summary: "Loans are failing close of business"
               description: >-
-                Loans on fineract that did not complete the COB step chain in the last 15 minutes: about 1. A
-                failed loan keeps its old COB date until it is processed again successfully, and the batch job
-                records the error on the loan's account lock.
+                Failed attempts to take a loan through the COB step chain on fineract in the last 15 minutes:
+                about 1. The batch job retries a loan, so one loan can count more than once. When it gives up
+                on a loan it rolls back that loan's chunk, and every loan in the chunk keeps its old COB date
+                until a later run processes it.
       - eval_time: 50m
         alertname: FineractCobLoanFailures
         exp_alerts: []
@@ -370,7 +371,7 @@ tests:
         exp_alerts: []
 
   # Prometheus starts with an empty database while the server already has 3 step failures from an hour ago.
-  # Nothing failed since, so nothing fires, neither at once nor when the 15 minute offset starts to exist.
+  # Nothing failed since, so the loan failure counter does not move and nothing fires.
   - interval: 1m
     input_series:
       - series: 'up{job="fineract-server",instance="fineract:8443"}'
@@ -396,6 +397,40 @@ tests:
         exp_alerts: []
       - eval_time: 16m
         alertname: FineractCobLoanFailures
+        exp_alerts: []
+
+  # Prometheus has scraped the server for 4 minutes when the first batch job fails 6 step executions at once
+  # (seen on a live server: one loan failed once, the next one five times through retries). The step series
+  # is created at 6. The step alert fires without 15 minutes of history, and stops 15 minutes later.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="fineract-server",instance="fineract:8443"}'
+        values: '1x40'
+      - series: 'fineract_cob_loans_processed_total{job="fineract-server",instance="fineract:8443",application="fineract",outcome="success"}'
+        values: '0 0 0 1000 1423x36'
+      - series: 'fineract_cob_loans_processed_total{job="fineract-server",instance="fineract:8443",application="fineract",outcome="failure"}'
+        values: '0 0 0 0 6x36'
+      - series: 'fineract_cob_step_execution_seconds_count{job="fineract-server",instance="fineract:8443",application="fineract",step="LOAN_DELINQUENCY_CLASSIFICATION",outcome="failure"}'
+        values: '_ _ _ _ 6x36'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: FineractCobStepFailures
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: FineractCobStepFailures
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              application: fineract
+              step: LOAN_DELINQUENCY_CLASSIFICATION
+            exp_annotations:
+              summary: "COB step LOAN_DELINQUENCY_CLASSIFICATION is failing"
+              description: >-
+                Failed executions of COB business step LOAN_DELINQUENCY_CLASSIFICATION on fineract in the last
+                15 minutes: about 6. Each one ended one attempt at a loan's step chain. The batch job retries a
+                loan, so one loan can count more than once. The server log has the loan id and the exception.
+      - eval_time: 25m
+        alertname: FineractCobStepFailures
         exp_alerts: []
 
   # COB failure ratio and step latency. 5% of loans fail; one step has p95 = 0.81 s, the other is fast.

@@ -49,6 +49,8 @@
 #
 #   COB step and loan failures. Any failure warns: a loan whose step chain fails stays on its old COB date
 #   until it is processed again successfully, and the batch job records the error on the loan's account lock.
+#   Both failure counters count attempts, not loans: the batch job retries a failed loan in place, so one loan
+#   can add several, and when it gives up on a loan it rolls back the whole chunk that loan was in.
 #   Critical when more than 1% of the loans processed in 30 minutes fail, which points at a broken step and
 #   not at one bad loan.
 #
@@ -200,10 +202,11 @@ groups:
     rules:
       # A step's failure timer is registered on its first failure, so the series starts at 1 and increase()
       # cannot see that first failure. The first operand takes a series that exists now and did not 15 minutes
-      # ago at its full value, but only when its target was already scraped 15 minutes ago: otherwise a
-      # Prometheus that starts with an empty database would report old failures as new. increase() covers a
-      # series that is older than 15 minutes. What this misses is the first failure of a step on an instance
-      # that Prometheus has scraped for less than 15 minutes; FineractCobLoanFailures still fires for that loan.
+      # ago at its full value, but only when fineract_cob_loans_processed_total{outcome="failure"} moved on the
+      # same instance in those 15 minutes. That counter exists from startup and moves with every failed step
+      # chain, so it tells a new failure from an old one that a Prometheus with an empty database sees for the
+      # first time. increase() covers a series that is older than 15 minutes. Known limit: while Prometheus has
+      # less than 15 minutes of data, a new failure in one step also reports the old failures of other steps.
       - alert: FineractCobStepFailures
         expr: |
           sum by (application, step) (
@@ -214,7 +217,7 @@ groups:
                 fineract_cob_step_execution_seconds_count{outcome="failure"} offset 15m
               )
               and on (job, instance)
-              (up offset 15m == 1)
+              (increase(fineract_cob_loans_processed_total{outcome="failure"}[15m]) > 0)
             )
             or
             (increase(fineract_cob_step_execution_seconds_count{outcome="failure"}[15m]) > 0)
@@ -225,8 +228,9 @@ groups:
           summary: "COB step {{ $labels.step }} is failing"
           description: >-
             Failed executions of COB business step {{ $labels.step }} on {{ $labels.application }} in the last
-            15 minutes: about {{ $value | printf "%.0f" }}. Each one ends the step chain for one loan, which then
-            stays behind on its COB date. The server log has the loan id and the exception.
+            15 minutes: about {{ $value | printf "%.0f" }}. Each one ended one attempt at a loan's step chain. The
+            batch job retries a loan, so one loan can count more than once. The server log has the loan id and
+            the exception.
 
       - alert: FineractCobLoanFailures
         expr: |
@@ -236,9 +240,10 @@ groups:
         annotations:
           summary: "Loans are failing close of business"
           description: >-
-            Loans on {{ $labels.application }} that did not complete the COB step chain in the last 15 minutes:
-            about {{ $value | printf "%.0f" }}. A failed loan keeps its old COB date until it is processed again
-            successfully, and the batch job records the error on the loan's account lock.
+            Failed attempts to take a loan through the COB step chain on {{ $labels.application }} in the last
+            15 minutes: about {{ $value | printf "%.0f" }}. The batch job retries a loan, so one loan can count
+            more than once. When it gives up on a loan it rolls back that loan's chunk, and every loan in the
+            chunk keeps its old COB date until a later run processes it.
 
       - alert: FineractCobLoanFailureRatioCritical
         expr: |
