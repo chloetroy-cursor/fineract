@@ -82,6 +82,7 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
     private final IdempotencyKeyResolver idempotencyKeyResolver;
     private final CommandSourceService commandSourceService;
     private final RetryConfigurationAssembler retryConfigurationAssembler;
+    private final LoanCommandMetrics loanCommandMetrics;
 
     private final FineractRequestContextHolder fineractRequestContextHolder;
     private final Gson gson = GoogleGsonSerializerHelper.createSimpleGson();
@@ -105,7 +106,21 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
     @Override
     public CommandProcessingResult executeCommand(final CommandWrapper wrapper, final JsonCommand command,
             final boolean isApprovedByChecker) {
-        return executeWithRetry(new CommandExecutionContext(wrapper, command, isApprovedByChecker));
+        final CommandExecutionContext executionContext = new CommandExecutionContext(wrapper, command, isApprovedByChecker);
+        final LoanCommandMetrics.LoanCommand loanCommand = LoanCommandMetrics.LoanCommand.of(wrapper);
+        if (loanCommand == null) {
+            return executeWithRetry(executionContext);
+        }
+        final long startNanos = loanCommandMetrics.start();
+        final CommandProcessingResult result;
+        try {
+            result = executeWithRetry(executionContext);
+        } catch (RuntimeException | Error e) {
+            loanCommandMetrics.recordFailure(loanCommand, startNanos, e, executionContext.errorStatusCodeOf(e));
+            throw e;
+        }
+        loanCommandMetrics.recordSuccess(loanCommand, startNanos);
+        return result;
     }
 
     private CommandProcessingResult executeCommandAttempt(CommandExecutionContext executionContext) {
@@ -208,6 +223,7 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
             return;
         }
         ErrorInfo errorInfo = commandSourceService.generateErrorInfo(mappable);
+        executionContext.setErrorStatusCode(mappable, errorInfo.getStatusCode());
         publishHookErrorEvent(executionContext.wrapper(), executionContext.command(), errorInfo);
         if (executionContext.enclosingTransaction()) {
             return;
@@ -274,6 +290,8 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
         private final boolean approvedByChecker;
         private CommandSource commandSource;
         private boolean enclosingTransaction;
+        private RuntimeException erroredWith;
+        private Integer errorStatusCode;
 
         private CommandExecutionContext(CommandWrapper wrapper, JsonCommand command, boolean approvedByChecker) {
             this.wrapper = wrapper;
@@ -307,6 +325,15 @@ public class SynchronousCommandProcessingService implements CommandProcessingSer
 
         void setEnclosingTransaction(boolean enclosingTransaction) {
             this.enclosingTransaction = enclosingTransaction;
+        }
+
+        Integer errorStatusCodeOf(Throwable thrown) {
+            return thrown == erroredWith ? errorStatusCode : null;
+        }
+
+        void setErrorStatusCode(RuntimeException exception, Integer errorStatusCode) {
+            this.erroredWith = exception;
+            this.errorStatusCode = errorStatusCode;
         }
     }
 
