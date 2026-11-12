@@ -27,6 +27,11 @@ For further understanding of the configurations properties related to metrics, r
 |false
 |Whether to publish percentile histograms for HTTP server requests.
 
+|management.metrics.web.server.max-uri-tags
+|
+|1000
+|Maximum number of distinct `uri` tag values recorded for HTTP server requests. The `uri` tag is the route template, for example `/api/v1/loans/{loanId}`, so this must be at least the number of API routes. Requests to further routes are not recorded once the limit is reached.
+
 |management.otlp.metrics.export.url
 |FINERACT_MANAGEMENT_OLTP_METRICS_EXPORT_URL
 |http://tempo:4318/v1/traces
