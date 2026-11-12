@@ -6,6 +6,8 @@ The Prometheus names shown are what `/fineract-provider/actuator/prometheus` exp
 
 == The cardinality rule
 
+This rule binds every meter that Fineract code registers: the meters in this section and any meter added later. Meters that a framework registers are not bound by it. See <<metrics-framework-meters,Framework meters>>.
+
 A tag value MUST come from a set that is closed in code (an enum, a constant, or the registered Spring beans of one type) and whose size is stated in this section. A value that identifies one loan, client, account, user, request or point in time MUST NOT be a tag value and MUST NOT be part of a meter name. A value outside the closed set MUST NOT be passed through: either the sample is not recorded, or the meter's table below names the fixed value to use instead.
 
 == Naming
@@ -66,7 +68,7 @@ Two groups of meters predate this section and keep their tags: `fineract.report.
 
 === Forbidden tag values
 
-None of the following may be a tag value or part of a meter name, on any meter:
+None of the following may be a tag value or part of a meter name on a meter that Fineract code registers:
 
 * Loan id, client id, group id, office id, staff id, user id or username.
 * Account numbers and external ids of any entity.
@@ -78,6 +80,11 @@ None of the following may be a tag value or part of a meter name, on any meter:
 * Exception messages, stack traces and, on meters registered by Fineract, exception class names. Use `outcome`.
 * Dates, business dates, timestamps and amounts.
 * Thread names and Spring Batch partition or step execution names.
+
+[#metrics-framework-meters]
+=== Framework meters
+
+Meters registered by Spring Boot, Spring Batch and other libraries keep their own names and tags, and this section does not vouch for their cardinality. One group is known to break the rule above today. Spring Batch's `spring_batch_*` meters carry the step execution name as a label value, for example in `spring_batch_step_name`, and each partition of a COB worker step has its own name, such as `loanCOBWorkerStep:partition_7`. The number of partitions grows with the number of loans, so these meters gain series with every new partition name. They predate this section and are not changed by it. A later change could drop or rewrite that tag with a `MeterFilter`. Until then, dashboards and alerts SHOULD aggregate that label away and MUST NOT rely on its values.
 
 [#metrics-tenant]
 === Tenant
@@ -200,9 +207,12 @@ Recorded in `COBBusinessStepServiceImpl#executeBusinessSteps`. That method serve
 |The chain ended early for this item with a `BusinessStepException`, or the transaction did not commit.
 |===
 
-The counter follows the transaction and the timer does not. A loan whose chunk rolls back is counted as `failure`, also when all of its own steps returned, and is counted as `success` when a later run processes it and commits. So `success` counts each time a loan is closed for a COB day. `failure` is not the number of failed steps: one rolled back chunk counts every loan it carried, and five failed attempts on one loan in one chunk count once. An inline run that is retried uses a new transaction for each attempt, so its loans are counted once for each attempt. When `executeBusinessSteps` runs outside a transaction, the counter is incremented at once for each call.
+The counter follows the transaction and the timer does not. A loan whose chunk rolls back is counted as `failure`, also when all of its own steps returned, and is counted as `success` when a later run processes it and commits. `failure` is not the number of failed steps: one rolled back chunk counts every loan it took through the chain, and five failed attempts on one loan in one chunk count once. When `executeBusinessSteps` runs outside a transaction, the counter is incremented at once for each call.
 
-One case breaks the `success` rule. When a chunk write fails and Spring Batch then writes the items of that chunk again one by one, the chain is not run again. A loan that such a write commits stays counted as `failure`.
+For the batch job, and for an inline request that is not retried, `success` grows by the number of loans closed for a COB day. Two cases differ:
+
+* A failed inline request is retried as a whole, up to `fineract.retry.instances.inlineCob.max-attempts` attempts (default 3). Each attempt takes the full loan list through the chain again, in new transactions. Loans whose chunk committed in a failed attempt are therefore counted as `success` again in every later attempt, and `success` exceeds the number of loans closed. This needs an attempt that fails after a chunk has committed, so a request of more than one chunk (100 loans by default). Loans that went through the chain in a chunk that rolled back are counted as `failure` once for each attempt. The step timer records the repeated executions as well.
+* When a chunk write fails and Spring Batch then writes the items of that chunk again one by one, the chain is not run again. A loan that such a write commits stays counted as `failure`.
 
 [#metrics-http-requests]
 === HTTP requests
