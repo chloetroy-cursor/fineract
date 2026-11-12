@@ -95,7 +95,7 @@ public class COBBusinessStepServiceImpl implements COBBusinessStepService {
             allStepsSucceeded = true;
             return result;
         } finally {
-            cobBusinessStepMetrics.recordItem(allStepsSucceeded);
+            cobBusinessStepMetrics.recordItem(item, allStepsSucceeded);
         }
     }
 

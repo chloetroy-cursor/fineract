@@ -22,12 +22,17 @@ import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Meters for the COB business step chain run by {@link COBBusinessStepServiceImpl}.
@@ -35,6 +40,9 @@ import org.springframework.stereotype.Component;
  * Names, tag keys and tag values are fixed by the "Metric naming and cardinality" chapter of the architecture
  * documentation. The only tags are {@code step} and {@code outcome}: nothing here may identify a loan, a client or a
  * tenant.
+ *
+ * The timer counts calls to a step, so a retried step is one sample for each attempt. The counter counts items by what
+ * became of their transaction, see {@link #recordItem(AbstractPersistableCustom, boolean)}.
  *
  * The recording methods never throw, so a metrics problem cannot fail a business step or replace its exception.
  */
@@ -102,15 +110,90 @@ public class COBBusinessStepMetrics {
     /**
      * Counts one item that went through the business step chain.
      *
+     * Inside a transaction the item is counted when that transaction completes: as {@code success} when the chain
+     * returned and the transaction committed, as {@code failure} otherwise. An item that is retried inside the
+     * transaction is counted once, by its last attempt. Outside a transaction the item is counted at once.
+     *
+     * @param item
+     *            the item handed to the chain; its id only tells a retry from another item and is never a tag
      * @param succeeded
      *            {@code true} when every configured step returned, {@code false} when the chain ended early
      */
-    public void recordItem(boolean succeeded) {
+    public void recordItem(AbstractPersistableCustom<Long> item, boolean succeeded) {
         try {
-            (succeeded ? loansSucceeded : loansFailed).increment();
+            ItemsOfTransaction itemsOfTransaction = itemsOfCurrentTransaction();
+            if (itemsOfTransaction == null) {
+                count(succeeded, 1);
+            } else {
+                itemsOfTransaction.put(item, succeeded);
+            }
         } catch (RuntimeException e) {
             logRecordingFailure(e);
         }
+    }
+
+    // The holder is looked up among the synchronizations of the transaction instead of being bound to the thread, so
+    // Spring suspends, resumes and discards it with the transaction and nothing here can outlive it.
+    private ItemsOfTransaction itemsOfCurrentTransaction() {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()
+                || !TransactionSynchronizationManager.isActualTransactionActive()) {
+            return null;
+        }
+        for (TransactionSynchronization synchronization : TransactionSynchronizationManager.getSynchronizations()) {
+            if (synchronization instanceof ItemsOfTransaction itemsOfTransaction && itemsOfTransaction.belongsTo(this)) {
+                return itemsOfTransaction;
+            }
+        }
+        ItemsOfTransaction itemsOfTransaction = new ItemsOfTransaction();
+        TransactionSynchronizationManager.registerSynchronization(itemsOfTransaction);
+        return itemsOfTransaction;
+    }
+
+    private void count(boolean succeeded, int items) {
+        if (items > 0) {
+            (succeeded ? loansSucceeded : loansFailed).increment(items);
+        }
+    }
+
+    private final class ItemsOfTransaction implements TransactionSynchronization {
+
+        private final Map<Object, Boolean> chainReturnedByItem = new HashMap<>();
+
+        private boolean belongsTo(COBBusinessStepMetrics metrics) {
+            return COBBusinessStepMetrics.this == metrics;
+        }
+
+        private void put(AbstractPersistableCustom<Long> item, boolean chainReturned) {
+            chainReturnedByItem.put(key(item), chainReturned);
+        }
+
+        private Object key(AbstractPersistableCustom<Long> item) {
+            if (item == null) {
+                return new Object();
+            }
+            Long id = item.getId();
+            return id == null ? item : new ItemKey(item.getClass(), id);
+        }
+
+        @Override
+        public void afterCompletion(int status) {
+            try {
+                boolean committed = status == STATUS_COMMITTED;
+                int succeeded = 0;
+                for (boolean chainReturned : chainReturnedByItem.values()) {
+                    if (committed && chainReturned) {
+                        succeeded++;
+                    }
+                }
+                count(true, succeeded);
+                count(false, chainReturnedByItem.size() - succeeded);
+            } catch (RuntimeException e) {
+                logRecordingFailure(e);
+            }
+        }
+    }
+
+    private record ItemKey(Class<?> type, Long id) {
     }
 
     private Timer stepTimer(String stepName, boolean succeeded) {
