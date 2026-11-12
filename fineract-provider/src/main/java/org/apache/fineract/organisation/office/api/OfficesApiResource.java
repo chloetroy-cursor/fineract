@@ -64,6 +64,8 @@ import org.apache.fineract.infrastructure.core.service.SearchParameters;
 import org.apache.fineract.infrastructure.security.service.PlatformSecurityContext;
 import org.apache.fineract.infrastructure.security.service.SqlValidator;
 import org.apache.fineract.organisation.office.data.OfficeData;
+import org.apache.fineract.organisation.office.data.OfficeLoanOutstandingData;
+import org.apache.fineract.organisation.office.service.OfficeLoanOutstandingReadService;
 import org.apache.fineract.organisation.office.service.OfficeReadPlatformService;
 import org.glassfish.jersey.media.multipart.FormDataContentDisposition;
 import org.glassfish.jersey.media.multipart.FormDataParam;
@@ -86,6 +88,7 @@ public class OfficesApiResource {
     private final OfficeSwaggerMapper officeSwaggerMapper;
     private final PlatformSecurityContext context;
     private final OfficeReadPlatformService readPlatformService;
+    private final OfficeLoanOutstandingReadService officeLoanOutstandingReadService;
     private final DefaultToApiJsonSerializer<OfficeData> toApiJsonSerializer;
     private final ApiRequestParameterHelper apiRequestParameterHelper;
     private final PortfolioCommandSourceWritePlatformService commandsSourceWritePlatformService;
@@ -183,6 +186,18 @@ public class OfficesApiResource {
             office = OfficeData.appendedTemplate(office, allowedParents);
         }
         return officeSwaggerMapper.toGetOfficesResponse(office);
+    }
+
+    @GET
+    @Path("{officeId}/loans/outstanding")
+    @Produces({ MediaType.APPLICATION_JSON })
+    @Operation(summary = "Outstanding on active loans for an office and its children, per currency", operationId = "retrieveOfficeLoanOutstanding")
+    @ApiResponse(responseCode = "200", description = "OK", content = @Content(schema = @Schema(implementation = OfficeLoanOutstandingData.class)))
+    public OfficeLoanOutstandingData retrieveOfficeLoanOutstanding(
+            @PathParam("officeId") @Parameter(description = "officeId") final Long officeId) {
+        context.authenticatedUser().validateHasReadPermission(RESOURCE_NAME_FOR_PERMISSIONS);
+        context.authenticatedUser().validateHasReadPermission("LOAN");
+        return officeLoanOutstandingReadService.retrieveActiveLoanOutstanding(officeId);
     }
 
     @PUT
