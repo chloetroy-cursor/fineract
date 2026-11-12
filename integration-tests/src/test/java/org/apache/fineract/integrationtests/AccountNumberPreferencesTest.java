@@ -29,11 +29,17 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
+import org.apache.fineract.client.models.GetAccountNumberFormatsIdResponse;
+import org.apache.fineract.client.models.PutAccountNumberFormatsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAccountNumberFormatHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.FeignErrors;
 import org.apache.fineract.integrationtests.common.CenterDomain;
 import org.apache.fineract.integrationtests.common.CenterHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
-import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -43,7 +49,6 @@ import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtens
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
-import org.apache.fineract.integrationtests.common.system.AccountNumberPreferencesHelper;
 import org.apache.fineract.integrationtests.common.system.CodeHelper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,9 +63,6 @@ public class AccountNumberPreferencesTest {
     private static final Logger LOG = LoggerFactory.getLogger(AccountNumberPreferencesTest.class);
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
-    private ResponseSpecification responseValidationError;
-    private ResponseSpecification responseNotFoundError;
-    private ResponseSpecification responseForbiddenError;
     private Integer clientId;
     private Integer loanProductId;
     private Integer loanId;
@@ -75,12 +77,13 @@ public class AccountNumberPreferencesTest {
     private final String enforceMinRequiredBalance = "false";
     private LoanTransactionHelper loanTransactionHelper;
     private SavingsAccountHelper savingsAccountHelper;
-    private AccountNumberPreferencesHelper accountNumberPreferencesHelper;
-    private Integer clientAccountNumberPreferenceId;
-    private Integer loanAccountNumberPreferenceId;
-    private Integer savingsAccountNumberPreferenceId;
-    private Integer groupsAccountNumberPreferenceId;
-    private Integer centerAccountNumberPreferenceId;
+    private final FeignAccountNumberFormatHelper accountNumberFormatHelper = new FeignAccountNumberFormatHelper(
+            FineractFeignClientHelper.getFineractFeignClient());
+    private Long clientAccountNumberPreferenceId;
+    private Long loanAccountNumberPreferenceId;
+    private Long savingsAccountNumberPreferenceId;
+    private Long groupsAccountNumberPreferenceId;
+    private Long centerAccountNumberPreferenceId;
     private static final String MINIMUM_OPENING_BALANCE = "1000.0";
     private static final String ACCOUNT_TYPE_INDIVIDUAL = "INDIVIDUAL";
     private Boolean isAccountPreferenceSetUp = false;
@@ -101,12 +104,7 @@ public class AccountNumberPreferencesTest {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.responseValidationError = new ResponseSpecBuilder().expectStatusCode(400).build();
-        this.responseNotFoundError = new ResponseSpecBuilder().expectStatusCode(404).build();
-        this.responseForbiddenError = new ResponseSpecBuilder().expectStatusCode(403).build();
         this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
-        this.accountNumberPreferencesHelper = new AccountNumberPreferencesHelper(this.requestSpec, this.responseSpec);
-
     }
 
     @Test
@@ -150,21 +148,19 @@ public class AccountNumberPreferencesTest {
     }
 
     private void deleteAllAccountNumberPreferences() {
-        ArrayList<HashMap<String, Object>> preferenceIds = this.accountNumberPreferencesHelper.getAllAccountNumberPreferences();
+        List<GetAccountNumberFormatsIdResponse> preferences = this.accountNumberFormatHelper.retrieveAllAccountNumberFormats();
         /* Deletion of valid account preference ID */
-        for (HashMap<String, Object> preferenceId : preferenceIds) {
-            Integer id = (Integer) preferenceId.get("id");
-            HashMap<String, Object> delResponse = this.accountNumberPreferencesHelper.deleteAccountNumberPreference(id, this.responseSpec,
-                    "");
-            LOG.info("Successfully deleted account number preference (ID: {} )", delResponse.get("resourceId"));
+        for (GetAccountNumberFormatsIdResponse preference : preferences) {
+            Long deletedId = this.accountNumberFormatHelper.deleteAccountNumberFormat(preference.getId()).getResourceId();
+            LOG.info("Successfully deleted account number preference (ID: {} )", deletedId);
         }
         /* Deletion of invalid account preference ID should fail */
         LOG.info(
                 "---------------------------------DELETING ACCOUNT NUMBER PREFERENCE WITH INVALID ID------------------------------------------");
 
-        HashMap<String, Object> deletionError = this.accountNumberPreferencesHelper.deleteAccountNumberPreference(10,
-                this.responseNotFoundError, "");
-        Assertions.assertEquals("error.msg.resource.not.found", deletionError.get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
+        CallFailedRuntimeException deletionError = this.accountNumberFormatHelper.deleteAccountNumberFormatExpectingError(10L);
+        Assertions.assertEquals(404, deletionError.getStatus());
+        Assertions.assertEquals("error.msg.resource.not.found", FeignErrors.errorGlobalisationCode(deletionError));
     }
 
     private void validateDefaultAccountNumberGeneration() {
@@ -185,94 +181,99 @@ public class AccountNumberPreferencesTest {
     }
 
     private void createAccountNumberPreference() {
-        this.clientAccountNumberPreferenceId = (Integer) this.accountNumberPreferencesHelper
-                .createClientAccountNumberPreference(this.responseSpec, "resourceId");
+        this.clientAccountNumberPreferenceId = this.accountNumberFormatHelper.createAccountNumberFormat(
+                FeignAccountNumberFormatHelper.ACCOUNT_TYPE_CLIENT, FeignAccountNumberFormatHelper.PREFIX_TYPE_CLIENT_TYPE);
         LOG.info("Successfully created account number preferences for Client (ID: {})", this.clientAccountNumberPreferenceId);
 
-        this.loanAccountNumberPreferenceId = (Integer) this.accountNumberPreferencesHelper
-                .createLoanAccountNumberPreference(this.responseSpec, "resourceId");
+        this.loanAccountNumberPreferenceId = this.accountNumberFormatHelper.createAccountNumberFormat(
+                FeignAccountNumberFormatHelper.ACCOUNT_TYPE_LOAN, FeignAccountNumberFormatHelper.PREFIX_TYPE_OFFICE_NAME);
         LOG.info("Successfully created account number preferences for Loan (ID: {} )", this.loanAccountNumberPreferenceId);
 
-        this.savingsAccountNumberPreferenceId = (Integer) this.accountNumberPreferencesHelper
-                .createSavingsAccountNumberPreference(this.responseSpec, "resourceId");
+        this.savingsAccountNumberPreferenceId = this.accountNumberFormatHelper.createAccountNumberFormat(
+                FeignAccountNumberFormatHelper.ACCOUNT_TYPE_SAVINGS, FeignAccountNumberFormatHelper.PREFIX_TYPE_OFFICE_NAME);
         LOG.info("Successfully created account number preferences for Savings (ID: {})", this.savingsAccountNumberPreferenceId);
 
-        this.groupsAccountNumberPreferenceId = (Integer) this.accountNumberPreferencesHelper
-                .createGroupsAccountNumberPreference(this.responseSpec, "resourceId");
+        this.groupsAccountNumberPreferenceId = this.accountNumberFormatHelper.createAccountNumberFormat(
+                FeignAccountNumberFormatHelper.ACCOUNT_TYPE_GROUP, FeignAccountNumberFormatHelper.PREFIX_TYPE_OFFICE_NAME);
         LOG.info("Successfully created account number preferences for Groups (ID: {})", this.groupsAccountNumberPreferenceId);
 
-        this.centerAccountNumberPreferenceId = (Integer) this.accountNumberPreferencesHelper
-                .createCenterAccountNumberPreference(this.responseSpec, "resourceId");
+        this.centerAccountNumberPreferenceId = this.accountNumberFormatHelper.createAccountNumberFormat(
+                FeignAccountNumberFormatHelper.ACCOUNT_TYPE_CENTER, FeignAccountNumberFormatHelper.PREFIX_TYPE_OFFICE_NAME);
         LOG.info("Successfully created account number preferences for Center (ID: {})", this.centerAccountNumberPreferenceId);
 
-        this.accountNumberPreferencesHelper.verifyCreationOfAccountNumberPreferences(this.clientAccountNumberPreferenceId,
-                this.loanAccountNumberPreferenceId, this.savingsAccountNumberPreferenceId, this.groupsAccountNumberPreferenceId,
-                this.centerAccountNumberPreferenceId, this.responseSpec, this.requestSpec);
+        for (Long preferenceId : List.of(this.clientAccountNumberPreferenceId, this.loanAccountNumberPreferenceId,
+                this.savingsAccountNumberPreferenceId, this.groupsAccountNumberPreferenceId, this.centerAccountNumberPreferenceId)) {
+            Assertions.assertEquals(preferenceId, this.accountNumberFormatHelper.retrieveAccountNumberFormat(preferenceId).getId());
+        }
 
-        this.createAccountNumberPreferenceInvalidData("1000", "1001");
-        this.createAccountNumberPreferenceDuplicateData("1", "101");
+        this.createAccountNumberPreferenceInvalidData(1000L, 1001L);
+        this.createAccountNumberPreferenceDuplicateData(FeignAccountNumberFormatHelper.ACCOUNT_TYPE_CLIENT,
+                FeignAccountNumberFormatHelper.PREFIX_TYPE_CLIENT_TYPE);
 
     }
 
-    private void createAccountNumberPreferenceDuplicateData(final String accountType, final String prefixType) {
+    private void createAccountNumberPreferenceDuplicateData(final long accountType, final long prefixType) {
         /* Creating account Preference with duplicate data should fail */
         LOG.info(
                 "---------------------------------CREATING ACCOUNT NUMBER PREFERENCE WITH DUPLICATE DATA------------------------------------------");
 
-        HashMap<String, Object> creationError = this.accountNumberPreferencesHelper
-                .createAccountNumberPreferenceWithInvalidData(this.responseForbiddenError, accountType, prefixType, "");
+        CallFailedRuntimeException creationError = this.accountNumberFormatHelper.createAccountNumberFormatExpectingError(accountType,
+                prefixType);
 
+        Assertions.assertEquals(403, creationError.getStatus());
         Assertions.assertEquals("error.msg.account.number.format.duplicate.account.type",
-                creationError.get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
+                FeignErrors.errorGlobalisationCode(creationError));
 
     }
 
-    private void createAccountNumberPreferenceInvalidData(final String accountType, final String prefixType) {
+    private void createAccountNumberPreferenceInvalidData(final long accountType, final long prefixType) {
 
         /* Creating account Preference with invalid data should fail */
         LOG.info(
                 "---------------------------------CREATING ACCOUNT NUMBER PREFERENCE WITH INVALID DATA------------------------------------------");
 
-        HashMap<String, Object> creationError = this.accountNumberPreferencesHelper
-                .createAccountNumberPreferenceWithInvalidData(this.responseValidationError, accountType, prefixType, "");
+        CallFailedRuntimeException creationError = this.accountNumberFormatHelper.createAccountNumberFormatExpectingError(accountType,
+                prefixType);
 
-        if (creationError.get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE)
-                .equals("validation.msg.accountNumberFormat.accountType.is.not.within.expected.range")) {
-            Assertions.assertEquals("validation.msg.accountNumberFormat.accountType.is.not.within.expected.range",
-                    creationError.get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
-        } else if (creationError.get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE)
-                .equals("validation.msg.accountNumberFormat.prefixType.is.not.one.of.expected.enumerations")) {
-            Assertions.assertEquals("validation.msg.accountNumberFormat.prefixType.is.not.one.of.expected.enumerations",
-                    creationError.get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
-        }
+        Assertions.assertEquals(400, creationError.getStatus());
+        String errorCode = FeignErrors.errorGlobalisationCode(creationError);
+        Assertions.assertTrue(
+                Set.of("validation.msg.accountNumberFormat.accountType.is.not.within.expected.range",
+                        "validation.msg.accountNumberFormat.prefixType.is.not.one.of.expected.enumerations").contains(errorCode),
+                errorCode);
     }
 
     private void updateAccountNumberPreference() {
-        HashMap<String, Object> accountNumberPreferences = this.accountNumberPreferencesHelper
-                .updateAccountNumberPreference(this.clientAccountNumberPreferenceId, "101", this.responseSpec, "");
+        PutAccountNumberFormatsResponse accountNumberPreferences = this.accountNumberFormatHelper
+                .updateAccountNumberFormat(this.clientAccountNumberPreferenceId, FeignAccountNumberFormatHelper.PREFIX_TYPE_CLIENT_TYPE);
 
         LOG.info("--------------------------UPDATION SUCCESSFUL FOR ACCOUNT NUMBER PREFERENCE ID {}",
-                accountNumberPreferences.get("resourceId"));
+                accountNumberPreferences.getResourceId());
 
-        this.accountNumberPreferencesHelper.verifyUpdationOfAccountNumberPreferences((Integer) accountNumberPreferences.get("resourceId"),
-                this.responseSpec, this.requestSpec);
+        Assertions.assertEquals(accountNumberPreferences.getResourceId(),
+                this.accountNumberFormatHelper.retrieveAccountNumberFormat(accountNumberPreferences.getResourceId()).getId());
 
         /* Update invalid account preference id should fail */
         LOG.info(
                 "---------------------------------UPDATING ACCOUNT NUMBER PREFERENCE WITH INVALID DATA------------------------------------------");
 
         /* Invalid Account Type */
-        HashMap<String, Object> updationError = this.accountNumberPreferencesHelper.updateAccountNumberPreference(9999, "101",
-                this.responseNotFoundError, "");
-        if (updationError.get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE).equals("error.msg.resource.not.found")) {
-            Assertions.assertEquals("error.msg.resource.not.found", updationError.get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
-        }
+        CallFailedRuntimeException updationError = this.accountNumberFormatHelper.updateAccountNumberFormatExpectingError(9999L,
+                FeignAccountNumberFormatHelper.PREFIX_TYPE_CLIENT_TYPE);
+        Assertions.assertEquals(404, updationError.getStatus());
+        Assertions.assertEquals("error.msg.resource.not.found", FeignErrors.errorGlobalisationCode(updationError));
+
         /* Invalid Prefix Type */
-        HashMap<String, Object> updationError1 = this.accountNumberPreferencesHelper
-                .updateAccountNumberPreference(this.clientAccountNumberPreferenceId, "103", this.responseValidationError, "");
+        CallFailedRuntimeException updationError1 = this.accountNumberFormatHelper
+                .updateAccountNumberFormatExpectingError(this.clientAccountNumberPreferenceId, 103L);
 
-        Assertions.assertEquals("validation.msg.validation.errors.exist", updationError1.get(CommonConstants.RESPONSE_ERROR_MESSAGE_CODE));
+        Assertions.assertEquals(400, updationError1.getStatus());
+        Assertions.assertEquals("validation.msg.validation.errors.exist", updationError1.getUserMessageGlobalisationCode());
 
+    }
+
+    private String prefixTypeValue(Long accountNumberPreferenceId) {
+        return this.accountNumberFormatHelper.retrieveAccountNumberFormat(accountNumberPreferenceId).getPrefixType().getValue();
     }
 
     private void createAndValidateClientEntity(Boolean isAccountPreferenceSetUp) {
@@ -296,8 +297,7 @@ public class AccountNumberPreferencesTest {
         this.groupAccountNo = Utils.performServerGet(requestSpec, responseSpec, GROUP_URL, "accountNo");
 
         if (isAccountPreferenceSetUp) {
-            String groupsPrefixName = (String) this.accountNumberPreferencesHelper
-                    .getAccountNumberPreference(this.groupsAccountNumberPreferenceId, "prefixType.value");
+            String groupsPrefixName = prefixTypeValue(this.groupsAccountNumberPreferenceId);
 
             if (groupsPrefixName.equals(this.officeName)) {
 
@@ -321,8 +321,7 @@ public class AccountNumberPreferencesTest {
         Assertions.assertTrue(center.getName().equals(name));
 
         if (isAccountPreferenceSetUp) {
-            String centerPrefixName = (String) this.accountNumberPreferencesHelper
-                    .getAccountNumberPreference(this.centerAccountNumberPreferenceId, "prefixType.value");
+            String centerPrefixName = prefixTypeValue(this.centerAccountNumberPreferenceId);
             final String CENTER_URL = "/fineract-provider/api/v1/centers/" + this.centerId + "?" + Utils.TENANT_IDENTIFIER;
 
             if (centerPrefixName.equals(this.officeName)) {
@@ -344,8 +343,7 @@ public class AccountNumberPreferencesTest {
     private void createAndValidateClientBasedOnAccountPreference() {
         final String codeName = "ClientType";
         String clientAccountNo = null;
-        String clientPrefixName = (String) this.accountNumberPreferencesHelper
-                .getAccountNumberPreference(this.clientAccountNumberPreferenceId, "prefixType.value");
+        String clientPrefixName = prefixTypeValue(this.clientAccountNumberPreferenceId);
         if (clientPrefixName.equals(this.clientTypeName)) {
 
             /* Retrieve Code id for the Code "ClientType" */
@@ -438,8 +436,7 @@ public class AccountNumberPreferencesTest {
                 "accountNo");
 
         if (isAccountPreferenceSetUp) {
-            String loanPrefixName = (String) this.accountNumberPreferencesHelper
-                    .getAccountNumberPreference(this.loanAccountNumberPreferenceId, "prefixType.value");
+            String loanPrefixName = prefixTypeValue(this.loanAccountNumberPreferenceId);
             if (loanPrefixName.equals(this.officeName)) {
                 String loanOfficeName = (String) ClientHelper.getClient(requestSpec, responseSpec, this.clientId.toString(), "officeName");
                 this.validateAccountNumberLengthAndStartsWithPrefix(loanAccountNo, loanOfficeName);
@@ -490,8 +487,7 @@ public class AccountNumberPreferencesTest {
         String savingsAccountNo = (String) this.savingsAccountHelper.getSavingsAccountDetail(this.savingsId, "accountNo");
 
         if (isAccountPreferenceSetUp) {
-            String savingsPrefixName = (String) this.accountNumberPreferencesHelper
-                    .getAccountNumberPreference(this.savingsAccountNumberPreferenceId, "prefixType.value");
+            String savingsPrefixName = prefixTypeValue(this.savingsAccountNumberPreferenceId);
 
             if (savingsPrefixName.equals(this.officeName)) {
                 String savingsOfficeName = (String) ClientHelper.getClient(requestSpec, responseSpec, this.clientId.toString(),
