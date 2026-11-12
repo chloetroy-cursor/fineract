@@ -27,6 +27,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -73,6 +74,7 @@ public class COBBulkEventConfigurationTest {
     @Mock
     private ConfigurationDomainService configurationDomainService;
     @Spy
+    @SuppressFBWarnings(value = "URF_UNREAD_FIELD", justification = "Mockito injects this field into underTest")
     private COBBusinessStepMetrics cobBusinessStepMetrics = new COBBusinessStepMetrics(new SimpleMeterRegistry());
     @InjectMocks
     private COBBusinessStepServiceImpl underTest;
