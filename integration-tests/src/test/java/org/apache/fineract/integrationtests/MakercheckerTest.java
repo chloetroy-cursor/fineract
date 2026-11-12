@@ -27,18 +27,19 @@ import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.fineract.client.models.AuditData;
+import org.apache.fineract.client.models.CommandProcessingResult;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutPermissionsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignMakerCheckerHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
-import org.apache.fineract.integrationtests.common.FineractClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.commands.MakercheckersHelper;
 import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
@@ -55,7 +56,7 @@ public class MakercheckerTest {
 
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
-    private MakercheckersHelper makercheckersHelper;
+    private FeignMakerCheckerHelper makercheckersHelper;
     private RolesHelper rolesHelper;
     private SavingsProductHelper savingsProductHelper;
     private SavingsAccountHelper savingsAccountHelper;
@@ -69,7 +70,7 @@ public class MakercheckerTest {
         this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
-        this.makercheckersHelper = new MakercheckersHelper(this.requestSpec, this.responseSpec);
+        this.makercheckersHelper = new FeignMakerCheckerHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.rolesHelper = new RolesHelper();
         this.savingsProductHelper = new SavingsProductHelper();
         this.savingsAccountHelper = new SavingsAccountHelper(this.requestSpec, this.responseSpec);
@@ -80,7 +81,7 @@ public class MakercheckerTest {
     public void testMakercheckerInboxList() {
         // given
         // when
-        List<Map<String, Object>> makerCheckerList = this.makercheckersHelper.getMakerCheckerList(null);
+        List<AuditData> makerCheckerList = this.makercheckersHelper.getMakerCheckerList();
         assertNotNull(makerCheckerList);
     }
 
@@ -132,10 +133,10 @@ public class MakercheckerTest {
             clientId = ClientHelper.createClient(makerRequestSpec, this.responseSpec);
             assertNull(clientId, "Client is created on the server");
 
-            List<Map<String, Object>> auditDetails = makercheckersHelper
-                    .getMakerCheckerList(Map.of("actionName", "CREATE", "entityName", "CLIENT", "makerId", makerUserId.toString()));
+            List<AuditData> auditDetails = makercheckersHelper
+                    .getMakerCheckerList(Map.of("actionName", "CREATE", "entityName", "CLIENT", "makerId", makerUserId));
             assertEquals(1, auditDetails.size(), "More than one command exists");
-            Long clientCommandId = ((Double) auditDetails.get(0).get("id")).longValue();
+            Long clientCommandId = auditDetails.get(0).getId();
 
             // savings withdrawal - maker-checker enabled
             SavingsAccountHelper makerSavingsHelper = new SavingsAccountHelper(makerRequestSpec, this.responseSpec);
@@ -143,34 +144,35 @@ public class MakercheckerTest {
                     CommonConstants.RESPONSE_RESOURCE_ID);
             assertNull(withdrawalId, "Withdrawal performed on the server");
 
-            auditDetails = makercheckersHelper.getMakerCheckerList(
-                    Map.of("actionName", "WITHDRAWAL", "entityName", "SAVINGSACCOUNT", "makerId", makerUserId.toString()));
+            auditDetails = makercheckersHelper
+                    .getMakerCheckerList(Map.of("actionName", "WITHDRAWAL", "entityName", "SAVINGSACCOUNT", "makerId", makerUserId));
             assertEquals(1, auditDetails.size(), "More than one command exists");
-            Long savingCommandId = ((Double) auditDetails.get(0).get("id")).longValue();
+            Long savingCommandId = auditDetails.get(0).getId();
 
             // check by the same user should fail
-            ResponseSpecification failedResponseSpec = new ResponseSpecBuilder().expectStatusCode(400).build();
-            MakercheckersHelper.approveMakerCheckerEntry(makerRequestSpec, failedResponseSpec, clientCommandId);
-            MakercheckersHelper.approveMakerCheckerEntry(makerRequestSpec, failedResponseSpec, savingCommandId);
+            FeignMakerCheckerHelper makerMakerCheckerHelper = new FeignMakerCheckerHelper(
+                    FineractFeignClientHelper.createNewFineractFeignClient(maker, "A1b2c3d4e5f$"));
+            assertEquals(400, makerMakerCheckerHelper.approveMakerCheckerEntryExpectingError(clientCommandId).getStatus());
+            assertEquals(400, makerMakerCheckerHelper.approveMakerCheckerEntryExpectingError(savingCommandId).getStatus());
 
             // create checker user
             String checker = Utils.uniqueRandomStringGenerator("user", 8);
             final Integer checkerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, checker,
                     "A1b2c3d4e5f$", "resourceId");
-            RequestSpecification checkerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
-                    .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(checker, "A1b2c3d4e5f$"));
+            FeignMakerCheckerHelper checkerMakerCheckerHelper = new FeignMakerCheckerHelper(
+                    FineractFeignClientHelper.createNewFineractFeignClient(checker, "A1b2c3d4e5f$"));
 
             // check by another checker user should succeed
-            HashMap<?, ?> response = MakercheckersHelper.approveMakerCheckerEntry(checkerRequestSpec, responseSpec, clientCommandId);
+            CommandProcessingResult response = checkerMakerCheckerHelper.approveMakerCheckerEntry(clientCommandId);
             assertNotNull(response);
-            clientId = (Integer) response.get("clientId");
-            assertNotNull(clientId);
+            assertNotNull(response.getClientId());
+            clientId = response.getClientId().intValue();
             ClientHelper.verifyClientCreatedOnServer(requestSpec, responseSpec, clientId);
 
-            response = MakercheckersHelper.approveMakerCheckerEntry(checkerRequestSpec, responseSpec, savingCommandId);
+            response = checkerMakerCheckerHelper.approveMakerCheckerEntry(savingCommandId);
             assertNotNull(response);
-            withdrawalId = (Integer) response.get("resourceId");
-            assertNotNull(withdrawalId);
+            assertNotNull(response.getResourceId());
+            withdrawalId = response.getResourceId().intValue();
 
             // add checker superuser permission - actions are performed in one step
             permissionMap = Map.of("CHECKER_SUPER_USER", true);
@@ -240,13 +242,14 @@ public class MakercheckerTest {
             makerDatatableHelper.createDatatable(datatableJson, "");
 
             // find the pending command
-            List<Map<String, Object>> auditDetails = makercheckersHelper
-                    .getMakerCheckerList(Map.of("actionName", "CREATE", "entityName", "DATATABLE", "makerId", makerUserId.toString()));
+            List<AuditData> auditDetails = makercheckersHelper
+                    .getMakerCheckerList(Map.of("actionName", "CREATE", "entityName", "DATATABLE", "makerId", makerUserId));
             assertEquals(1, auditDetails.size(), "Error: Expected only one pending CREATE DATATABLE command");
-            Long commandId = ((Double) auditDetails.get(0).get("id")).longValue();
+            Long commandId = auditDetails.get(0).getId();
 
             // checker rejects the command which should drop the orphaned table
-            MakercheckersHelper.rejectMakerCheckerEntry(FineractClientHelper.createNewFineractClient(checker, "A1b2c3d4e5f$"), commandId);
+            new FeignMakerCheckerHelper(FineractFeignClientHelper.createNewFineractFeignClient(checker, "A1b2c3d4e5f$"))
+                    .rejectMakerCheckerEntry(commandId);
 
             // verify the datatable no longer exists by trying to create it again
             // verify without maker checker, so transaction rollback in postgres doesn't break the test
@@ -299,17 +302,17 @@ public class MakercheckerTest {
             ClientHelper.createClient(maker1RequestSpec, this.responseSpec);
             ClientHelper.createClient(maker2RequestSpec, this.responseSpec);
 
-            List<Map<String, Object>> maker1Results = makercheckersHelper
+            List<AuditData> maker1Results = makercheckersHelper
                     .getMakerCheckerList(Map.of("username", maker1, "actionName", "CREATE", "entityName", "CLIENT"));
             assertEquals(1, maker1Results.size(), "Username filter should return only maker1's commands");
-            assertEquals(maker1, maker1Results.get(0).get("maker"));
+            assertEquals(maker1, maker1Results.get(0).getMaker());
 
-            List<Map<String, Object>> maker2Results = makercheckersHelper
+            List<AuditData> maker2Results = makercheckersHelper
                     .getMakerCheckerList(Map.of("username", maker2, "actionName", "CREATE", "entityName", "CLIENT"));
             assertEquals(1, maker2Results.size(), "Username filter should return only maker2's commands");
-            assertEquals(maker2, maker2Results.get(0).get("maker"));
+            assertEquals(maker2, maker2Results.get(0).getMaker());
 
-            List<Map<String, Object>> noResults = makercheckersHelper.getMakerCheckerList(Map.of("username", "nonexistentuserxyz_999"));
+            List<AuditData> noResults = makercheckersHelper.getMakerCheckerList(Map.of("username", "nonexistentuserxyz_999"));
             assertEquals(0, noResults.size(), "Unknown username should return no results");
         } finally {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.MAKER_CHECKER,
@@ -346,16 +349,16 @@ public class MakercheckerTest {
             ClientHelper.createClient(makerRequestSpec, this.responseSpec);
 
             // "dd MMMM yyyy" format without dateFormat/locale — previously caused 500 error
-            List<Map<String, Object>> fromOnly = makercheckersHelper
-                    .getMakerCheckerList(Map.of("makerId", makerUserId.toString(), "makerDateTimeFrom", "01 January 2020"));
+            List<AuditData> fromOnly = makercheckersHelper
+                    .getMakerCheckerList(Map.of("makerId", makerUserId, "makerDateTimeFrom", "01 January 2020"));
             assertEquals(1, fromOnly.size(), "'dd MMMM yyyy' from-date filter should include today's pending command");
 
-            List<Map<String, Object>> fromAndTo = makercheckersHelper.getMakerCheckerList(Map.of("makerId", makerUserId.toString(),
-                    "makerDateTimeFrom", "01 January 2020", "makerDateTimeTo", "31 December 2030"));
+            List<AuditData> fromAndTo = makercheckersHelper.getMakerCheckerList(
+                    Map.of("makerId", makerUserId, "makerDateTimeFrom", "01 January 2020", "makerDateTimeTo", "31 December 2030"));
             assertEquals(1, fromAndTo.size(), "'dd MMMM yyyy' date range filter should include today's pending command");
 
-            List<Map<String, Object>> pastRange = makercheckersHelper.getMakerCheckerList(Map.of("makerId", makerUserId.toString(),
-                    "makerDateTimeFrom", "01 January 2020", "makerDateTimeTo", "31 December 2020"));
+            List<AuditData> pastRange = makercheckersHelper.getMakerCheckerList(
+                    Map.of("makerId", makerUserId, "makerDateTimeFrom", "01 January 2020", "makerDateTimeTo", "31 December 2020"));
             assertEquals(0, pastRange.size(), "Past date range should exclude today's pending command");
         } finally {
             globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.MAKER_CHECKER,
