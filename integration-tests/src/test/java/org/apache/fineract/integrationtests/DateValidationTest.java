@@ -32,20 +32,25 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.client.models.PostFixedDepositAccountsCharges;
+import org.apache.fineract.client.models.PostFixedDepositAccountsRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignFixedDepositHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.DepositRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.DepositTestData;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
-import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositAccountHelper;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositProductHelper;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
@@ -62,7 +67,6 @@ import org.junit.jupiter.api.Test;
 @Slf4j
 public class DateValidationTest {
 
-    public static final String WHOLE_TERM = "1";
     public static final String MINIMUM_OPENING_BALANCE = "1000.0";
     public static final String ACCOUNT_TYPE_INDIVIDUAL = "INDIVIDUAL";
 
@@ -164,15 +168,16 @@ public class DateValidationTest {
                 expenseAccount);
         Assertions.assertNotNull(fixedDepositProductId);
 
-        final Integer maturityInstructionId = 400;
-        String response = applyForFixedDepositApplication(clientId.toString(), fixedDepositProductId.toString(), SUBMITTED_ON_DATE,
+        final Integer maturityInstructionId = DepositTestData.AccountClosureType.REINVEST_PRINCIPAL_ONLY;
+        CallFailedRuntimeException failure = applyForFixedDepositApplication(clientId, fixedDepositProductId.longValue(), SUBMITTED_ON_DATE,
                 maturityInstructionId, getCharges());
-        HashMap<String, Object> map = new Gson().fromJson(response, new TypeToken<HashMap<String, Object>>() {}.getType());
+        assertEquals(400, failure.getStatus());
+        HashMap<String, Object> map = new Gson().fromJson(failure.getResponseBody(), new TypeToken<HashMap<String, Object>>() {}.getType());
         List<Map<String, Object>> errors = (List) map.get("errors");
         assertNotNull(errors);
         Map<String, Object> error = errors.get(0);
         assertNotNull(error);
-        assertEquals("The parameter `feeOnMonthDay` is invalid based on the monthDayFormat: `dd MMM` and locale: `en_GB` provided:",
+        assertEquals("The parameter `feeOnMonthDay` is invalid based on the monthDayFormat: `dd MMM` and locale: `en` provided:",
                 error.get("developerMessage"));
     }
 
@@ -209,21 +214,17 @@ public class DateValidationTest {
         return FixedDepositProductHelper.createFixedDepositProduct(fixedDepositProductJSON, requestSpec, responseSpec);
     }
 
-    private String applyForFixedDepositApplication(final String clientID, final String productID, final String submittedOnDate,
-            final Integer maturityInstructionId, final List<HashMap<String, String>> charges) {
+    private CallFailedRuntimeException applyForFixedDepositApplication(final Long clientId, final Long productId,
+            final String submittedOnDate, final Integer maturityInstructionId, final List<PostFixedDepositAccountsCharges> charges) {
         log.info("--------------------------------APPLYING FOR FIXED DEPOSIT ACCOUNT --------------------------------");
-        final String fixedDepositApplicationJSON = new FixedDepositAccountHelper(this.requestSpec, this.errorResponseSpec) //
-                .withSubmittedOnDate(submittedOnDate).withMaturityInstructionId(maturityInstructionId).withCharges(charges)
-                .build(clientID, productID, WHOLE_TERM);
-        return FixedDepositAccountHelper.applyFixedDepositApplication(fixedDepositApplicationJSON, this.requestSpec,
-                this.errorResponseSpec);
+        PostFixedDepositAccountsRequest request = DepositRequestBuilders
+                .fixedDepositAccount(clientId, productId, submittedOnDate, DepositTestData.PreClosurePenalInterestOnType.WHOLE_TERM)//
+                .maturityInstructionId(maturityInstructionId)//
+                .charges(charges);
+        return new FeignFixedDepositHelper(FineractFeignClientHelper.getFineractFeignClient()).submitApplicationExpectingError(request);
     }
 
-    private List<HashMap<String, String>> getCharges() {
-        List<HashMap<String, String>> list = new ArrayList<>();
-        HashMap<String, String> map = new HashMap<>();
-        map.put("feeOnMonthDay", "31 June");
-        list.add(map);
-        return list;
+    private List<PostFixedDepositAccountsCharges> getCharges() {
+        return List.of(new PostFixedDepositAccountsCharges().feeOnMonthDay("31 June"));
     }
 }

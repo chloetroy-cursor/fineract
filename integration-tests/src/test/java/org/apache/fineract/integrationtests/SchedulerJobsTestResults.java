@@ -58,16 +58,23 @@ import org.apache.fineract.client.models.GetStandingInstructionHistoryPageItemsR
 import org.apache.fineract.client.models.GetStandingInstructionsStandingInstructionIdResponse;
 import org.apache.fineract.client.models.JournalEntryTransactionItem;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.client.models.PostFixedDepositAccountsRequest;
 import org.apache.fineract.client.models.PostLoansLoanIdTransactionsRequest;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutJobsJobIDRequest;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignFixedDepositHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.DepositRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.DepositTestData;
+import org.apache.fineract.integrationtests.client.feign.modules.DepositTestValidators;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.BusinessStepHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.HolidayHelper;
 import org.apache.fineract.integrationtests.common.SchedulerJobHelper;
@@ -78,7 +85,6 @@ import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.accounting.JournalEntry;
 import org.apache.fineract.integrationtests.common.accounting.JournalEntryHelper;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
-import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositAccountHelper;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositAccountStatusChecker;
 import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositProductHelper;
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
@@ -1252,7 +1258,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     @Test
     public void testInterestTransferForSavings() throws InterruptedException {
         this.savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
-        FixedDepositAccountHelper fixedDepositAccountHelper = new FixedDepositAccountHelper(requestSpec, responseSpec);
+        FeignFixedDepositHelper fixedDepositAccountHelper = new FeignFixedDepositHelper(FineractFeignClientHelper.getFineractFeignClient());
 
         DateFormat dateFormat = new SimpleDateFormat("dd MMMM yyyy", Locale.US);
         Calendar todaysDate = Calendar.getInstance();
@@ -1267,11 +1273,10 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         final String APPROVED_ON_DATE = dateFormat.format(todaysDate.getTime());
         final String ACTIVATION_DATE = dateFormat.format(todaysDate.getTime());
         todaysDate.add(Calendar.MONTH, 1);
-        final String WHOLE_TERM = "1";
 
         Integer clientId = ClientHelper.createClient(requestSpec, responseSpec);
         Assertions.assertNotNull(clientId);
-        Float balance = Float.parseFloat(MINIMUM_OPENING_BALANCE) + Float.parseFloat(FixedDepositAccountHelper.DEPOSIT_AMOUNT);
+        Float balance = Float.parseFloat(MINIMUM_OPENING_BALANCE) + DepositTestData.DEPOSIT_AMOUNT.floatValue();
         final Integer savingsProductID = createSavingsProduct(requestSpec, responseSpec, String.valueOf(balance));
         Assertions.assertNotNull(savingsProductID);
 
@@ -1292,34 +1297,32 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         Integer fixedDepositProductId = createFixedDepositProduct(VALID_FROM, VALID_TO);
         Assertions.assertNotNull(fixedDepositProductId);
 
-        Integer fixedDepositAccountId = applyForFixedDepositApplication(clientId.toString(), fixedDepositProductId.toString(),
-                SUBMITTED_ON_DATE, WHOLE_TERM, savingsId.toString());
+        Long fixedDepositAccountId = applyForFixedDepositApplication(clientId.longValue(), fixedDepositProductId.longValue(),
+                SUBMITTED_ON_DATE, DepositTestData.PreClosurePenalInterestOnType.WHOLE_TERM, savingsId.longValue());
         Assertions.assertNotNull(fixedDepositAccountId);
 
         HashMap fixedDepositAccountStatusHashMap = FixedDepositAccountStatusChecker.getStatusOfFixedDepositAccount(requestSpec,
                 responseSpec, fixedDepositAccountId.toString());
         FixedDepositAccountStatusChecker.verifyFixedDepositIsPending(fixedDepositAccountStatusHashMap);
 
-        fixedDepositAccountStatusHashMap = fixedDepositAccountHelper.approveFixedDeposit(fixedDepositAccountId, APPROVED_ON_DATE);
-        FixedDepositAccountStatusChecker.verifyFixedDepositIsApproved(fixedDepositAccountStatusHashMap);
+        fixedDepositAccountHelper.approve(fixedDepositAccountId, APPROVED_ON_DATE);
+        DepositTestValidators.verifyFixedDepositIsApproved(fixedDepositAccountHelper.getAccount(fixedDepositAccountId).getStatus());
 
-        fixedDepositAccountStatusHashMap = fixedDepositAccountHelper.activateFixedDeposit(fixedDepositAccountId, ACTIVATION_DATE);
-        FixedDepositAccountStatusChecker.verifyFixedDepositIsActive(fixedDepositAccountStatusHashMap);
+        fixedDepositAccountHelper.activate(fixedDepositAccountId, ACTIVATION_DATE);
+        DepositTestValidators.verifyFixedDepositIsActive(fixedDepositAccountHelper.getAccount(fixedDepositAccountId).getStatus());
         summary = savingsAccountHelper.getSavingsSummary(savingsId);
         balance = Float.parseFloat(MINIMUM_OPENING_BALANCE);
         assertEquals(balance, summary.get("accountBalance"), "Verifying Balance");
 
-        fixedDepositAccountHelper.postInterestForFixedDeposit(fixedDepositAccountId);
+        fixedDepositAccountHelper.postInterest(fixedDepositAccountId);
 
-        HashMap fixedDepositSummary = savingsAccountHelper.getSavingsSummary(fixedDepositAccountId);
-        float interestPosted = (Float) fixedDepositSummary.get("accountBalance")
-                - Float.parseFloat(FixedDepositAccountHelper.DEPOSIT_AMOUNT);
+        HashMap fixedDepositSummary = savingsAccountHelper.getSavingsSummary(fixedDepositAccountId.intValue());
+        float interestPosted = (Float) fixedDepositSummary.get("accountBalance") - DepositTestData.DEPOSIT_AMOUNT.floatValue();
 
         String JobName = "Transfer Interest To Savings";
         SchedulerJobHelper.executeAndAwaitJob(JobName);
-        fixedDepositSummary = savingsAccountHelper.getSavingsSummary(fixedDepositAccountId);
-        assertEquals(Float.parseFloat(FixedDepositAccountHelper.DEPOSIT_AMOUNT), fixedDepositSummary.get("accountBalance"),
-                "Verifying opening Balance");
+        fixedDepositSummary = savingsAccountHelper.getSavingsSummary(fixedDepositAccountId.intValue());
+        assertEquals(DepositTestData.DEPOSIT_AMOUNT.floatValue(), fixedDepositSummary.get("accountBalance"), "Verifying opening Balance");
 
         summary = savingsAccountHelper.getSavingsSummary(savingsId);
         balance = Float.parseFloat(MINIMUM_OPENING_BALANCE) + interestPosted;
@@ -1482,12 +1485,15 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         return FixedDepositProductHelper.createFixedDepositProduct(fixedDepositProductJSON, requestSpec, responseSpec);
     }
 
-    private Integer applyForFixedDepositApplication(final String clientID, final String productID, final String submittedOnDate,
-            final String penalInterestType, String savingsId) {
-        final String fixedDepositApplicationJSON = new FixedDepositAccountHelper(requestSpec, responseSpec)
-                .withSubmittedOnDate(submittedOnDate).withSavings(savingsId).transferInterest(true)
-                .withLockinPeriodFrequency("1", FixedDepositAccountHelper.DAYS).build(clientID, productID, penalInterestType);
-        return FixedDepositAccountHelper.applyFixedDepositApplicationGetId(fixedDepositApplicationJSON, requestSpec, responseSpec);
+    private Long applyForFixedDepositApplication(final Long clientId, final Long productId, final String submittedOnDate,
+            final int penalInterestType, final Long savingsId) {
+        PostFixedDepositAccountsRequest request = DepositRequestBuilders
+                .fixedDepositAccount(clientId, productId, submittedOnDate, penalInterestType)//
+                .linkAccountId(savingsId)//
+                .transferInterestToSavings(true)//
+                .lockinPeriodFrequency(1)//
+                .lockinPeriodFrequencyType(SavingsTestData.PeriodFrequencyType.DAYS);
+        return new FeignFixedDepositHelper(FineractFeignClientHelper.getFineractFeignClient()).submitApplication(request).getResourceId();
     }
 
     private void validateNumberForEqualExcludePrecision(String val, String val2) {
