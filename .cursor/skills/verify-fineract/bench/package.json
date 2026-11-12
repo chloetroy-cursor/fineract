@@ -1,0 +1,8 @@
+{
+    "name": "fineract-observability-overhead-bench",
+    "private": true,
+    "description": "autocannon driver for the observability overhead report",
+    "dependencies": {
+        "autocannon": "9.0.0"
+    }
+}
