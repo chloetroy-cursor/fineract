@@ -88,28 +88,33 @@ public class COBBusinessStepServiceImpl implements COBBusinessStepService {
         return businessEventNotifierService.withExternalEventRecording(() -> executeBusinessSteps(executionMap, item));
     }
 
-    @SuppressWarnings({ "unchecked" })
     private <S extends AbstractPersistableCustom<Long>> S executeBusinessSteps(TreeMap<Long, String> executionMap, S item) {
         boolean allStepsSucceeded = false;
         try {
-            for (String businessStep : executionMap.values()) {
-                try {
-                    ThreadLocalContextUtil.setActionContext(ActionContext.COB);
-                    COBBusinessStep<S> businessStepBean = (COBBusinessStep<S>) applicationContext.getBean(businessStep);
-                    item = reloaderService.reload(item);
-                    item = executeTimed(businessStepBean, item);
-                } catch (Exception e) {
-                    throw new BusinessStepException("Error happened during business step execution", e);
-                } finally {
-                    // Fallback to COB action context after each business step
-                    ThreadLocalContextUtil.setActionContext(ActionContext.COB);
-                }
-            }
+            S result = executeBusinessStepChain(executionMap, item);
             allStepsSucceeded = true;
-            return item;
+            return result;
         } finally {
             cobBusinessStepMetrics.recordItem(allStepsSucceeded);
         }
+    }
+
+    @SuppressWarnings({ "unchecked" })
+    private <S extends AbstractPersistableCustom<Long>> S executeBusinessStepChain(TreeMap<Long, String> executionMap, S item) {
+        for (String businessStep : executionMap.values()) {
+            try {
+                ThreadLocalContextUtil.setActionContext(ActionContext.COB);
+                COBBusinessStep<S> businessStepBean = (COBBusinessStep<S>) applicationContext.getBean(businessStep);
+                item = reloaderService.reload(item);
+                item = executeTimed(businessStepBean, item);
+            } catch (Exception e) {
+                throw new BusinessStepException("Error happened during business step execution", e);
+            } finally {
+                // Fallback to COB action context after each business step
+                ThreadLocalContextUtil.setActionContext(ActionContext.COB);
+            }
+        }
+        return item;
     }
 
     private <S extends AbstractPersistableCustom<Long>> S executeTimed(COBBusinessStep<S> businessStepBean, S item) {
