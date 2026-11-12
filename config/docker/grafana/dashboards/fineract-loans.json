@@ -376,7 +376,7 @@
       "type": "stat",
       "id": 7,
       "title": "COB loans failed",
-      "description": "Loans whose COB transaction did not commit in the selected time range. One failed loan rolls back its whole chunk (100 loans by default) and every loan in the chunk is counted, so this can be far more than the number of loans with an error. An inline COB request that is retried counts its loans once for each attempt. Any value above zero is red; the alert FineractCobLoanFailures fires on the same condition.",
+      "description": "Loans whose COB transaction did not commit in the selected time range. One failed loan rolls back its whole chunk (100 loans by default) and every loan in the chunk is counted, so this can be far more than the number of loans with an error. An inline COB request stops at the first failure and is retried; each attempt counts the loans it had processed. Any value above zero is red; the alert FineractCobLoanFailures fires on the same condition.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

@@ -53,9 +53,13 @@
 #   fineract_cob_loans_processed_total follows the transaction: outcome="success" is a loan whose step chain
 #   returned and whose transaction committed, so the loan is closed for that COB day. outcome="failure" is a
 #   loan whose transaction did not commit. A failed step rolls back the whole chunk (LOAN_COB_CHUNK_SIZE, 100
-#   by default), and every loan the chunk carried counts as a failure, also the loans that had no error.
-#   Attempts on one loan inside one chunk count once. An inline COB request that is retried counts its loans
-#   once for each attempt.
+#   by default), and every loan the chunk carried counts as a failure, also the loans that had no error. A
+#   chunk can also be rolled back after every step returned, for example when an API call changed one of its
+#   loans during the run: then the loan counter moves and no step failure is recorded, so
+#   FineractCobLoanFailures can fire without FineractCobStepFailures.
+#   Attempts on one loan inside one chunk count once. An inline COB request is different: its chunk stops at
+#   the first failure and the request is retried, up to three times. Each attempt counts the loans it had taken
+#   through the steps, so the count can be lower or higher than the number of loans the request left unclosed.
 #   Any failure warns: a loan that is not closed stays on its old COB date until a later run closes it.
 #   Critical when more than 5% of the loans counted in 30 minutes were not closed and they are more than 150.
 #   One failed loan costs up to 100 loans, so 1% is already reached by one rolled back chunk in a run of
@@ -255,8 +259,10 @@ groups:
             Loans on {{ $labels.application }} whose COB transaction did not commit in the last 15 minutes:
             about {{ $value | printf "%.0f" }}. One failed loan rolls back its whole chunk and every loan in
             the chunk is counted, so many of them may have had no error of their own. They keep their old COB
-            date until a later run closes them. An inline COB request that is retried counts its loans once
-            for each attempt. See FineractCobStepFailures for the step that failed.
+            date until a later run closes them. An inline COB request stops at the first failure and is
+            retried; each attempt counts the loans it had processed. FineractCobStepFailures names the step
+            if a step failed. If it is not firing, the chunk was rolled back without a failed step, for
+            example after a write conflict with an API call (OptimisticLockException in the server log).
 
       - alert: FineractCobLoanFailureRatioCritical
         expr: |
@@ -277,8 +283,8 @@ groups:
             {{ $value | humanizePercentage }} of the loans that went through COB on {{ $labels.application }}
             in the last 30 minutes were not closed, because their transaction did not commit (threshold 5%, and
             more than 150 loans). That is more than one rolled back chunk: a step or data that is broken for
-            many loans, or repeated conflicts with API traffic during the run. See the alert
-            FineractCobStepFailures for the step.
+            many loans, or repeated conflicts with API traffic during the run. FineractCobStepFailures names
+            the step if a step failed; conflicts with API traffic roll chunks back without a failed step.
 
       - alert: FineractCobStepLatencyHigh
         expr: |
