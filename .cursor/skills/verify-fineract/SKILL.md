@@ -21,6 +21,7 @@ Options for the same commands:
 - Metrics: `fineract observe up` starts Prometheus on :9090 and Grafana on :3000 (dashboard "Fineract Spring Boot"). The server always exports request-latency histograms.
 - SQL statements in the logs: `FINERACT_STATEMENT_LOGGING_ENABLED=true fineract restart`.
 - Bulk data: `fineract seed-loans 1000` creates 1,000 loans with the `seed-loan` terms.
+- Load test: `fineract load offices/1/exposure` runs autocannon for 30 s with 10 connections (`fineract load PATH SECONDS CONNECTIONS` to change). Report requests/sec and p50/p97.5 latency. Grafana's "Office exposure demo" dashboard charts the same run.
 
 ## Doctor
 
