@@ -28,6 +28,7 @@ import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -39,9 +40,16 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
+import org.apache.fineract.client.models.InteropTransactionRequestData;
+import org.apache.fineract.client.models.InteropTransactionTypeData;
+import org.apache.fineract.client.models.MoneyData;
 import org.apache.fineract.client.models.PostClientsRequest;
 import org.apache.fineract.client.models.PostClientsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignInteropHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.InteropCommandsApi.FormattedExpirationTransactionRequest;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
@@ -50,11 +58,6 @@ import org.apache.fineract.integrationtests.common.fixeddeposit.FixedDepositProd
 import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
-import org.apache.fineract.integrationtests.interoperation.InteropHelper;
-import org.apache.fineract.interoperation.domain.InteropInitiatorType;
-import org.apache.fineract.interoperation.domain.InteropTransactionRole;
-import org.apache.fineract.interoperation.domain.InteropTransactionScenario;
-import org.apache.fineract.interoperation.util.InteropUtil;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -71,7 +74,7 @@ public class DateValidationTest {
     private RequestSpecification requestSpec;
     private ClientHelper clientHelper;
     private LoanTransactionHelper loanTransactionHelper;
-    private InteropHelper interopHelper;
+    private FeignInteropHelper interopHelper;
     private AccountHelper accountHelper;
 
     @BeforeEach
@@ -83,7 +86,7 @@ public class DateValidationTest {
         this.errorResponseSpec = new ResponseSpecBuilder().expectStatusCode(400).build();
         this.clientHelper = new ClientHelper(this.requestSpec, this.responseSpec);
         this.loanTransactionHelper = new LoanTransactionHelper(requestSpec, responseSpec);
-        this.interopHelper = new InteropHelper(requestSpec, errorResponseSpec);
+        this.interopHelper = new FeignInteropHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.accountHelper = new AccountHelper(requestSpec, responseSpec);
     }
 
@@ -126,10 +129,10 @@ public class DateValidationTest {
     @Test
     public void testShouldFailWithInvalidDateTime() {
         String requestCode = UUID.randomUUID().toString();
-        InteropTransactionRole role = InteropTransactionRole.PAYER;
-        String requestBody = buildRequestBody(requestCode, role);
-        String response = interopHelper.postTransactionRequest(requestCode, role, requestBody);
-        HashMap<String, Object> map = new Gson().fromJson(response, new TypeToken<HashMap<String, Object>>() {}.getType());
+        CallFailedRuntimeException failure = interopHelper.createTransactionRequestExpectingError(
+                buildRequestBody(requestCode, InteropTransactionRequestData.TransactionRoleEnum.PAYER));
+        assertEquals(400, failure.getStatus());
+        HashMap<String, Object> map = new Gson().fromJson(failure.getResponseBody(), new TypeToken<HashMap<String, Object>>() {}.getType());
         List<Map<String, Object>> errors = (List) map.get("errors");
         assertNotNull(errors);
         Map<String, Object> error = errors.get(0);
@@ -176,28 +179,14 @@ public class DateValidationTest {
                 error.get("developerMessage"));
     }
 
-    private String buildRequestBody(final String requestCode, final InteropTransactionRole role) {
-        HashMap<String, Object> map = new HashMap<>();
-        map.put(InteropUtil.PARAM_TRANSACTION_CODE, UUID.randomUUID().toString());
-        map.put(InteropUtil.PARAM_REQUEST_CODE, requestCode);
-        map.put(InteropUtil.PARAM_ACCOUNT_ID, UUID.randomUUID().toString());
-        map.put(InteropUtil.PARAM_TRANSACTION_ROLE, role);
-        map.put(InteropUtil.PARAM_EXPIRATION, "31 November 2022 11:11:11");
-        map.put(InteropUtil.PARAM_LOCALE, "en");
-        map.put(InteropUtil.PARAM_DATE_FORMAT, "dd MMMM yyyy HH:mm:ss");
-
-        HashMap<String, Object> amountMap = new HashMap<>();
-        amountMap.put(InteropUtil.PARAM_AMOUNT, "10");
-        amountMap.put(InteropUtil.PARAM_CURRENCY, "EUR");
-        map.put(InteropUtil.PARAM_AMOUNT, amountMap);
-
-        HashMap<String, Object> typeMap = new HashMap<>();
-        typeMap.put(InteropUtil.PARAM_SCENARIO, InteropTransactionScenario.PAYMENT);
-        typeMap.put(InteropUtil.PARAM_INITIATOR, InteropTransactionRole.PAYEE);
-        typeMap.put(InteropUtil.PARAM_INITIATOR_TYPE, InteropInitiatorType.CONSUMER);
-        map.put(InteropUtil.PARAM_TRANSACTION_TYPE, typeMap);
-
-        return new Gson().toJson(map);
+    private FormattedExpirationTransactionRequest buildRequestBody(final String requestCode,
+            final InteropTransactionRequestData.TransactionRoleEnum role) {
+        return new FormattedExpirationTransactionRequest().transactionCode(UUID.randomUUID().toString()).requestCode(requestCode)
+                .accountId(UUID.randomUUID().toString()).transactionRole(role).expiration("31 November 2022 11:11:11").locale("en")
+                .dateFormat("dd MMMM yyyy HH:mm:ss").amount(new MoneyData().amount(BigDecimal.TEN).currency("EUR"))
+                .transactionType(new InteropTransactionTypeData().scenario(InteropTransactionTypeData.ScenarioEnum.PAYMENT)
+                        .initiator(InteropTransactionTypeData.InitiatorEnum.PAYEE)
+                        .initiatorType(InteropTransactionTypeData.InitiatorTypeEnum.CONSUMER));
     }
 
     private Integer createFixedDepositProduct(final String validFrom, final String validTo, Account... accounts) {
