@@ -32,10 +32,11 @@ import org.apache.fineract.batch.domain.BatchRequest;
 import org.apache.fineract.batch.domain.BatchResponse;
 import org.apache.fineract.batch.domain.Header;
 import org.apache.fineract.infrastructure.core.exception.AbstractIdempotentCommandException;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignGroupHelper;
 import org.apache.fineract.integrationtests.common.BatchHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
-import org.apache.fineract.integrationtests.common.GroupHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
@@ -56,6 +57,7 @@ public class BatchRequestsIntegrationTest {
     private static final Logger LOG = LoggerFactory.getLogger(BatchRequestsIntegrationTest.class);
     private ResponseSpecification responseSpec;
     private RequestSpecification requestSpec;
+    private final FeignGroupHelper groupHelper = new FeignGroupHelper(FineractFeignClientHelper.getFineractFeignClient());
     private static final SecureRandom secureRandom = new SecureRandom();
 
     public BatchRequestsIntegrationTest() {
@@ -89,12 +91,12 @@ public class BatchRequestsIntegrationTest {
         final Integer[] clientIDs = new Integer[clientsCount];
 
         // Create a new group and get its groupId
-        Integer groupID = GroupHelper.createGroup(this.requestSpec, this.responseSpec, true);
+        final Long groupID = groupHelper.createActiveGroup().getGroupId();
 
         // Create new clients and add those to this group
         for (Integer i = 0; i < clientsCount; i++) {
             clientIDs[i] = ClientHelper.createClient(this.requestSpec, this.responseSpec);
-            groupID = GroupHelper.associateClient(this.requestSpec, this.responseSpec, groupID.toString(), clientIDs[i].toString());
+            groupHelper.associateClient(groupID, clientIDs[i].longValue());
             LOG.info("client {} has been added to the group {}", clientIDs[i], groupID);
         }
 
@@ -159,12 +161,12 @@ public class BatchRequestsIntegrationTest {
         final Integer[] clientIDs = new Integer[clientsCount];
 
         // Create a new group and get its groupId
-        Integer groupID = GroupHelper.createGroup(this.requestSpec, this.responseSpec, true);
+        final Long groupID = groupHelper.createActiveGroup().getGroupId();
 
         // Create new clients and add those to this group
         for (Integer i = 0; i < clientsCount; i++) {
             clientIDs[i] = ClientHelper.createClient(this.requestSpec, this.responseSpec);
-            groupID = GroupHelper.associateClient(this.requestSpec, this.responseSpec, groupID.toString(), clientIDs[i].toString());
+            groupHelper.associateClient(groupID, clientIDs[i].longValue());
             LOG.info("client {} has been added to the group {}", clientIDs[i], groupID);
         }
 
