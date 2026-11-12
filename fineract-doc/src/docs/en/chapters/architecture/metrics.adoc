@@ -183,8 +183,8 @@ Recorded in `COBBusinessStepServiceImpl#executeBusinessSteps`. That method serve
 |`outcome`
 |===
 
-* The timer records one sample for each call to `businessStepBean.execute(item)` and times that call only, not the bean lookup or the reload before it.
-* The counter is incremented once for each item passed to `executeBusinessSteps`, after the last step or at the first failing step. It has no `step` tag. Every item today is a loan or a working capital loan, and both are counted. It SHOULD be registered at startup for both outcomes.
+* The timer records one sample for each call to `businessStepBean.execute(item)` and times that call only, not the bean lookup or the reload before it. A step that is retried records one sample for each attempt. A sample is recorded at once and stays when the transaction rolls back.
+* The counter counts an item once for each transaction that takes it through `executeBusinessSteps`, when that transaction completes. Attempts on the same item inside one transaction, which is how the batch job retries, count as one item with the result of the last attempt. It has no `step` tag. Every item today is a loan or a working capital loan, and both are counted. It SHOULD be registered at startup for both outcomes.
 * `step` is `businessStepBean.getEnumStyledName()`, the name stored in `m_batch_business_steps.step_name` and shown by the job step configuration API. The Spring bean name and the class name MUST NOT be used.
 
 [cols="1,2,2"]
@@ -193,14 +193,16 @@ Recorded in `COBBusinessStepServiceImpl#executeBusinessSteps`. That method serve
 
 |`success`
 |`execute` returned.
-|Every configured step returned for this item.
+|Every configured step returned for this item and the transaction committed.
 
 |`failure`
 |`execute` threw.
-|A step threw, which ends the chain for this item with a `BusinessStepException`.
+|The chain ended early for this item with a `BusinessStepException`, or the transaction did not commit.
 |===
 
-Meters are not transactional. A loan counted as `success` can still be rolled back with its chunk, and is then counted again when it is reprocessed.
+The counter follows the transaction and the timer does not. A loan whose chunk rolls back is counted as `failure`, also when all of its own steps returned, and is counted as `success` when a later run processes it and commits. So `success` counts each time a loan is closed for a COB day. `failure` is not the number of failed steps: one rolled back chunk counts every loan it carried, and five failed attempts on one loan in one chunk count once. An inline run that is retried uses a new transaction for each attempt, so its loans are counted once for each attempt. When `executeBusinessSteps` runs outside a transaction, the counter is incremented at once for each call.
+
+One case breaks the `success` rule. When a chunk write fails and Spring Batch then writes the items of that chunk again one by one, the chain is not run again. A loan that such a write commits stays counted as `failure`.
 
 [#metrics-http-requests]
 === HTTP requests
