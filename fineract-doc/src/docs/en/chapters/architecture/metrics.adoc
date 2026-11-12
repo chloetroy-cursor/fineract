@@ -218,6 +218,8 @@ Meters are not transactional. A loan counted as `success` can still be rolled ba
 
 The query parameter `command` is not part of `uri`, so `POST /api/v1/loans/{loanId}` covers approval, disbursal and every other state transition. The loan command meters exist to tell them apart.
 
+The route template rule applies to `http_server_requests_seconds` only. `http.server.requests.active`, Spring's long task timer of requests in flight, exposed as `http_server_requests_active_seconds`, is tagged when a request starts, before Jersey matches a route. It is expected to report `uri="UNKNOWN"` for every Jersey request, one series for each HTTP method. Dashboards and alerts MUST NOT break it down or filter it by `uri`.
+
 == Histograms
 
 * Percentiles computed in the application (`publishPercentiles`, `management.metrics.distribution.percentiles.*`) MUST NOT be used. They cannot be aggregated across instances.
