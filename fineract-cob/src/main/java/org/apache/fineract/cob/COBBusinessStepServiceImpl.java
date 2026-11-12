@@ -54,6 +54,7 @@ public class COBBusinessStepServiceImpl implements COBBusinessStepService {
     private final ConfigurationDomainService configurationDomainService;
 
     private final ReloaderService reloaderService;
+    private final COBBusinessStepMetrics cobBusinessStepMetrics;
 
     @Override
     // Spring Batch 6's ChunkOrientedStep submits item processing to the step's task executor. The
@@ -87,14 +88,25 @@ public class COBBusinessStepServiceImpl implements COBBusinessStepService {
         return businessEventNotifierService.withExternalEventRecording(() -> executeBusinessSteps(executionMap, item));
     }
 
-    @SuppressWarnings({ "unchecked" })
     private <S extends AbstractPersistableCustom<Long>> S executeBusinessSteps(TreeMap<Long, String> executionMap, S item) {
+        boolean allStepsSucceeded = false;
+        try {
+            S result = executeBusinessStepChain(executionMap, item);
+            allStepsSucceeded = true;
+            return result;
+        } finally {
+            cobBusinessStepMetrics.recordItem(allStepsSucceeded);
+        }
+    }
+
+    @SuppressWarnings({ "unchecked" })
+    private <S extends AbstractPersistableCustom<Long>> S executeBusinessStepChain(TreeMap<Long, String> executionMap, S item) {
         for (String businessStep : executionMap.values()) {
             try {
                 ThreadLocalContextUtil.setActionContext(ActionContext.COB);
                 COBBusinessStep<S> businessStepBean = (COBBusinessStep<S>) applicationContext.getBean(businessStep);
                 item = reloaderService.reload(item);
-                item = businessStepBean.execute(item);
+                item = executeTimed(businessStepBean, item);
             } catch (Exception e) {
                 throw new BusinessStepException("Error happened during business step execution", e);
             } finally {
@@ -103,6 +115,18 @@ public class COBBusinessStepServiceImpl implements COBBusinessStepService {
             }
         }
         return item;
+    }
+
+    private <S extends AbstractPersistableCustom<Long>> S executeTimed(COBBusinessStep<S> businessStepBean, S item) {
+        long startedAt = cobBusinessStepMetrics.startStep();
+        boolean succeeded = false;
+        try {
+            S result = businessStepBean.execute(item);
+            succeeded = true;
+            return result;
+        } finally {
+            cobBusinessStepMetrics.recordStep(businessStepBean, startedAt, succeeded);
+        }
     }
 
     @NonNull
