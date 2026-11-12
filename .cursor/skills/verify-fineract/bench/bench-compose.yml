@@ -1,0 +1,8 @@
+# Layered on top of the verify-fineract compose files by overhead.sh. The same values apply to every variant.
+services:
+  fineract:
+    environment:
+      # Tomcat closes a connection after 100 requests by default. autocannon then reconnects and pairs every later
+      # response on that connection with an older request, which inflates its latencies.
+      FINERACT_SERVER_TOMCAT_MAX_KEEP_ALIVE_REQUESTS: "-1"
+      JAVA_TOOL_OPTIONS: ${BENCH_JAVA_TOOL_OPTIONS:?set by overhead.sh}

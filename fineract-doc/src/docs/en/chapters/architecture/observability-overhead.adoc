@@ -1,0 +1,388 @@
+= Observability overhead on loan read and repayment
+
+This section reports what the loan lifecycle and Loan COB instrumentation costs on two API calls: reading a loan and posting a repayment. It was measured on 12 November 2026 with https://github.com/mcollina/autocannon[autocannon] against images built by Gradle from the two source trees. The scripts are in `.cursor/skills/verify-fineract/bench/`. The numbers of every run are in `bench/results/2026-11-12-runs.jsonl`, and `bench/analyze.py` prints every table of this section from that file.
+
+== Result
+
+No overhead was found. For both workloads, with JSON logs off and with JSON logs on, every difference from Before in throughput, in p50, p97.5 and p99 latency and in server CPU per request is inside the noise. The 95% intervals put the cost at no more than 2.6% of throughput for the loan read and 1.7% for the repayment. A smaller cost may exist; this setup cannot see it.
+
+.Overhead against Before, positive is worse. Each cell is the overhead and, below it, the 95% interval in percent.
+[cols="2,3,3,3,3,3,3",options="header"]
+|===
+|Workload |Variant |Throughput |p50 |p97.5 |p99 |Server CPU
+
+|Loan read
+|After, JSON logs off
+|+0.5% +
+-1.3 .. +2.6
+|+0.9% +
+-1.4 .. +2.7
+|-0.2% +
+-2.4 .. +3.4
+|-0.2% +
+-2.3 .. +3.5
+|+1.5% +
+-0.6 .. +3.1
+
+|Loan read
+|After, JSON logs on
+|-1.5% +
+-2.5 .. +1.9
+|-1.0% +
+-2.4 .. +2.3
+|-2.3% +
+-3.9 .. +1.1
+|-2.0% +
+-4.0 .. +1.5
+|+0.2% +
+-1.0 .. +2.2
+
+|Loan read
+|Noise: Before against itself
+|A/A 0.7% +
+starts ±3.7%
+|A/A 0.9% +
+starts ±3.7%
+|A/A 0.6% +
+starts ±3.7%
+|A/A 1.1% +
+starts ±3.5%
+|A/A 1.6% +
+starts ±3.3%
+
+|Repayment
+|After, JSON logs off
+|+0.3% +
+-0.7 .. +1.7
+|-0.3% +
+-1.1 .. +1.0
+|+1.4% +
+-2.1 .. +4.2
+|+2.0% +
+-1.6 .. +4.3
+|+0.6% +
+-1.1 .. +2.1
+
+|Repayment
+|After, JSON logs on
+|+0.1% +
+-0.9 .. +1.3
+|-0.7% +
+-1.4 .. +0.2
+|+1.8% +
+-1.6 .. +4.1
+|+1.6% +
+-2.0 .. +3.8
+|+0.4% +
+-0.8 .. +1.7
+
+|Repayment
+|Noise: Before against itself
+|A/A 1.1% +
+starts ±2.0%
+|A/A 0.1% +
+starts ±0.9%
+|A/A 6.0% +
+starts ±7.8%
+|A/A 6.7% +
+starts ±7.1%
+|A/A 0.8% +
+starts ±1.5%
+|===
+
+* The noise rows compare Before with itself. A/A is the difference between its odd and its even cycles. "starts" is half the range of its per-start medians.
+* Loan read: Before 931.8 requests a second, p50 8.05 ms, p97.5 12.80 ms, p99 13.95 ms. After with JSON logs off 926.8, 8.12, 12.78 and 13.93. After with JSON logs on 945.4, 7.97, 12.51 and 13.67.
+* Repayment: Before 225.7 requests a second, p50 34.19 ms, p97.5 50.32 ms, p99 54.49 ms. After with JSON logs off 225.1, 34.08, 51.03 and 55.56. After with JSON logs on 225.5, 33.95, 51.20 and 55.35.
+* Metrics against JSON logs: the two After variants are within about 2 percentage points of each other on every metric. JSON logs on comes out nominally better than JSON logs off on 9 of the 10 cells, which a switch that adds work cannot cause; <<observability-overhead-noise>> has a possible reason. Neither part has a measurable cost.
+* At the default log level neither request writes a log line, in any variant. With JSON logs on, the cost that was measured is the correlation id filter, which generates a UUID for each request and returns it in `X-Correlation-ID`. The cost of formatting a log line as JSON was not exercised.
+* The repayment p97.5 and p99 are 1.4% to 2.0% higher in both After variants, and After was the worse one in 7 or 8 of 10 cycles. Before's own repayment p97.5 differs by 6.0% between its odd and even cycles and by ±7.8% between starts. The data neither show a tail cost nor rule out one of up to about 4%.
+
+== What was compared
+
+[cols="2,3,5"]
+|===
+|Variant |Image |Source
+
+|Before
+|`fineract:before`
+|`addepar-demo` at `f69ff78`.
+
+|After, JSON logs off
+|`fineract:after`
+|`addepar-demo` at `f69ff78` with the four instrumentation branches merged, in this order: `cursor/jersey-route-template-uri-tag-6024` at `4187e54` (route template as the `uri` tag of `http.server.requests`), `cursor/cob-step-metrics-10c6` at `1de970f` (COB step timer and loans-processed counter), `cursor/loan-command-metrics-7fb6` at `e872607` (loan command timer and counter), `cursor/json-logs-mdc-context-8c95` at `2969f1e` (tenant, correlation id and loan id on log lines). The only conflicts were added lines in `application.properties`; both sides were kept.
+
+|After, JSON logs on
+|`fineract:after`
+|The same image started with `FINERACT_LOGGING_JSON_ENABLED=true`.
+|===
+
+Both images were built from a checkout with `FINERACT_IMAGE=fineract:<tag> fineract build`, which is `./gradlew :fineract-provider:jibDockerBuild`. No image was patched after the build. On every server start `fineract doctor` reported `f69ff78` for Before and `b68159b`, the local merge commit, for After. The After server exposed `fineract_loan_commands_total`, `fineract_cob_loans_processed_total` and `uri="/api/v1/loans/{loanId}"`; the Before server exposed none of them and reported `uri="UNKNOWN"`.
+
+The difference between After with JSON logs off and Before is the cost of the metrics plus the logging context that is always maintained. The difference between the two After variants is the cost of switching JSON logs on.
+
+== Workloads
+
+[cols="1,4"]
+|===
+|Workload |Request
+
+|Loan read
+|`GET /fineract-provider/api/v1/loans/{loanId}`
+
+|Repayment
+|`POST /fineract-provider/api/v1/loans/{loanId}/transactions?command=repayment` with `{"transactionDate":"01 February 2026","transactionAmount":10,"dateFormat":"dd MMMM yyyy","locale":"en"}`
+|===
+
+Both use HTTPS, basic authentication as `mifos` and the tenant `default`, as `fineract api` does. Each run walks round-robin over a pool of 1,000 loans from one shared counter, so two requests in flight never touch the same loan.
+
+== Method
+
+=== Machine and versions
+
+One cloud VM ran the server, MySQL and autocannon: 8 vCPU (Intel Xeon, family 6 model 207, KVM), 47 GiB RAM, Ubuntu 24.04.5, kernel 6.12.113. Docker 29.9.3 with the `fuse-overlayfs` storage driver, Docker Compose 5.7.1, MySQL 8.4.13 (`mysql:8`), Node.js 22.23.4, autocannon 9.0.0. The images run on Azul Zulu 25.0.5 and were built with Temurin 25.0.5 and Gradle 9.7.1.
+
+=== Settings, the same for every variant
+
+* The `verify-fineract` stack with `FINERACT_DB=mysql`: `docker-compose-mysql-test.yml` plus `compose/fineract-demo.yml`, which turns on `percentiles-histogram` for `http.server.requests`. MySQL runs with its image defaults, including `innodb_flush_log_at_trx_commit=1` and `sync_binlog=1`.
+* `bench/bench-compose.yml` on top, with two changes:
+** `FINERACT_SERVER_TOMCAT_MAX_KEEP_ALIVE_REQUESTS=-1`. With the default of 100 Tomcat closes each connection after 100 requests. autocannon then reconnects and pairs every later response on that connection with an older request, so its latencies grow with every reconnect. In a trial with the default it reported a mean of 60 ms at 430 requests a second on 8 connections, which cannot both be true.
+** `JAVA_TOOL_OPTIONS` as in `config/docker/env/fineract-common.env` with three changes: `-Xms4G -Xmx4G` instead of `-Xmx1G`, no `-XX:TieredStopAtLevel=1`, no JDWP agent. <<observability-overhead-heap>> gives the reason.
+* autocannon: 8 connections, 30 seconds for a measured run, no pipelining, 30 second timeout.
+* The scheduler was left on, as shipped. No Prometheus server scraped the application during the runs.
+
+=== Data
+
+`fineract seed-loans 5000` created 5,000 loans with the `seed-loan` terms on the Before server: 12,000 over 12 monthly repayments at 1% flat a month, disbursed 01 January 2026. The server and MySQL were then stopped and the MySQL data directory was archived. Before every server start the script restores that archive and checks its SHA-256, so every start of every variant begins from the same bytes. The loans are split into five pools of 1,000:
+
+[cols="1,4"]
+|===
+|Loans |Use
+
+|1 to 1,000
+|Repayments during warm-up
+
+|1,001 to 2,000
+|Every read, in warm-up and in measured runs. These loans are never repaid.
+
+|2,001 to 5,000
+|One pool for each of the three measured repayment runs of a start, so every measured repayment run starts on loans without a repayment. A run posts 6 to 8 repayments of 10 to each loan, against 13,440 outstanding.
+|===
+
+=== Runs
+
+One cycle starts each variant once, in an order that rotates from cycle to cycle. After each start:
+
+. Warm-up: 90 seconds of reads, then 60 seconds of repayments, at the same 8 connections.
+. Three times: a 30 second read run, then a 30 second repayment run.
+
+Ten cycles were run, from 02:28 to 05:55 UTC: 10 starts of each variant, and 30 measured runs of each workload for each variant.
+
+Six cycles were planned. After six, the repayment p97.5 of After with JSON logs off stood 3.7% above Before with an interval of +0.8% to +6.4%, and three other cells said that After was faster, which added instrumentation cannot cause. Four cycles were added to settle it. All ten are reported, and with ten no cell is outside the noise.
+
+=== Checks on every run
+
+The script stops the benchmark if a run fails any of these. None did.
+
+* Every response has a 2xx status, and autocannon reports no error and no timeout. The 240 runs, warm-ups included, returned 5,896,732 responses, all with status 200.
+* For repayments, a second read-only view: `summary.totalRepayment` of 25 loans of the pool is read before and after the run and must have grown by 10 for every request sent to that loan. One request per loan may be missing, because autocannon drops the requests in flight when the run ends.
+
+=== Numbers
+
+* Throughput is autocannon's `requests.average`.
+* p50, p97.5 and p99 are computed from the response time autocannon reports for each 2xx response. autocannon's own percentiles are rounded down to whole milliseconds, which is 12% of the read median.
+* Server CPU is the CPU time of the Fineract container (`cpu.stat` of its cgroup) during the run, divided by the number of responses. It includes garbage collection and JIT threads.
+* A variant's value is the median over all its measured runs. Overhead is the difference between the After median and the Before median as a percentage of Before, signed so that positive is worse: lower throughput, higher latency, more CPU.
+* The 95% interval is a bootstrap over cycles: cycles are drawn with replacement 10,000 times and the overhead is recomputed from the runs of the drawn cycles. Runs inside one JVM share its JIT and GC state, so they are not treated as independent.
+* A/A is the same overhead computed between the odd and the even cycles of Before, where nothing changed.
+* A difference is called outside the noise only when its interval excludes zero and it is larger than the A/A difference.
+
+== Detailed results
+
+"Run spread" is half the interquartile range of the runs as a percentage of the median. "Start spread" is half the range of the per-start medians. "Per cycle" is the overhead inside one cycle, and "Cycles worse" counts the cycles in which After was the worse one.
+
+=== Loan read
+
+.Level of each variant
+[cols="3,2,2,3,3,2,2",options="header"]
+|===
+|Metric |Variant |Median |Quartiles |Min .. max |Run spread |Start spread
+|Throughput (req/s) |before |931.8 |919.6 .. 940.7 |894.1 .. 977.1 |±1.1% |±3.7%
+|Throughput (req/s) |after |926.8 |909.0 .. 948.7 |863.3 .. 972.7 |±2.1% |±3.2%
+|Throughput (req/s) |after-json |945.4 |912.5 .. 954.0 |889.1 .. 976.6 |±2.2% |±4.0%
+|p50 (ms) |before |8.05 |7.99 .. 8.16 |7.72 .. 8.38 |±1.0% |±3.7%
+|p50 (ms) |after |8.12 |7.91 .. 8.26 |7.71 .. 8.71 |±2.2% |±3.2%
+|p50 (ms) |after-json |7.97 |7.89 .. 8.25 |7.72 .. 8.48 |±2.3% |±3.7%
+|p97.5 (ms) |before |12.80 |12.57 .. 13.04 |11.93 .. 13.42 |±1.8% |±3.7%
+|p97.5 (ms) |after |12.78 |12.47 .. 13.10 |11.90 .. 13.87 |±2.5% |±4.4%
+|p97.5 (ms) |after-json |12.51 |12.37 .. 12.98 |11.85 .. 13.57 |±2.5% |±5.4%
+|p99 (ms) |before |13.95 |13.66 .. 14.18 |13.06 .. 14.86 |±1.9% |±3.5%
+|p99 (ms) |after |13.93 |13.59 .. 14.31 |12.97 .. 15.04 |±2.6% |±4.4%
+|p99 (ms) |after-json |13.67 |13.45 .. 14.20 |12.98 .. 14.83 |±2.7% |±4.4%
+|Server CPU (ms/req) |before |4.32 |4.26 .. 4.40 |4.15 .. 4.48 |±1.6% |±3.3%
+|Server CPU (ms/req) |after |4.38 |4.29 .. 4.43 |4.24 .. 4.58 |±1.6% |±2.4%
+|Server CPU (ms/req) |after-json |4.33 |4.29 .. 4.43 |4.18 .. 4.55 |±1.6% |±3.3%
+|===
+
+.Overhead against Before, positive is worse
+[cols="3,2,2,3,3,2,1,3",options="header"]
+|===
+|Metric |Variant |Overhead |95% interval |Per cycle, min .. max |Cycles worse |A/A |Verdict
+|Throughput (req/s) |after |+0.5% |-1.3% .. +2.6% |-3.9% .. +6.2% |5 of 10 |0.7% |inside the noise
+|Throughput (req/s) |after-json |-1.5% |-2.5% .. +1.9% |-3.6% .. +4.1% |5 of 10 |0.7% |inside the noise
+|p50 (ms) |after |+0.9% |-1.4% .. +2.7% |-3.4% .. +6.7% |5 of 10 |0.9% |inside the noise
+|p50 (ms) |after-json |-1.0% |-2.4% .. +2.3% |-3.2% .. +4.1% |3 of 10 |0.9% |inside the noise
+|p97.5 (ms) |after |-0.2% |-2.4% .. +3.4% |-5.8% .. +6.7% |5 of 10 |0.6% |inside the noise
+|p97.5 (ms) |after-json |-2.3% |-3.9% .. +1.1% |-4.9% .. +4.4% |4 of 10 |0.6% |inside the noise
+|p99 (ms) |after |-0.2% |-2.3% .. +3.5% |-6.6% .. +7.4% |5 of 10 |1.1% |inside the noise
+|p99 (ms) |after-json |-2.0% |-4.0% .. +1.5% |-4.7% .. +5.6% |4 of 10 |1.1% |inside the noise
+|Server CPU (ms/req) |after |+1.5% |-0.6% .. +3.1% |-1.8% .. +6.6% |7 of 10 |1.6% |inside the noise
+|Server CPU (ms/req) |after-json |+0.2% |-1.0% .. +2.2% |-3.3% .. +3.3% |8 of 10 |1.6% |inside the noise
+|===
+
+=== Repayment
+
+.Level of each variant
+[cols="3,2,2,3,3,2,2",options="header"]
+|===
+|Metric |Variant |Median |Quartiles |Min .. max |Run spread |Start spread
+|Throughput (req/s) |before |225.7 |223.2 .. 227.0 |213.7 .. 230.9 |±0.8% |±2.0%
+|Throughput (req/s) |after |225.1 |221.4 .. 226.7 |213.9 .. 229.6 |±1.2% |±2.0%
+|Throughput (req/s) |after-json |225.5 |223.2 .. 227.1 |218.9 .. 232.5 |±0.9% |±1.1%
+|p50 (ms) |before |34.19 |34.00 .. 34.31 |33.30 .. 35.49 |±0.5% |±0.9%
+|p50 (ms) |after |34.08 |33.76 .. 34.54 |33.36 .. 36.03 |±1.1% |±2.8%
+|p50 (ms) |after-json |33.95 |33.70 .. 34.34 |33.32 .. 35.08 |±0.9% |±1.7%
+|p97.5 (ms) |before |50.32 |48.80 .. 52.62 |47.53 .. 56.52 |±3.8% |±7.8%
+|p97.5 (ms) |after |51.03 |49.56 .. 52.63 |47.47 .. 56.27 |±3.0% |±6.1%
+|p97.5 (ms) |after-json |51.20 |48.69 .. 51.93 |47.40 .. 55.27 |±3.2% |±4.8%
+|p99 (ms) |before |54.49 |52.81 .. 56.98 |50.90 .. 60.46 |±3.8% |±7.1%
+|p99 (ms) |after |55.56 |53.62 .. 56.97 |51.33 .. 60.61 |±3.0% |±5.4%
+|p99 (ms) |after-json |55.35 |52.86 .. 57.07 |50.94 .. 59.31 |±3.8% |±5.1%
+|Server CPU (ms/req) |before |16.67 |16.60 .. 16.76 |16.29 .. 17.19 |±0.5% |±1.5%
+|Server CPU (ms/req) |after |16.77 |16.47 .. 17.03 |16.15 .. 17.52 |±1.7% |±3.0%
+|Server CPU (ms/req) |after-json |16.73 |16.52 .. 16.99 |16.04 .. 17.48 |±1.4% |±3.2%
+|===
+
+.Overhead against Before, positive is worse
+[cols="3,2,2,3,3,2,1,3",options="header"]
+|===
+|Metric |Variant |Overhead |95% interval |Per cycle, min .. max |Cycles worse |A/A |Verdict
+|Throughput (req/s) |after |+0.3% |-0.7% .. +1.7% |-3.6% .. +3.9% |4 of 10 |1.1% |inside the noise
+|Throughput (req/s) |after-json |+0.1% |-0.9% .. +1.3% |-3.8% .. +1.9% |4 of 10 |1.1% |inside the noise
+|p50 (ms) |after |-0.3% |-1.1% .. +1.0% |-2.1% .. +3.9% |2 of 10 |0.1% |inside the noise
+|p50 (ms) |after-json |-0.7% |-1.4% .. +0.2% |-1.9% .. +2.0% |3 of 10 |0.1% |inside the noise
+|p97.5 (ms) |after |+1.4% |-2.1% .. +4.2% |-15.3% .. +10.2% |8 of 10 |6.0% |inside the noise
+|p97.5 (ms) |after-json |+1.8% |-1.6% .. +4.1% |-8.5% .. +5.2% |8 of 10 |6.0% |inside the noise
+|p99 (ms) |after |+2.0% |-1.6% .. +4.3% |-13.6% .. +8.2% |7 of 10 |6.7% |inside the noise
+|p99 (ms) |after-json |+1.6% |-2.0% .. +3.8% |-7.5% .. +6.3% |8 of 10 |6.7% |inside the noise
+|Server CPU (ms/req) |after |+0.6% |-1.1% .. +2.1% |-2.7% .. +3.7% |5 of 10 |0.8% |inside the noise
+|Server CPU (ms/req) |after-json |+0.4% |-0.8% .. +1.7% |-4.2% .. +3.1% |5 of 10 |0.8% |inside the noise
+|===
+
+[[observability-overhead-noise]]
+== Noise
+
+* Run to run, inside one start: half the interquartile range of Before is ±1.1% of the read throughput and ±0.8% of the repayment throughput. For p97.5 it is ±1.8% and ±3.8%.
+* Start to start: the per-start medians of Before's throughput span ±3.7% for reads and ±2.0% for repayments, with no change of code or data. For the repayment p97.5 they span ±7.8%. This is the noise that limits the benchmark, and the reason the statistics treat a start as the unit.
+* Inside single cycles the read throughput overhead of After ranged from -3.9% to +6.2%, with After the worse one in 5 of 10. One cycle, or the first cycle alone, can show anything in that range.
+* The A/A column is one split of ten starts and can be small by luck: 0.1% for the repayment p50. Read it together with the start spread.
+* Every interval in the tables contains zero. The widest reach is +2.7% for throughput and p50, +3.5% for the read tail, +4.3% for the repayment tail and +3.1% for server CPU. Differences below those values are inside the noise of this setup.
+* One difference between starts remains unexplained. In 22 of the 30 starts G1 made 4 concurrent-cycle pauses; in 8 it made 22 to 30, and those starts used 2% more server CPU per read. Four of the 8 were Before, four were After with JSON logs off, none was After with JSON logs on. That may be why JSON logs on looks slightly faster than JSON logs off. The cause was not investigated.
+
+[[observability-overhead-heap]]
+=== Why the heap setting was changed
+
+The first starts used the stock `-Xmx1G` without `-Xms`. Starts of the same image then fell into two groups that differed by more than any instrumentation effect. In the slow group G1 ran concurrent marking cycles back to back.
+
+[cols="2,2,2,2,2,2",options="header"]
+|===
+|Heap flags |Variant |Concurrent GC pauses in the start |Server CPU, read (ms/req) |Read throughput (req/s) |Read p97.5 (ms)
+
+|`-Xmx1G`
+|Before
+|212
+|4.48
+|911
+|13.3
+
+|`-Xmx1G`
+|After
+|540
+|5.05
+|873
+|15.7
+
+|`-Xmx1G`
+|Before
+|526
+|5.00
+|860
+|15.9
+
+|`-Xmx1G`
+|After
+|166
+|4.21
+|967
+|12.3
+
+|`-Xmx4G`
+|Before
+|514
+|4.92
+|881
+|15.3
+
+|`-Xmx4G`
+|After
+|52
+|4.49
+|925
+|12.6
+|===
+
+Each row is one start with three measured runs. The After image of the first pair was an earlier build of the same tree. Measured this way, After was 4% slower than Before in the first pair and 12% faster in the second. With `-Xmx4G` alone the heap stayed near 1 GiB committed and the behaviour did not change. With `-Xms4G -Xmx4G` 22 of the 30 starts of the results made 4 concurrent GC pauses and the other 8 made 22 to 30. These six starts are not part of the results.
+
+The stock flags of the test compose file also limit the JIT to C1 and attach a debugger agent. Neither is how a production server runs, so both were removed. No result was measured with the stock flags.
+
+== Reasons to distrust these numbers
+
+* The resolution is a few percent. An overhead below about 2% of throughput, or below about 4% of tail latency, would not have been detected.
+* The server, MySQL and autocannon shared one 8 vCPU cloud VM, without CPU pinning, and 8 connections keep it close to saturated: the server used about 4 cores and MySQL 2.5 to 3.5. The absolute figures are not capacity figures, and other tenants of the host can move them.
+* The JVM flags are not the flags of the `verify-fineract` stack: 4 GiB heap instead of 1 GiB, C2 enabled, no debugger agent. Nothing was measured with the stock flags, where a C1-only JIT could make the same instrumentation relatively cheaper or dearer.
+* The load is closed-loop: a connection sends its next request when the previous one returns. Latency therefore follows throughput, and the percentiles are not corrected for coordinated omission. No run at a fixed request rate below saturation was made.
+* Histogram buckets for `http.server.requests` are on in every variant, because the stack turns them on. With them off every variant does less work per request, and the relative overhead was not measured.
+* Nothing scraped `/actuator/prometheus` during the runs. One scrape after the runs took about 0.12 s in every variant and returned 181 to 190 KB for Before and 188 to 197 KB for After.
+* JSON logs were measured at the default log level, where these requests log nothing. At `DEBUG`, where every request logs, the cost of JSON formatting is not known from this report.
+* The COB step timer and the loans-processed counter are not on the path of either request. This report says nothing about their cost during Loan COB.
+* The workloads are narrow: one tenant, one flat-interest product, loans with at most 8 repayments, reads and repayments never mixed in one run, 8 connections.
+* Keep-alive was unlimited. A client that reconnects every 100 requests pays a TLS handshake that these numbers leave out, in every variant.
+* After is a local merge of the four branches as they were on 12 November 2026, built with tests skipped. It is not the commit that will exist on `addepar-demo` once they are merged.
+* The sample size was extended from six to ten cycles after looking at the first six. Nothing was dropped, but the stopping point was not fixed in advance.
+* The interval is a bootstrap over ten cycles, which tends to be too narrow for so few units.
+
+== How to rerun
+
+The build needs JDK 25 and Docker. `before` and `after` are any two checkouts; `after` here was `addepar-demo` with the four branches merged.
+
+[source,bash]
+----
+# in the Before checkout, then in the After checkout
+FINERACT_IMAGE=fineract:before .cursor/skills/verify-fineract/scripts/fineract build
+FINERACT_IMAGE=fineract:after  .cursor/skills/verify-fineract/scripts/fineract build
+
+# seed once on the Before image and snapshot the database
+FINERACT_DB=mysql FINERACT_IMAGE=fineract:before .cursor/skills/verify-fineract/scripts/fineract up
+.cursor/skills/verify-fineract/bench/overhead.sh install
+.cursor/skills/verify-fineract/bench/overhead.sh seed
+
+# measure, then summarise
+JVM=bench CYCLES=6 .cursor/skills/verify-fineract/bench/overhead.sh run
+JVM=bench FIRST_CYCLE=7 CYCLES=4 .cursor/skills/verify-fineract/bench/overhead.sh run
+.cursor/skills/verify-fineract/bench/analyze.py /tmp/fineract-overhead/runs.jsonl
+
+FINERACT_DB=mysql .cursor/skills/verify-fineract/scripts/fineract down
+----
+
+Build the After image from a normal checkout, not from a `git worktree`. In a worktree the build stamps the image with the commit of the main checkout, and `fineract doctor` then reports the wrong commit.
+
+`overhead.sh` without arguments lists the settings. `analyze.py --summary` and `analyze.py --adoc` print the tables of this section. The six starts of <<observability-overhead-heap>> are in `bench/results/2026-11-12-heap-pilot-runs.csv`.
