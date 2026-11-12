@@ -18,17 +18,21 @@
  */
 package org.apache.fineract.integrationtests.organization.teller;
 
-import static org.hamcrest.Matchers.equalTo;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
-import java.util.Map;
+import java.math.BigDecimal;
 import org.apache.fineract.accounting.common.AccountingConstants.FinancialActivity;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
 import org.apache.fineract.client.models.PostFinancialActivityAccountsRequest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignTellerHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
@@ -46,8 +50,7 @@ import org.junit.jupiter.api.Test;
  */
 public class AllocateCashToCashierValidationTest {
 
-    private RequestSpecification requestSpecification;
-    private ResponseSpecification responseSpecification;
+    private FeignTellerHelper tellerHelper;
     private Long tellerId;
     private Long cashierId;
 
@@ -86,45 +89,45 @@ public class AllocateCashToCashierValidationTest {
     public void setup() {
         Utils.initializeRESTAssured();
 
-        requestSpecification = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
+        final RequestSpecification requestSpecification = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
         requestSpecification.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        responseSpecification = new ResponseSpecBuilder().expectStatusCode(200).build();
+        final ResponseSpecification responseSpecification = new ResponseSpecBuilder().expectStatusCode(200).build();
 
-        final Integer staffId = StaffHelper.createStaff(requestSpecification, responseSpecification);
-        tellerId = Long.valueOf(CashierTransactionsHelper.createTeller(requestSpecification, responseSpecification));
-        cashierId = Long.valueOf(
-                CashierTransactionsHelper.createCashier(requestSpecification, responseSpecification, tellerId, staffId.longValue()));
+        tellerHelper = new FeignTellerHelper(FineractFeignClientHelper.getFineractFeignClient());
+        final Long staffId = Long.valueOf(StaffHelper.createStaff(requestSpecification, responseSpecification));
+        tellerId = tellerHelper.createTeller().getResourceId();
+        cashierId = tellerHelper.createCashier(tellerId, staffId);
     }
 
     @Test
     public void allocateCashWithNonNumericAmountReturnsFieldSpecificValidationError() {
-        final ResponseSpecification invalidAmountResponseSpec = new ResponseSpecBuilder().expectStatusCode(400)
-                .expectBody("userMessageGlobalisationCode", equalTo("validation.msg.invalid.decimal.format"))
-                .expectBody("parameterName", equalTo("txnAmount")).expectBody("value", equalTo("not-a-number")).build();
+        final String json = """
+                {"locale":"en","dateFormat":"dd MMMM yyyy","txnDate":"01 January 2023","currencyCode":"USD",
+                 "txnAmount":"not-a-number","txnNote":"Allocate cash"}
+                """;
 
-        final Map<String, Object> requestMap = CashierTransactionsHelper.allocateCashToCashierRequestMap("not-a-number");
-        final String json = new Gson().toJson(requestMap);
+        final CallFailedRuntimeException error = tellerHelper.allocateCashToCashierExpectingError(tellerId, cashierId, json);
 
-        CashierTransactionsHelper.allocateCashToCashierRaw(requestSpecification, invalidAmountResponseSpec, tellerId, cashierId, json);
+        assertEquals(400, error.getStatus());
+        assertEquals("validation.msg.invalid.decimal.format", error.getUserMessageGlobalisationCode());
+        final JsonObject body = JsonParser.parseString(error.getResponseBody()).getAsJsonObject();
+        assertEquals("txnAmount", body.get("parameterName").getAsString());
+        assertEquals("not-a-number", body.get("value").getAsString());
     }
 
     @Test
     public void allocateCashWithValidNumericAmountIsNotRejectedAsInvalidNumber() {
-        final Map<String, Object> requestMap = CashierTransactionsHelper.allocateCashToCashierRequestMap(100);
-        final String json = new Gson().toJson(requestMap);
-
-        CashierTransactionsHelper.allocateCashToCashierRaw(requestSpecification, responseSpecification, tellerId, cashierId, json);
+        tellerHelper.allocateCashToCashier(tellerId, cashierId, FeignTellerHelper.allocateCashRequest(BigDecimal.valueOf(100)));
     }
 
     @Test
     public void allocateCashWithMalformedJsonStillReturnsGenericInvalidJsonError() {
-        final ResponseSpecification malformedJsonResponseSpec = new ResponseSpecBuilder().expectStatusCode(400)
-                .expectBody("userMessageGlobalisationCode", equalTo("error.msg.invalid.json.data")).build();
-
         final String malformedJson = "{\"currencyCode\":\"USD\",\"txnAmount\":100,\"txnDate\":\"01 January 2023\"";
 
-        CashierTransactionsHelper.allocateCashToCashierRaw(requestSpecification, malformedJsonResponseSpec, tellerId, cashierId,
-                malformedJson);
+        final CallFailedRuntimeException error = tellerHelper.allocateCashToCashierExpectingError(tellerId, cashierId, malformedJson);
+
+        assertEquals(400, error.getStatus());
+        assertEquals("error.msg.invalid.json.data", error.getUserMessageGlobalisationCode());
     }
 
 }
