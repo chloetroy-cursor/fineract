@@ -21,6 +21,7 @@ package org.apache.fineract.cob.listener;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fineract.cob.domain.LockOwner;
 import org.apache.fineract.cob.domain.LockingService;
+import org.apache.fineract.infrastructure.core.logging.LoggingContext;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -34,6 +35,11 @@ public class ChunkProcessingLoanItemListener extends AbstractLoanItemListener<Lo
     @Override
     protected LockOwner getLockOwner() {
         return LockOwner.LOAN_COB_CHUNK_PROCESSING;
+    }
+
+    @Override
+    protected LoggingContext.Scope openLoggingScope(Long itemId) {
+        return LoggingContext.withLoanId(itemId);
     }
 
 }

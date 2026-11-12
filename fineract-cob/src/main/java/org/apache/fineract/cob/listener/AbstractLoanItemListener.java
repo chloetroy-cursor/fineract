@@ -25,6 +25,7 @@ import org.apache.fineract.cob.domain.LockOwner;
 import org.apache.fineract.cob.domain.LockingService;
 import org.apache.fineract.cob.exceptions.LockedReadException;
 import org.apache.fineract.infrastructure.core.domain.AbstractPersistableCustom;
+import org.apache.fineract.infrastructure.core.logging.LoggingContext;
 import org.apache.fineract.infrastructure.core.serialization.ThrowableSerialization;
 import org.jspecify.annotations.NonNull;
 import org.springframework.batch.core.annotation.OnProcessError;
@@ -55,8 +56,10 @@ public abstract class AbstractLoanItemListener<S extends AbstractPersistableCust
     @OnReadError
     public void onReadError(Exception e) {
         if (e instanceof LockedReadException ee) {
-            log.warn("Error was triggered during reading of Loan (id={}) due to: {}", ee.getId(), ThrowableSerialization.serialize(e));
-            updateAccountLockWithError(List.of(ee.getId()), "Loan (id: %d) reading is failed", e);
+            inLoggingScope(ee.getId(), () -> {
+                log.warn("Error was triggered during reading of Loan (id={}) due to: {}", ee.getId(), ThrowableSerialization.serialize(e));
+                updateAccountLockWithError(List.of(ee.getId()), "Loan (id: %d) reading is failed", e);
+            });
         } else {
             log.error("Could not handle read error", e);
         }
@@ -64,8 +67,10 @@ public abstract class AbstractLoanItemListener<S extends AbstractPersistableCust
 
     @OnProcessError
     public void onProcessError(@NonNull S item, Exception e) {
-        log.warn("Error was triggered during processing of Loan (id={}) due to: {}", item.getId(), ThrowableSerialization.serialize(e));
-        updateAccountLockWithError(List.of(item.getId()), "Loan (id: %d) processing is failed", e);
+        inLoggingScope(item.getId(), () -> {
+            log.warn("Error was triggered during processing of Loan (id={}) due to: {}", item.getId(), ThrowableSerialization.serialize(e));
+            updateAccountLockWithError(List.of(item.getId()), "Loan (id: %d) processing is failed", e);
+        });
     }
 
     @OnWriteError
@@ -82,14 +87,31 @@ public abstract class AbstractLoanItemListener<S extends AbstractPersistableCust
 
     @OnSkipInProcess
     public void onSkipInProcess(@NonNull S item, @NonNull Throwable e) {
-        log.warn("Skipping was triggered during processing of Loan (id={})", item.getId());
+        inLoggingScope(item.getId(), () -> log.warn("Skipping was triggered during processing of Loan (id={})", item.getId()));
     }
 
     @OnSkipInWrite
     public void onSkipInWrite(@NonNull S item, @NonNull Throwable e) {
-        log.warn("Skipping was triggered during writing of Loan (id={})", item.getId());
+        inLoggingScope(item.getId(), () -> log.warn("Skipping was triggered during writing of Loan (id={})", item.getId()));
     }
 
     protected abstract LockOwner getLockOwner();
+
+    /**
+     * Opens the logging scope for the item a callback is about, so the lines that report a failed or skipped item can
+     * be found by its id. Nothing is added by default; listeners whose items have an id on the log lines override this.
+     */
+    protected LoggingContext.Scope openLoggingScope(Long itemId) {
+        return LoggingContext.Scope.NOOP;
+    }
+
+    private void inLoggingScope(Long itemId, Runnable callback) {
+        final LoggingContext.Scope scope = openLoggingScope(itemId);
+        try {
+            callback.run();
+        } finally {
+            scope.close();
+        }
+    }
 
 }

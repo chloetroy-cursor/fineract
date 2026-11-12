@@ -20,6 +20,7 @@ package org.apache.fineract.cob.loan;
 
 import org.apache.fineract.cob.COBBusinessStepService;
 import org.apache.fineract.cob.processor.AbstractItemProcessor;
+import org.apache.fineract.infrastructure.core.logging.LoggingContext;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.apache.fineract.portfolio.loanaccount.service.ProgressiveLoanModelProcessingService;
 import org.apache.fineract.portfolio.loanproduct.calc.data.ProgressiveLoanInterestScheduleModel;
@@ -37,10 +38,16 @@ public abstract class AbstractLoanItemProcessor extends AbstractItemProcessor<Lo
 
     @Override
     public Loan process(@NonNull Loan loan) throws Exception {
-        if (needToRebuildModel(loan)) {
-            progressiveLoanModelProcessingService.recalculateModelAndSave(loan);
+        // COB runs on batch worker threads with no request around it, so the loan id is put on the log lines here.
+        final LoggingContext.Scope loanScope = LoggingContext.withLoanId(loan.getId());
+        try {
+            if (needToRebuildModel(loan)) {
+                progressiveLoanModelProcessingService.recalculateModelAndSave(loan);
+            }
+            return super.process(loan);
+        } finally {
+            loanScope.close();
         }
-        return super.process(loan);
     }
 
     private boolean needToRebuildModel(Loan loan) {

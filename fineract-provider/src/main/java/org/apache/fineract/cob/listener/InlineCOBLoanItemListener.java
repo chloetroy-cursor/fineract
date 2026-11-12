@@ -20,6 +20,7 @@ package org.apache.fineract.cob.listener;
 
 import org.apache.fineract.cob.domain.LockOwner;
 import org.apache.fineract.cob.domain.LockingService;
+import org.apache.fineract.infrastructure.core.logging.LoggingContext;
 import org.apache.fineract.portfolio.loanaccount.domain.Loan;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -32,5 +33,10 @@ public class InlineCOBLoanItemListener extends AbstractLoanItemListener<Loan> {
     @Override
     protected LockOwner getLockOwner() {
         return LockOwner.LOAN_INLINE_COB_PROCESSING;
+    }
+
+    @Override
+    protected LoggingContext.Scope openLoggingScope(Long itemId) {
+        return LoggingContext.withLoanId(itemId);
     }
 }

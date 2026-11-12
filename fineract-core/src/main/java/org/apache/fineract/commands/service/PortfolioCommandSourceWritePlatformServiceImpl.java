@@ -32,6 +32,7 @@ import org.apache.fineract.commands.exception.UnsupportedCommandException;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.logging.LoggingContext;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.apache.fineract.infrastructure.dataqueries.service.CleanupService;
 import org.apache.fineract.infrastructure.jobs.service.SchedulerJobRunnerReadService;
@@ -78,7 +79,7 @@ public class PortfolioCommandSourceWritePlatformServiceImpl implements Portfolio
                 wrapper.getTransactionId(), wrapper.getHref(), wrapper.getProductId(), wrapper.getCreditBureauId(),
                 wrapper.getOrganisationCreditBureauId(), wrapper.getJobName(), wrapper.getLoanExternalId());
 
-        return this.processAndLogCommandService.executeCommand(wrapper, command, isApprovedByChecker);
+        return executeCommand(wrapper, command, isApprovedByChecker);
     }
 
     @Override
@@ -102,7 +103,27 @@ public class PortfolioCommandSourceWritePlatformServiceImpl implements Portfolio
                 commandSourceInput.getOrganisationCreditBureauId(), commandSourceInput.getJobName(),
                 commandSourceInput.getLoanExternalId());
 
-        return this.processAndLogCommandService.executeCommand(wrapper, command, true);
+        return executeCommand(wrapper, command, true);
+    }
+
+    private CommandProcessingResult executeCommand(final CommandWrapper wrapper, final JsonCommand command,
+            final boolean isApprovedByChecker) {
+        final LoggingContext.Scope loanScope = LoggingContext.withLoanId(loanIdForLogs(wrapper));
+        try {
+            return this.processAndLogCommandService.executeCommand(wrapper, command, isApprovedByChecker);
+        } finally {
+            loanScope.close();
+        }
+    }
+
+    private static Long loanIdForLogs(final CommandWrapper wrapper) {
+        final String entityName = wrapper.getEntityName();
+        // Working capital loan commands carry the id of a different entity in loanId, which would read as a loan id in
+        // a log search.
+        if (entityName != null && (entityName.startsWith("WORKINGCAPITAL") || entityName.startsWith("WC_"))) {
+            return null;
+        }
+        return wrapper.getLoanId();
     }
 
     @Transactional

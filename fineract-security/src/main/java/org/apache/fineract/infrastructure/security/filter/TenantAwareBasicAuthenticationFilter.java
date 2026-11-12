@@ -26,6 +26,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.Map;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.time.StopWatch;
@@ -35,6 +36,7 @@ import org.apache.fineract.infrastructure.cache.domain.CacheType;
 import org.apache.fineract.infrastructure.cache.service.CacheWritePlatformService;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainService;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.infrastructure.core.logging.LoggingContext;
 import org.apache.fineract.infrastructure.core.serialization.ToApiJsonSerializer;
 import org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil;
 import org.apache.fineract.infrastructure.security.data.PlatformRequestLog;
@@ -159,10 +161,18 @@ public class TenantAwareBasicAuthenticationFilter extends BasicAuthenticationFil
             response.addHeader("WWW-Authenticate", "Basic realm=\"" + "Fineract Platform API" + "\"");
             response.sendError(HttpServletResponse.SC_BAD_REQUEST, e.getMessage());
         } finally {
+            // The request summary below is logged after the reset. It is still about this request, so its log line
+            // keeps the tenant and loan id.
+            final Map<String, String> requestLoggingContext = LoggingContext.snapshot();
             ThreadLocalContextUtil.reset();
             task.stop();
             final PlatformRequestLog msg = PlatformRequestLog.from(task, request);
-            log.debug("{}", toApiJsonSerializer.serialize(msg));
+            final LoggingContext.Scope requestSummaryScope = LoggingContext.restore(requestLoggingContext);
+            try {
+                log.debug("{}", toApiJsonSerializer.serialize(msg));
+            } finally {
+                requestSummaryScope.close();
+            }
         }
     }
 
