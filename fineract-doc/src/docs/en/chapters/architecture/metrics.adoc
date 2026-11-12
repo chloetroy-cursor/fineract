@@ -207,9 +207,12 @@ Meters are not transactional. A loan counted as `success` can still be rolled ba
 
 `http.server.requests` is the existing Spring Boot timer, exposed as `http_server_requests_seconds`. Its name and tag keys stay as they are. This section fixes the value of `uri` for requests served by Jersey, which is every request under `/api`.
 
-* When a Jersey resource method was matched, `uri` MUST be the route template: `/api`, then the class-level `@Path`, then the method-level `@Path`, joined with single slashes, with no trailing slash and with path parameters as declared. Examples: `/api/v1/loans`, `/api/v1/loans/{loanId}`, `/api/v1/loans/{loanId}/transactions`, `/api/v1/loans/external-id/{loanExternalId}`.
+* When Jersey matched a resource method, `uri` MUST be the route template: `/api`, then the class-level `@Path`, then the method-level `@Path`, joined with single slashes and with no trailing slash. Examples: `/api/v1/loans`, `/api/v1/loans/{loanId}`, `/api/v1/loans/{loanId}/transactions`, `/api/v1/loans/external-id/{loanExternalId}`.
+* A path variable is reported exactly as `@Path` declares it, including a regular expression: `/api/v1/{resourceType:.+}/{resourceId}/notes`.
+* The template is reported whatever the response status. `GET /api/v1/loans/999999` for a loan that does not exist reports `uri="/api/v1/loans/{loanId}"` with `status="404"`.
 * `uri` MUST NOT contain the resolved path, the servlet context path (`/fineract-provider`), a query string, or a host. `uri` values are relative to the context path, as they already are for `/actuator/prometheus`.
-* When no resource method was matched, `uri` is `NOT_FOUND` for a `404`, `REDIRECTION` for a `3xx`, and `UNKNOWN` otherwise. `UNKNOWN` covers a request that a servlet filter answered before Jersey ran, such as a `401`. A matched request MUST NOT report `UNKNOWN`.
+* When Jersey matched no resource method, `uri` MUST be one of three fixed values: `NOT_FOUND` for a `404`, which here means the path matches no route; `REDIRECTION` for a `3xx`; and `UNKNOWN` otherwise.
+* `UNKNOWN` covers two cases: a `405`, where the path matches a resource but no method of it accepts the HTTP verb, and a request that a servlet filter answered before Jersey ran, such as a `401`. A request for which Jersey matched a resource method MUST NOT report `UNKNOWN`.
 * Each request MUST produce exactly one `http.server.requests` sample. A second instrumentation of the same requests MUST NOT be added next to the existing one.
 * `management.metrics.web.server.max-uri-tags` MUST be set to `1000`. Spring Boot's default of `100` drops samples for every route template after the first hundred, and this source tree declares fewer than 1,000 templates.
 
