@@ -1,5 +1,10 @@
 global:
   scrape_interval: 5s
+  evaluation_interval: 15s
+
+# Mounted from config/docker/prometheus/etc/rules by observability.yml.
+rule_files:
+  - "rules/*.rules.yml"
 
 scrape_configs:
   - job_name: fineract-server

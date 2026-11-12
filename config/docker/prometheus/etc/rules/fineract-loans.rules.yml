@@ -1,0 +1,291 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements. See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership. The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied. See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+# Alert rules for the loan lifecycle and Loan COB. The Grafana dashboard "Fineract: Loans and COB"
+# (config/docker/grafana/dashboards/fineract-loans.json) charts the same series.
+#
+# Every rule aggregates over instances and keeps `application`, so one alert covers a whole deployment.
+# Labels used are closed sets only: command (4), outcome (5 or 2), step (COB business step beans), method, uri
+# (route templates).
+#
+# Thresholds, and why:
+#
+#   Loan command error ratio. The share of submit, approve, disburse or repay commands that end in
+#   outcome="server_error". Warning above 1%, critical above 5% with at least 5 failed commands, so one
+#   failure on a quiet system does not page. A healthy system has none: every other outcome has its own value.
+#
+#   Loan command rejection ratio. The share that ends in outcome="client_error". Warning above 25% with at
+#   least 20 commands in 15 minutes. Callers do send invalid requests, so the threshold is loose, but
+#   ErrorHandler also maps data integrity and lock failures to 4xx, so a database problem shows up here and
+#   not as server_error.
+#
+#   Loan command latency. p95 of successful commands. Warning above 1 s, critical above 2.5 s. A command takes
+#   50 to 150 ms on an idle server. Both thresholds are bucket boundaries of
+#   management.metrics.distribution.slo.fineract.loan.command.execution (50ms,100ms,250ms,500ms,1s,2500ms,5s,10s),
+#   so "p95 above 1 s" is exact: more than 5% of commands took longer than 1 s. Change the thresholds only to
+#   another boundary, or change the boundaries with them.
+#
+#   Loan endpoint latency. Requests to /api/v1/loans and everything below it, for each route template and
+#   method. Warning when p95 is above 1 s, which needs the http.server.requests histogram
+#   (FINERACT_MANAGEMENT_METRICS_DISTRIBUTION_HTTP_SERVER_REQUESTS=true, or SLO buckets that include 1 s).
+#   That histogram is off by default, so a second rule warns when the mean is above 500 ms; it needs no
+#   buckets. Routes below 0.05 requests per second (15 in 5 minutes) are skipped: too few samples.
+#
+#   COB step and loan failures. Any failure warns: a loan whose step chain fails stays on its old COB date
+#   until it is processed again successfully, and the batch job records the error on the loan's account lock.
+#   Critical when more than 1% of the loans processed in 30 minutes fail, which points at a broken step and
+#   not at one bad loan.
+#
+#   COB step latency. Warning when p95 of one step is above 250 ms, a boundary of
+#   management.metrics.distribution.slo.fineract.cob.step.execution (5ms,10ms,25ms,50ms,100ms,250ms,1s,5s).
+#   A step takes under 10 ms for a simple loan. At 250 ms one partition thread handles at most 4 loans per
+#   second for that step alone, about 14,000 an hour.
+#
+#   COB stall. Critical when no loan went through the COB step chain for 25 hours: the default schedule of the
+#   Loan COB job is once a day (cron 0 0 0 * * ?), plus one hour of slack. Change the window if the job is
+#   scheduled differently.
+#
+# Latency rules use a 5 minute rate and `for: 10m`, so one slow request cannot fire them: it leaves the
+# window before the hold time ends.
+
+groups:
+  - name: fineract-loan-commands
+    rules:
+      - alert: FineractLoanCommandErrorRatioHigh
+        expr: |
+          sum by (application, command) (rate(fineract_loan_commands_total{outcome="server_error"}[10m]))
+            /
+          sum by (application, command) (rate(fineract_loan_commands_total[10m]))
+            > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loan {{ $labels.command }} commands are failing with server errors"
+          description: >-
+            {{ $value | humanizePercentage }} of loan {{ $labels.command }} commands on {{ $labels.application }}
+            ended in outcome="server_error" over the last 10 minutes (threshold 1%). These are failures that
+            ErrorHandler does not map to a 4xx status. Look for the exceptions in the server log and at the
+            command audit rows in m_portfolio_command_source.
+
+      - alert: FineractLoanCommandErrorRatioCritical
+        expr: |
+          (
+            sum by (application, command) (rate(fineract_loan_commands_total{outcome="server_error"}[5m]))
+              /
+            sum by (application, command) (rate(fineract_loan_commands_total[5m]))
+              > 0.05
+          )
+          and
+          sum by (application, command) (increase(fineract_loan_commands_total{outcome="server_error"}[5m])) >= 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 5% of loan {{ $labels.command }} commands fail with server errors"
+          description: >-
+            {{ $value | humanizePercentage }} of loan {{ $labels.command }} commands on {{ $labels.application }}
+            ended in outcome="server_error" over the last 5 minutes (threshold 5%, at least 5 failures).
+            Customers cannot {{ $labels.command }} loans reliably.
+
+      - alert: FineractLoanCommandRejectionRatioHigh
+        expr: |
+          (
+            sum by (application, command) (rate(fineract_loan_commands_total{outcome="client_error"}[15m]))
+              /
+            sum by (application, command) (rate(fineract_loan_commands_total[15m]))
+              > 0.25
+          )
+          and
+          sum by (application, command) (increase(fineract_loan_commands_total[15m])) >= 20
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "A quarter of loan {{ $labels.command }} commands are rejected"
+          description: >-
+            {{ $value | humanizePercentage }} of loan {{ $labels.command }} commands on {{ $labels.application }}
+            ended in outcome="client_error" over the last 15 minutes (threshold 25%, at least 20 commands).
+            Either a caller sends invalid requests, or the database rejects writes: data integrity and lock
+            failures are mapped to 4xx and counted here.
+
+      - alert: FineractLoanCommandLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (application, command, le) (rate(fineract_loan_command_execution_seconds_bucket{outcome="success"}[5m]))
+          ) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loan {{ $labels.command }} commands are slow (p95 above 1 s)"
+          description: >-
+            The 95th percentile of successful loan {{ $labels.command }} commands on {{ $labels.application }} is
+            {{ $value | humanizeDuration }} over the last 5 minutes (threshold 1 s). The value is interpolated
+            inside an SLO bucket; what is exact is that more than 5% of commands took longer than 1 s.
+
+      - alert: FineractLoanCommandLatencyCritical
+        expr: |
+          histogram_quantile(0.95,
+            sum by (application, command, le) (rate(fineract_loan_command_execution_seconds_bucket{outcome="success"}[5m]))
+          ) > 2.5
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Loan {{ $labels.command }} commands are very slow (p95 above 2.5 s)"
+          description: >-
+            The 95th percentile of successful loan {{ $labels.command }} commands on {{ $labels.application }} is
+            {{ $value | humanizeDuration }} over the last 5 minutes (threshold 2.5 s). More than 5% of commands
+            took longer than 2.5 s. Values above the last bucket are reported as 10 s.
+
+  - name: fineract-loan-endpoints
+    rules:
+      - alert: FineractLoanEndpointLatencyHigh
+        expr: |
+          (
+            histogram_quantile(0.95,
+              sum by (application, method, uri, le) (rate(http_server_requests_seconds_bucket{uri=~"/api/v1/loans(/.*)?"}[5m]))
+            ) > 1
+          )
+          and
+          sum by (application, method, uri) (rate(http_server_requests_seconds_count{uri=~"/api/v1/loans(/.*)?"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.method }} {{ $labels.uri }} is slow (p95 above 1 s)"
+          description: >-
+            The 95th percentile of {{ $labels.method }} {{ $labels.uri }} on {{ $labels.application }} is
+            {{ $value | humanizeDuration }} over the last 5 minutes (threshold 1 s). This rule only has data when
+            the http.server.requests histogram is enabled.
+
+      - alert: FineractLoanEndpointMeanLatencyHigh
+        expr: |
+          (
+            sum by (application, method, uri) (rate(http_server_requests_seconds_sum{uri=~"/api/v1/loans(/.*)?"}[5m]))
+              /
+            sum by (application, method, uri) (rate(http_server_requests_seconds_count{uri=~"/api/v1/loans(/.*)?"}[5m]))
+              > 0.5
+          )
+          and
+          sum by (application, method, uri) (rate(http_server_requests_seconds_count{uri=~"/api/v1/loans(/.*)?"}[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.method }} {{ $labels.uri }} is slow (mean above 500 ms)"
+          description: >-
+            The mean response time of {{ $labels.method }} {{ $labels.uri }} on {{ $labels.application }} is
+            {{ $value | humanizeDuration }} over the last 5 minutes (threshold 500 ms). This rule needs no
+            histogram, so it also works with the default metrics configuration.
+
+  - name: fineract-loan-cob
+    rules:
+      # A step's failure timer is registered on its first failure, so the series starts at 1 and increase()
+      # cannot see that first failure. The first operand takes a series that exists now and did not 15 minutes
+      # ago at its full value, but only when its target was already scraped 15 minutes ago: otherwise a
+      # Prometheus that starts with an empty database would report old failures as new. increase() covers a
+      # series that is older than 15 minutes. What this misses is the first failure of a step on an instance
+      # that Prometheus has scraped for less than 15 minutes; FineractCobLoanFailures still fires for that loan.
+      - alert: FineractCobStepFailures
+        expr: |
+          sum by (application, step) (
+            (
+              (
+                fineract_cob_step_execution_seconds_count{outcome="failure"}
+                unless
+                fineract_cob_step_execution_seconds_count{outcome="failure"} offset 15m
+              )
+              and on (job, instance)
+              (up offset 15m == 1)
+            )
+            or
+            (increase(fineract_cob_step_execution_seconds_count{outcome="failure"}[15m]) > 0)
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "COB step {{ $labels.step }} is failing"
+          description: >-
+            Failed executions of COB business step {{ $labels.step }} on {{ $labels.application }} in the last
+            15 minutes: about {{ $value | printf "%.0f" }}. Each one ends the step chain for one loan, which then
+            stays behind on its COB date. The server log has the loan id and the exception.
+
+      - alert: FineractCobLoanFailures
+        expr: |
+          sum by (application) (increase(fineract_cob_loans_processed_total{outcome="failure"}[15m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Loans are failing close of business"
+          description: >-
+            Loans on {{ $labels.application }} that did not complete the COB step chain in the last 15 minutes:
+            about {{ $value | printf "%.0f" }}. A failed loan keeps its old COB date until it is processed again
+            successfully, and the batch job records the error on the loan's account lock.
+
+      - alert: FineractCobLoanFailureRatioCritical
+        expr: |
+          sum by (application) (rate(fineract_cob_loans_processed_total{outcome="failure"}[30m]))
+            /
+          sum by (application) (rate(fineract_cob_loans_processed_total[30m]))
+            > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 1% of loans fail close of business"
+          description: >-
+            {{ $value | humanizePercentage }} of the loans processed by COB on {{ $labels.application }} in the
+            last 30 minutes failed (threshold 1%). That is a broken step or broken data across many loans, not
+            one bad loan. See the alert FineractCobStepFailures for the step.
+
+      - alert: FineractCobStepLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (application, step, le) (rate(fineract_cob_step_execution_seconds_bucket[5m]))
+          ) > 0.25
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "COB step {{ $labels.step }} is slow (p95 above 250 ms)"
+          description: >-
+            The 95th percentile of COB business step {{ $labels.step }} on {{ $labels.application }} is
+            {{ $value | humanizeDuration }} for each loan over the last 5 minutes (threshold 250 ms). At that
+            speed one partition thread handles at most 4 loans per second, and the nightly run may not finish
+            in time.
+
+      # The offset operand keeps the rule quiet until the application has been scraped for the whole window,
+      # so a new deployment does not alert before its first scheduled run.
+      - alert: FineractCobStalled
+        expr: |
+          (sum by (application) (increase(fineract_cob_loans_processed_total[25h])) == 0)
+          and on (application)
+          (count by (application) (fineract_cob_loans_processed_total offset 25h) > 0)
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No loan has gone through close of business for 25 hours"
+          description: >-
+            fineract_cob_loans_processed_total on {{ $labels.application }} has not moved for 25 hours. The
+            default schedule of the Loan COB job is once a day, so the job did not run, is stuck before its
+            first loan, or had no loans to process. Check the job history (GET /v1/jobs) and the batch manager
+            and worker logs.

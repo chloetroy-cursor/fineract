@@ -18,7 +18,7 @@ Options for the same commands:
 
 - MySQL instead of Postgres: prefix with `FINERACT_DB=mysql` (uses `docker-compose-mysql-test.yml`). Use the same prefix for `down`.
 - Another image: `FINERACT_IMAGE=fineract:<tag> fineract build` tags the build; `FINERACT_IMAGE=fineract:<tag> fineract restart` swaps the running server and keeps the database.
-- Metrics: `fineract observe up` starts Prometheus on :9090 and Grafana on :3000 (dashboard "Fineract Spring Boot"). The server always exports request-latency histograms.
+- Metrics: `fineract observe up` starts Prometheus on :9090 and Grafana on :3000 (dashboards "Fineract: Spring Boot" and "Fineract: Loans and COB"). The server always exports request-latency histograms. Prometheus also loads the loan and COB alert rules from `config/docker/prometheus/etc/rules/`; see them on :9090/alerts.
 - SQL statements in the logs: `FINERACT_STATEMENT_LOGGING_ENABLED=true fineract restart`.
 - Bulk data: `fineract seed-loans 1000` creates 1,000 loans with the `seed-loan` terms.
 
