@@ -35,10 +35,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignAccountHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
-import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
 import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
@@ -71,7 +72,7 @@ public class InteropTest {
     private ResponseSpecification responseNotFoundErrorSpec;
     private ResponseSpecification responseForbiddenErrorSpec;
 
-    private AccountHelper accountHelper;
+    private FeignAccountHelper accountHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private InteropHelper interopHelper;
 
@@ -97,7 +98,7 @@ public class InteropTest {
         String savingsExternalId = UUID.randomUUID().toString();
         String transactionCode = UUID.randomUUID().toString();
 
-        accountHelper = new AccountHelper(this.requestSpec, this.responseSpec);
+        accountHelper = new FeignAccountHelper(FineractFeignClientHelper.getFineractFeignClient());
         savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
         interopHelper = new InteropHelper(requestSpec, responseSpec, savingsExternalId, transactionCode);
     }
