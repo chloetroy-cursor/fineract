@@ -27,6 +27,7 @@ import static org.mockito.Mockito.verify;
 
 import com.google.common.base.Splitter;
 import io.cucumber.java8.En;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -74,7 +75,8 @@ public class COBBusinessStepServiceStepDefinitions implements En {
 
     public COBBusinessStepServiceStepDefinitions() throws Exception {
         businessStepService = new COBBusinessStepServiceImpl(batchBusinessStepRepository, applicationContext, beanFactory,
-                businessEventNotifierService, configurationDomainService, reloaderService);
+                businessEventNotifierService, configurationDomainService, reloaderService,
+                new COBBusinessStepMetrics(new SimpleMeterRegistry()));
 
         // The notifier owns opening and closing the recording window; here it just has to run what it was handed and
         // hand back the result, otherwise the business step chain never executes at all.

@@ -27,6 +27,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -34,6 +36,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Supplier;
 import org.apache.fineract.cob.COBBusinessStep;
+import org.apache.fineract.cob.COBBusinessStepMetrics;
 import org.apache.fineract.cob.COBBusinessStepServiceImpl;
 import org.apache.fineract.cob.domain.BatchBusinessStepRepository;
 import org.apache.fineract.cob.exceptions.BusinessStepException;
@@ -51,6 +54,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.context.ApplicationContext;
@@ -69,6 +73,9 @@ public class COBBulkEventConfigurationTest {
     private BusinessEventNotifierService businessEventNotifierService;
     @Mock
     private ConfigurationDomainService configurationDomainService;
+    @Spy
+    @SuppressFBWarnings(value = "URF_UNREAD_FIELD", justification = "Mockito injects this field into underTest")
+    private COBBusinessStepMetrics cobBusinessStepMetrics = new COBBusinessStepMetrics(new SimpleMeterRegistry());
     @InjectMocks
     private COBBusinessStepServiceImpl underTest;
 

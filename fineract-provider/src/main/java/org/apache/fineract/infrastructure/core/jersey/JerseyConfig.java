@@ -34,8 +34,10 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
-@ApplicationPath("/api")
+@ApplicationPath(JerseyConfig.APPLICATION_PATH)
 public class JerseyConfig extends ResourceConfig {
+
+    public static final String APPLICATION_PATH = "/api";
 
     JerseyConfig() {
         register(org.glassfish.jersey.media.multipart.MultiPartFeature.class);

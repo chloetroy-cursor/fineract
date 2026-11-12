@@ -20,6 +20,7 @@ package com.acme.fineract.loan.starter;
 
 import static org.mockito.Mockito.mock;
 
+import org.apache.fineract.cob.COBBusinessStepMetrics;
 import org.apache.fineract.cob.COBBusinessStepService;
 import org.apache.fineract.cob.COBBusinessStepServiceImpl;
 import org.apache.fineract.cob.domain.BatchBusinessStepRepository;
@@ -53,7 +54,7 @@ public class TestDefaultConfiguration {
             ApplicationContext context, ListableBeanFactory beanFactory, BusinessEventNotifierService businessEventNotifierService,
             ConfigurationDomainService configurationDomainService, ReloaderService reloaderService) {
         return new COBBusinessStepServiceImpl(batchBusinessStepRepository, context, beanFactory, businessEventNotifierService,
-                configurationDomainService, reloaderService);
+                configurationDomainService, reloaderService, mock(COBBusinessStepMetrics.class));
     }
 
     @Bean

@@ -24,6 +24,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import org.apache.fineract.cob.COBBusinessStep;
+import org.apache.fineract.cob.COBBusinessStepMetrics;
 import org.apache.fineract.cob.COBBusinessStepServiceImpl;
 import org.apache.fineract.cob.domain.BatchBusinessStepRepository;
 import org.apache.fineract.cob.service.ReloaderService;
@@ -139,7 +141,8 @@ class NestedExternalEventRecordingWindowTest {
         businessEventNotifierService = new BusinessEventNotifierServiceImpl(externalEventService, fineractProperties, transactionHelper,
                 externalBusinessEventConfigurationService);
         cobBusinessStepService = new COBBusinessStepServiceImpl(batchBusinessStepRepository, applicationContext, beanFactory,
-                businessEventNotifierService, configurationDomainService, reloaderService);
+                businessEventNotifierService, configurationDomainService, reloaderService,
+                new COBBusinessStepMetrics(new SimpleMeterRegistry()));
     }
 
     @AfterEach
