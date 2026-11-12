@@ -36,16 +36,17 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 import org.apache.fineract.client.models.GetOfficesResponse;
+import org.apache.fineract.client.models.StaffData;
 import org.apache.fineract.infrastructure.bulkimport.constants.SavingsConstants;
 import org.apache.fineract.infrastructure.bulkimport.constants.TemplatePopulateImportConstants;
 import org.apache.fineract.integrationtests.bulkimport.importhandler.BulkImportOutputTemplateHelper;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignStaffHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsTestLifecycleExtension;
@@ -116,11 +117,12 @@ public class SavingsImportHandlerTest {
         Assertions.assertNotNull(outcome_group_creation, "Could not create group");
 
         // in order to populate helper sheets
-        Integer outcome_staff_creation = StaffHelper.createStaff(requestSpec, responseSpec);
+        FeignStaffHelper staffHelper = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient());
+        Long outcome_staff_creation = staffHelper.createStaff().getResourceId();
         Assertions.assertNotNull(outcome_staff_creation, "Could not create staff");
 
-        Map<String, Object> staffMap = StaffHelper.getStaff(requestSpec, responseSpec, outcome_staff_creation);
-        Assertions.assertNotNull(staffMap, "Could not retrieve created staff");
+        StaffData staff = staffHelper.getStaff(outcome_staff_creation);
+        Assertions.assertNotNull(staff, "Could not retrieve created staff");
 
         SavingsProductHelper savingsProductHelper = new SavingsProductHelper();
         String jsonSavingsProduct = savingsProductHelper.build();
@@ -140,7 +142,7 @@ public class SavingsImportHandlerTest {
         Sheet savingsProductSheet = workbook.getSheet(TemplatePopulateImportConstants.PRODUCT_SHEET_NAME);
         firstSavingsRow.createCell(SavingsConstants.PRODUCT_COL)
                 .setCellValue(savingsProductSheet.getRow(1).getCell(1).getStringCellValue());
-        firstSavingsRow.createCell(SavingsConstants.FIELD_OFFICER_NAME_COL).setCellValue((String) staffMap.get("displayName"));
+        firstSavingsRow.createCell(SavingsConstants.FIELD_OFFICER_NAME_COL).setCellValue(staff.getDisplayName());
         SimpleDateFormat simpleDateFormat = new SimpleDateFormat("dd MMMM yyyy", Locale.US);
         Date date = simpleDateFormat.parse("13 May 2017");
         firstSavingsRow.createCell(SavingsConstants.SUBMITTED_ON_DATE_COL).setCellValue(date);

@@ -27,8 +27,9 @@ import io.restassured.http.ContentType;
 import io.restassured.specification.RequestSpecification;
 import io.restassured.specification.ResponseSpecification;
 import java.util.HashMap;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignStaffHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.organisation.StaffHelper;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
 import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.junit.jupiter.api.Assertions;
@@ -136,7 +137,8 @@ public class RolesTest {
         final Integer roleId = RolesHelper.createRole(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(roleId);
 
-        final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
+        final Integer staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId()
+                .intValue();
         Assertions.assertNotNull(staffId);
 
         final Integer userId = UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId);
@@ -154,7 +156,8 @@ public class RolesTest {
         final Integer roleId = RolesHelper.createRole(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(roleId);
 
-        final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
+        final Integer staffId = new FeignStaffHelper(FineractFeignClientHelper.getFineractFeignClient()).createStaff().getResourceId()
+                .intValue();
         Assertions.assertNotNull(staffId);
 
         final Integer userId = UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId);
