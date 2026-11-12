@@ -24,11 +24,15 @@ import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.core.domain.ActionContext;
 import org.apache.fineract.infrastructure.core.domain.FineractContext;
 import org.apache.fineract.infrastructure.core.domain.FineractPlatformTenant;
+import org.apache.fineract.infrastructure.core.logging.LoggingContext;
 import org.springframework.util.Assert;
 
 /**
  * A utility class for managing ThreadLocal context in the application. Provides methods for context initialization and
  * cleanup.
+ * <p>
+ * The tenant is mirrored into the logging MDC here, so every thread that is given a tenant (API requests, scheduled
+ * jobs, batch workers, async listeners) logs it, and {@link #reset()} removes it together with the loan id.
  */
 public final class ThreadLocalContextUtil {
 
@@ -47,10 +51,12 @@ public final class ThreadLocalContextUtil {
 
     public static void setTenant(final FineractPlatformTenant tenant) {
         tenantContext.set(tenant);
+        LoggingContext.setTenantId(tenant == null ? null : tenant.getTenantIdentifier());
     }
 
     public static void clearTenant() {
         tenantContext.remove();
+        LoggingContext.clearTenantId();
     }
 
     public static String getDataSourceContext() {
@@ -124,6 +130,7 @@ public final class ThreadLocalContextUtil {
         authTokenContext.remove();
         businessDateContext.remove();
         actionContext.remove();
+        LoggingContext.clear();
     }
 
 }

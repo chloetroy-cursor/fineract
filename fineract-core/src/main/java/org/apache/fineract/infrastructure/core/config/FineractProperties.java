@@ -56,6 +56,8 @@ public class FineractProperties {
 
     private FineractCorrelationProperties correlation;
 
+    private FineractLoggingProperties logging = new FineractLoggingProperties();
+
     private FineractIpTrackingProperties ipTracking;
 
     private FineractPartitionedJob partitionedJob;
@@ -168,6 +170,20 @@ public class FineractProperties {
 
         private boolean enabled;
         private String headerName;
+    }
+
+    @Getter
+    @Setter
+    public static class FineractLoggingProperties {
+
+        private FineractJsonLoggingProperties json = new FineractJsonLoggingProperties();
+    }
+
+    @Getter
+    @Setter
+    public static class FineractJsonLoggingProperties {
+
+        private boolean enabled;
     }
 
     @Getter
