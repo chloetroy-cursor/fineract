@@ -49,7 +49,6 @@
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]CreditBureauConfigurationValidationTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]DateValidationTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]DisallowBackdatedTransactionsIntegrationTest\.java$"/>
-    <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]ExternalServicesConfigurationTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]FinancialActivityAccountsTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]FundsIntegrationTest\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]IpTrackingIntegrationTest\.java$"/>
@@ -90,7 +89,6 @@
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]ClientHelper\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]CollateralManagementHelper\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]ExternalEventConfigurationHelper\.java$"/>
-    <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]ExternalServicesConfigurationHelper\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]GroupHelper\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]NotesHelper\.java$"/>
     <suppress id="FeignNoRestAssured" files="[/\\]integration-tests[/\\]src[/\\]test[/\\]java[/\\]org[/\\]apache[/\\]fineract[/\\]integrationtests[/\\]common[/\\]PaymentTypeHelper\.java$"/>
