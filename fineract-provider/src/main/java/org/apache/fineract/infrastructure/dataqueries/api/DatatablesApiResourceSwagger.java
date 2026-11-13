@@ -125,6 +125,8 @@ final class DatatablesApiResourceSwagger {
             public String code;
             @Schema(example = "true")
             public boolean mandatory;
+            @Schema(example = "1653", description = "Length of the text field. Mandatory if type String is used, otherwise an error is returned.")
+            public Long length;
             @Schema(example = "true")
             public boolean unique;
             @Schema(example = "true", description = "Defaults to false")
@@ -145,6 +147,8 @@ final class DatatablesApiResourceSwagger {
             public String newCode;
             @Schema(example = "true")
             public boolean mandatory;
+            @Schema(example = "100", description = "New length of a String column. Left unchanged when absent.")
+            public Long length;
             @Schema(example = "true")
             public boolean unique;
             @Schema(example = "true", description = "Defaults to false")
@@ -153,6 +157,8 @@ final class DatatablesApiResourceSwagger {
 
         @Schema(example = "m_client")
         public String apptableName;
+        @Schema(example = "Person", description = "Re-registers the datatable with this entity sub type when present.")
+        public String entitySubType;
         public List<PutDataTablesRequestDropColumns> dropColumns;
         public List<PutDataTablesRequestAddColumns> addColumns;
         public List<PutDataTablesRequestChangeColumns> changeColumns;
