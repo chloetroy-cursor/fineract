@@ -23,12 +23,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import io.restassured.RestAssured;
-import io.restassured.builder.RequestSpecBuilder;
-import io.restassured.builder.ResponseSpecBuilder;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
-import io.restassured.specification.RequestSpecification;
-import io.restassured.specification.ResponseSpecification;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.fineract.client.models.PostUsersRequest;
@@ -36,26 +32,21 @@ import org.apache.fineract.client.models.PostUsersResponse;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignUserHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class PasswordResetIntegrationTest extends IntegrationTest {
 
-    private RequestSpecification requestSpec;
-    private ResponseSpecification responseSpec;
     private GlobalConfigurationHelper globalConfigurationHelper;
-    private List<Integer> transientUsers = new ArrayList<>();
+    private List<Long> transientUsers = new ArrayList<>();
 
     @BeforeEach
     public void setup() {
         Utils.initializeRESTAssured();
-        this.requestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build();
-        this.requestSpec.header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey());
-        this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         this.globalConfigurationHelper = new GlobalConfigurationHelper();
     }
 
@@ -64,8 +55,8 @@ public class PasswordResetIntegrationTest extends IntegrationTest {
         globalConfigurationHelper.updateGlobalConfiguration(GlobalConfigurationConstants.FORCE_PASSWORD_RESET_ON_FIRST_LOGIN,
                 new PutGlobalConfigurationsRequest().value(0L).enabled(false));
 
-        for (Integer userId : this.transientUsers) {
-            UserHelper.deleteUser(this.requestSpec, this.responseSpec, userId);
+        for (Long userId : this.transientUsers) {
+            FeignUserHelper.deleteUser(userId);
         }
         this.transientUsers.clear();
     }
@@ -76,11 +67,11 @@ public class PasswordResetIntegrationTest extends IntegrationTest {
                 new PutGlobalConfigurationsRequest().value(0L).enabled(true));
 
         String password = "Abcdef1#2$3%XYZ";
-        PostUsersRequest userRequest = UserHelper.buildUserRequest(responseSpec, requestSpec, password);
-        PostUsersResponse userResponse = UserHelper.createUser(requestSpec, responseSpec, userRequest);
+        PostUsersRequest userRequest = FeignUserHelper.buildUserRequest(password);
+        PostUsersResponse userResponse = FeignUserHelper.createUser(userRequest);
         Long userId = userResponse.getResourceId();
         assertNotNull(userId, "User creation failed to return an ID!");
-        this.transientUsers.add(userId.intValue());
+        this.transientUsers.add(userId);
         String username = userRequest.getUsername();
 
         Response loginResponse = attemptLogin(username, password);
@@ -100,10 +91,10 @@ public class PasswordResetIntegrationTest extends IntegrationTest {
                 new PutGlobalConfigurationsRequest().value(0L).enabled(false));
 
         String password = "Abcdef1#2$3%XYZ";
-        PostUsersRequest userRequest = UserHelper.buildUserRequest(responseSpec, requestSpec, password);
-        PostUsersResponse userResponse = UserHelper.createUser(requestSpec, responseSpec, userRequest);
+        PostUsersRequest userRequest = FeignUserHelper.buildUserRequest(password);
+        PostUsersResponse userResponse = FeignUserHelper.createUser(userRequest);
         assertNotNull(userResponse.getResourceId(), "User creation failed!");
-        this.transientUsers.add(userResponse.getResourceId().intValue());
+        this.transientUsers.add(userResponse.getResourceId());
         String username = userRequest.getUsername();
 
         Response loginResponse = attemptLogin(username, password);

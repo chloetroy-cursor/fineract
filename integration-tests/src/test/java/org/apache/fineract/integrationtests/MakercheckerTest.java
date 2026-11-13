@@ -33,6 +33,7 @@ import java.util.Map;
 import org.apache.fineract.client.models.PutGlobalConfigurationsRequest;
 import org.apache.fineract.client.models.PutPermissionsRequest;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignUserHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
@@ -44,7 +45,6 @@ import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.apache.fineract.integrationtests.useradministration.roles.RolesHelper;
-import org.apache.fineract.integrationtests.useradministration.users.UserHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -106,8 +106,8 @@ public class MakercheckerTest {
             final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
             // create maker user
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
-            final Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,
-                    "A1b2c3d4e5f$", "resourceId");
+            final Long makerUserId = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), maker, "A1b2c3d4e5f$")
+                    .getResourceId();
 
             // create client - maker-checker disabled
             RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
@@ -155,8 +155,8 @@ public class MakercheckerTest {
 
             // create checker user
             String checker = Utils.uniqueRandomStringGenerator("user", 8);
-            final Integer checkerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, checker,
-                    "A1b2c3d4e5f$", "resourceId");
+            final Long checkerUserId = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), checker, "A1b2c3d4e5f$")
+                    .getResourceId();
             RequestSpecification checkerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
                     .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(checker, "A1b2c3d4e5f$"));
 
@@ -221,12 +221,11 @@ public class MakercheckerTest {
             // create maker user
             Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
-            Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,
-                    "A1b2c3d4e5f$", "resourceId");
+            Long makerUserId = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), maker, "A1b2c3d4e5f$").getResourceId();
 
             // create checker user
             String checker = Utils.uniqueRandomStringGenerator("user", 8);
-            UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, checker, "A1b2c3d4e5f$", "resourceId");
+            FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), checker, "A1b2c3d4e5f$");
 
             RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
                     .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
@@ -288,8 +287,8 @@ public class MakercheckerTest {
 
             String maker1 = Utils.uniqueRandomStringGenerator("user", 8);
             String maker2 = Utils.uniqueRandomStringGenerator("user", 8);
-            UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker1, "A1b2c3d4e5f$", "resourceId");
-            UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker2, "A1b2c3d4e5f$", "resourceId");
+            FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), maker1, "A1b2c3d4e5f$");
+            FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), maker2, "A1b2c3d4e5f$");
 
             RequestSpecification maker1RequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
                     .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker1, "A1b2c3d4e5f$"));
@@ -338,8 +337,8 @@ public class MakercheckerTest {
             final Integer staffId = StaffHelper.createStaff(this.requestSpec, this.responseSpec);
 
             String maker = Utils.uniqueRandomStringGenerator("user", 8);
-            final Integer makerUserId = (Integer) UserHelper.createUser(this.requestSpec, this.responseSpec, roleId, staffId, maker,
-                    "A1b2c3d4e5f$", "resourceId");
+            final Long makerUserId = FeignUserHelper.createUser(roleId.longValue(), staffId.longValue(), maker, "A1b2c3d4e5f$")
+                    .getResourceId();
             RequestSpecification makerRequestSpec = new RequestSpecBuilder().setContentType(ContentType.JSON).build()
                     .header("Authorization", "Basic " + Utils.loginIntoServerAndGetBase64EncodedAuthenticationKey(maker, "A1b2c3d4e5f$"));
 
