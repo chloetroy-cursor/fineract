@@ -69,13 +69,16 @@ import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.infrastructure.core.service.DateUtils;
 import org.apache.fineract.infrastructure.dataqueries.data.EntityTables;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsProductHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
 import org.apache.fineract.integrationtests.common.system.DatatableHelper;
 import org.jspecify.annotations.NonNull;
@@ -106,7 +109,7 @@ public class DatatableAdvancedQueryTest {
     private RequestSpecification requestSpec;
     private ResponseSpecification responseSpec;
     private DatatableHelper datatableHelper;
-    private SavingsProductHelper savingsProductHelper;
+    private FeignSavingsProductHelper savingsProductHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private GlobalConfigurationHelper globalConfigurationHelper;
 
@@ -118,7 +121,7 @@ public class DatatableAdvancedQueryTest {
         responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
         datatableHelper = new DatatableHelper(requestSpec, responseSpec);
         savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
-        savingsProductHelper = new SavingsProductHelper();
+        savingsProductHelper = new FeignSavingsProductHelper(FineractFeignClientHelper.getFineractFeignClient());
         globalConfigurationHelper = new GlobalConfigurationHelper();
     }
 
@@ -373,9 +376,10 @@ public class DatatableAdvancedQueryTest {
     }
 
     private Integer createSavingsProductDailyPosting() {
-        final String savingsProductJSON = savingsProductHelper.withInterestCompoundingPeriodTypeAsDaily()
-                .withInterestPostingPeriodTypeAsDaily().withInterestCalculationPeriodTypeAsDailyBalance().build();
-        return SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
+        return savingsProductHelper
+                .createSavingsProduct(SavingsRequestBuilders.savingsProduct(SavingsTestData.InterestCompoundingPeriodType.DAILY,
+                        SavingsTestData.InterestPostingPeriodType.DAILY, SavingsTestData.InterestCalculationType.DAILY_BALANCE))
+                .getResourceId().intValue();
     }
 
     private Integer createSavingsAccountDailyPosting(final Integer clientID, final String startDate) {

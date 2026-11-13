@@ -29,11 +29,15 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsProductHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
 import org.apache.fineract.integrationtests.common.CenterDomain;
 import org.apache.fineract.integrationtests.common.CenterHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
@@ -42,7 +46,6 @@ import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
 import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
-import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.AccountNumberPreferencesHelper;
 import org.apache.fineract.integrationtests.common.system.CodeHelper;
 import org.junit.jupiter.api.Assertions;
@@ -70,10 +73,8 @@ public class AccountNumberPreferencesTest {
     private final String numberOfRepayments = "12";
     private final String interestRatePerPeriod = "18";
     private final String dateString = "04 September 2014";
-    private final String minBalanceForInterestCalculation = null;
-    private final String minRequiredBalance = null;
-    private final String enforceMinRequiredBalance = "false";
     private LoanTransactionHelper loanTransactionHelper;
+    private FeignSavingsProductHelper savingsProductHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private AccountNumberPreferencesHelper accountNumberPreferencesHelper;
     private Integer clientAccountNumberPreferenceId;
@@ -105,6 +106,7 @@ public class AccountNumberPreferencesTest {
         this.responseNotFoundError = new ResponseSpecBuilder().expectStatusCode(404).build();
         this.responseForbiddenError = new ResponseSpecBuilder().expectStatusCode(403).build();
         this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
+        this.savingsProductHelper = new FeignSavingsProductHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.accountNumberPreferencesHelper = new AccountNumberPreferencesHelper(this.requestSpec, this.responseSpec);
 
     }
@@ -460,21 +462,10 @@ public class AccountNumberPreferencesTest {
 
         LOG.info("------------------------------CREATING NEW SAVINGS PRODUCT ---------------------------------------");
 
-        SavingsProductHelper savingsProductHelper = new SavingsProductHelper();
-
-        final String savingsProductJSON = savingsProductHelper
-                //
-                .withInterestCompoundingPeriodTypeAsDaily()
-                //
-                .withInterestPostingPeriodTypeAsMonthly()
-                //
-                .withInterestCalculationPeriodTypeAsDailyBalance()
-                //
-                .withMinBalanceForInterestCalculation(minBalanceForInterestCalculation)
-                //
-                .withMinRequiredBalance(minRequiredBalance).withEnforceMinRequiredBalance(enforceMinRequiredBalance)
-                .withMinimumOpenningBalance(MINIMUM_OPENING_BALANCE).build();
-        this.savingsProductId = SavingsProductHelper.createSavingsProduct(savingsProductJSON, this.requestSpec, this.responseSpec);
+        this.savingsProductId = this.savingsProductHelper.createSavingsProduct(SavingsRequestBuilders
+                .savingsProduct(SavingsTestData.InterestCompoundingPeriodType.DAILY, SavingsTestData.InterestPostingPeriodType.MONTHLY,
+                        SavingsTestData.InterestCalculationType.DAILY_BALANCE)
+                .minRequiredOpeningBalance(new BigDecimal(MINIMUM_OPENING_BALANCE))).getResourceId().intValue();
         LOG.info("Sucessfully created savings product (ID: {} )", this.savingsProductId);
 
     }

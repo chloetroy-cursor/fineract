@@ -48,11 +48,16 @@ import org.apache.fineract.client.models.PostSavingsAccountTransactionsRequest;
 import org.apache.fineract.client.models.PostSavingsAccountTransactionsResponse;
 import org.apache.fineract.client.models.PostSavingsAccountsAccountIdRequest;
 import org.apache.fineract.client.models.PostSavingsAccountsAccountIdResponse;
+import org.apache.fineract.client.models.PostSavingsProductsRequest;
 import org.apache.fineract.client.models.SavingsAccountTransactionsSearchResponse;
 import org.apache.fineract.client.util.Calls;
 import org.apache.fineract.client.util.JSON;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignSavingsProductHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsTestData;
 import org.apache.fineract.integrationtests.common.CommonConstants;
 import org.apache.fineract.integrationtests.common.FineractClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
@@ -1300,13 +1305,12 @@ public class SavingsAccountHelper {
     private static Integer createSavingsProduct(final RequestSpecification requestSpec, final ResponseSpecification responseSpec,
             final String minOpenningBalance) {
         LOG.info("------------------------------CREATING NEW SAVINGS PRODUCT ---------------------------------------");
-        SavingsProductHelper savingsProductHelper = new SavingsProductHelper();
-        final String savingsProductJSON = savingsProductHelper //
-                .withInterestCompoundingPeriodTypeAsDaily() //
-                .withInterestPostingPeriodTypeAsMonthly() //
-                .withInterestCalculationPeriodTypeAsDailyBalance() //
-                .withMinimumOpenningBalance(minOpenningBalance).build();
-        return SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
+        final PostSavingsProductsRequest request = SavingsRequestBuilders
+                .savingsProduct(SavingsTestData.InterestCompoundingPeriodType.DAILY, SavingsTestData.InterestPostingPeriodType.MONTHLY,
+                        SavingsTestData.InterestCalculationType.DAILY_BALANCE)
+                .minRequiredOpeningBalance(new BigDecimal(minOpenningBalance));
+        return new FeignSavingsProductHelper(FineractFeignClientHelper.getFineractFeignClient()).createSavingsProduct(request)
+                .getResourceId().intValue();
     }
 
     // TODO: Rewrite to use fineract-client instead!
@@ -1509,14 +1513,13 @@ public class SavingsAccountHelper {
     public Integer createSavingsProductWithAccrualAccounting(final Account assetAccount, final Account liabilityAccount,
             final Account incomeAccount, final Account expenseAccount, final String interestRate) {
 
-        SavingsProductHelper productHelper = new SavingsProductHelper();
-        final Account[] accountList = { assetAccount, liabilityAccount, incomeAccount, expenseAccount };
-
-        final String savingsProductJSON = productHelper.withInterestCompoundingPeriodTypeAsDaily().withInterestPostingPeriodTypeAsMonthly()
-                .withInterestCalculationPeriodTypeAsDailyBalance().withAccountingRuleAsAccrualBased(accountList)
-                .withNominalAnnualInterestRate(new BigDecimal(interestRate)).build();
-
-        return SavingsProductHelper.createSavingsProduct(savingsProductJSON, requestSpec, responseSpec);
+        final PostSavingsProductsRequest request = SavingsRequestBuilders.withAccrualAccountingMappings(SavingsRequestBuilders
+                .savingsProduct(SavingsTestData.InterestCompoundingPeriodType.DAILY, SavingsTestData.InterestPostingPeriodType.MONTHLY,
+                        SavingsTestData.InterestCalculationType.DAILY_BALANCE)
+                .accountingRule(SavingsTestData.AccountingRule.ACCRUAL_PERIODIC).nominalAnnualInterestRate(Double.valueOf(interestRate)),
+                assetAccount, liabilityAccount, incomeAccount, expenseAccount);
+        return new FeignSavingsProductHelper(FineractFeignClientHelper.getFineractFeignClient()).createSavingsProduct(request)
+                .getResourceId().intValue();
     }
 
     public BigDecimal getTotalAccrualAmount(Integer savingsId) {
