@@ -18,19 +18,27 @@
  */
 package org.apache.fineract.integrationtests.client.feign.helpers;
 
+import static org.apache.fineract.client.feign.util.FeignCalls.fail;
 import static org.apache.fineract.client.feign.util.FeignCalls.ok;
 
 import java.util.Map;
 import org.apache.fineract.client.feign.FineractFeignClient;
+import org.apache.fineract.client.feign.util.CallFailedRuntimeException;
+import org.apache.fineract.client.models.DeleteRolesRoleIdResponse;
 import org.apache.fineract.client.models.PostRolesRequest;
 import org.apache.fineract.client.models.PostRolesResponse;
+import org.apache.fineract.client.models.PostRolesRoleIdResponse;
 import org.apache.fineract.client.models.PutRolesRoleIdPermissionsRequest;
 import org.apache.fineract.client.models.PutRolesRoleIdPermissionsResponse;
+import org.apache.fineract.integrationtests.client.feign.helpers.RoleDetailsApi.RoleDetails;
 import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 
 /** Typed Feign helper for role and role-permission operations. */
 public final class FeignRoleHelper {
+
+    private static final String DISABLE_ROLE_COMMAND = "disable";
+    private static final String ENABLE_ROLE_COMMAND = "enable";
 
     private FeignRoleHelper() {}
 
@@ -44,6 +52,28 @@ public final class FeignRoleHelper {
                 () -> client().roles().createRole(new PostRolesRequest().name(Utils.uniqueRandomStringGenerator("Role_Name_", 5))
                         .description(Utils.randomStringGenerator("Role_Description_", 10))));
         return response.getResourceId();
+    }
+
+    /** Reads a role including its {@code disabled} flag, see {@link RoleDetailsApi}. */
+    public static RoleDetails getRole(Long roleId) {
+        return ok(() -> client().create(RoleDetailsApi.class).retrieveRole(roleId));
+    }
+
+    public static PostRolesRoleIdResponse disableRole(Long roleId) {
+        return ok(() -> client().roles().handleCommandsRole(roleId, DISABLE_ROLE_COMMAND));
+    }
+
+    public static PostRolesRoleIdResponse enableRole(Long roleId) {
+        return ok(() -> client().roles().handleCommandsRole(roleId, ENABLE_ROLE_COMMAND));
+    }
+
+    public static DeleteRolesRoleIdResponse deleteRole(Long roleId) {
+        return ok(() -> client().roles().deleteRole(roleId));
+    }
+
+    /** Deletes a role the server must refuse, for example one still assigned to a user, and returns the failure. */
+    public static CallFailedRuntimeException deleteRoleExpectingError(Long roleId) {
+        return fail(() -> client().roles().deleteRole(roleId));
     }
 
     /**
