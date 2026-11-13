@@ -64,10 +64,11 @@ import org.apache.fineract.client.models.PutJobsJobIDRequest;
 import org.apache.fineract.infrastructure.businessdate.domain.BusinessDateType;
 import org.apache.fineract.infrastructure.configuration.api.GlobalConfigurationConstants;
 import org.apache.fineract.integrationtests.client.IntegrationTest;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignCollateralHelper;
 import org.apache.fineract.integrationtests.common.BusinessDateHelper;
 import org.apache.fineract.integrationtests.common.BusinessStepHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
-import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GlobalConfigurationHelper;
 import org.apache.fineract.integrationtests.common.HolidayHelper;
 import org.apache.fineract.integrationtests.common.SchedulerJobHelper;
@@ -130,6 +131,7 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     private BusinessDateHelper businessDateHelper;
     private static BusinessStepHelper businessStepHelper;
     private GlobalConfigurationHelper globalConfigurationHelper;
+    private final FeignCollateralHelper collateralHelper = new FeignCollateralHelper(FineractFeignClientHelper.getFineractFeignClient());
 
     @BeforeAll
     public static void beforeAll() {
@@ -1427,11 +1429,11 @@ public class SchedulerJobsTestResults extends IntegrationTest {
         return this.loanTransactionHelper.getLoanProductId(loanProductJSON);
     }
 
-    private void addCollaterals(List<HashMap> collaterals, Integer collateralId, BigDecimal quantity) {
+    private void addCollaterals(List<HashMap> collaterals, Long collateralId, BigDecimal quantity) {
         collaterals.add(collaterals(collateralId, quantity));
     }
 
-    private HashMap<String, String> collaterals(Integer collateralId, BigDecimal quantity) {
+    private HashMap<String, String> collaterals(Long collateralId, BigDecimal quantity) {
         HashMap<String, String> collateral = new HashMap<>(2);
         collateral.put("clientCollateralId", collateralId.toString());
         collateral.put("quantity", quantity.toString());
@@ -1441,10 +1443,9 @@ public class SchedulerJobsTestResults extends IntegrationTest {
     private Integer applyForLoanApplication(final String clientID, final String loanProductID, final String savingsID, final String date) {
 
         List<HashMap> collaterals = new ArrayList<>();
-        final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
+        final Long collateralId = collateralHelper.createCollateralProduct().getResourceId();
         Assertions.assertNotNull(collateralId);
-        final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec, clientID,
-                collateralId);
+        final Long clientCollateralId = collateralHelper.createClientCollateral(Long.valueOf(clientID), collateralId).getResourceId();
         Assertions.assertNotNull(clientCollateralId);
         addCollaterals(collaterals, clientCollateralId, BigDecimal.valueOf(1));
 
@@ -1461,10 +1462,9 @@ public class SchedulerJobsTestResults extends IntegrationTest {
             final String date) {
 
         List<HashMap> collaterals = new ArrayList<>();
-        final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
+        final Long collateralId = collateralHelper.createCollateralProduct().getResourceId();
         Assertions.assertNotNull(collateralId);
-        final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec, clientID,
-                collateralId);
+        final Long clientCollateralId = collateralHelper.createClientCollateral(Long.valueOf(clientID), collateralId).getResourceId();
         Assertions.assertNotNull(clientCollateralId);
         addCollaterals(collaterals, clientCollateralId, BigDecimal.valueOf(1));
 
