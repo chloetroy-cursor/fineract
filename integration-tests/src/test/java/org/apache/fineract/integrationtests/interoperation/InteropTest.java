@@ -34,12 +34,15 @@ import java.math.RoundingMode;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import org.apache.fineract.client.models.ChargeRequest;
 import org.apache.fineract.infrastructure.core.service.MathUtil;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignChargesHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.SavingsRequestBuilders;
 import org.apache.fineract.integrationtests.common.ClientHelper;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.Utils;
 import org.apache.fineract.integrationtests.common.accounting.Account;
 import org.apache.fineract.integrationtests.common.accounting.AccountHelper;
-import org.apache.fineract.integrationtests.common.charges.ChargesHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsStatusChecker;
@@ -74,6 +77,7 @@ public class InteropTest {
     private AccountHelper accountHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private InteropHelper interopHelper;
+    private FeignChargesHelper chargesHelper;
 
     private Integer clientId;
     private Integer savingsProductId;
@@ -100,6 +104,7 @@ public class InteropTest {
         accountHelper = new AccountHelper(this.requestSpec, this.responseSpec);
         savingsAccountHelper = new SavingsAccountHelper(requestSpec, responseSpec);
         interopHelper = new InteropHelper(requestSpec, responseSpec, savingsExternalId, transactionCode);
+        chargesHelper = new FeignChargesHelper(FineractFeignClientHelper.getFineractFeignClient());
     }
 
     @Test
@@ -148,8 +153,10 @@ public class InteropTest {
     }
 
     private void createCharge() {
-        chargeId = ChargesHelper.createCharges(requestSpec, responseSpec, ChargesHelper.getSavingsJSON(interopHelper.getFee().toString(),
-                interopHelper.getCurrency(), ChargeTimeType.WITHDRAWAL_FEE));
+        ChargeRequest withdrawalFee = SavingsRequestBuilders.savingsCharge(ChargeTimeType.WITHDRAWAL_FEE.getValue())//
+                .amount(interopHelper.getFee().doubleValue())//
+                .currencyCode(interopHelper.getCurrency());
+        chargeId = chargesHelper.createCharge(withdrawalFee).getResourceId().intValue();
         Assertions.assertNotNull(chargeId);
     }
 
