@@ -29,18 +29,22 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import org.apache.fineract.client.models.PostLoansRequest;
+import org.apache.fineract.client.models.PostLoansRequestCollateralData;
+import org.apache.fineract.integrationtests.client.feign.helpers.FeignLoanHelper;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanRequestBuilders;
+import org.apache.fineract.integrationtests.client.feign.modules.LoanTestData;
 import org.apache.fineract.integrationtests.common.CenterDomain;
 import org.apache.fineract.integrationtests.common.CenterHelper;
 import org.apache.fineract.integrationtests.common.ClientHelper;
 import org.apache.fineract.integrationtests.common.CollateralManagementHelper;
 import org.apache.fineract.integrationtests.common.CommonConstants;
+import org.apache.fineract.integrationtests.common.FineractFeignClientHelper;
 import org.apache.fineract.integrationtests.common.GroupHelper;
 import org.apache.fineract.integrationtests.common.OfficeHelper;
 import org.apache.fineract.integrationtests.common.Utils;
-import org.apache.fineract.integrationtests.common.loans.LoanApplicationTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanProductTestBuilder;
 import org.apache.fineract.integrationtests.common.loans.LoanTestLifecycleExtension;
-import org.apache.fineract.integrationtests.common.loans.LoanTransactionHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsAccountHelper;
 import org.apache.fineract.integrationtests.common.savings.SavingsProductHelper;
 import org.apache.fineract.integrationtests.common.system.AccountNumberPreferencesHelper;
@@ -73,7 +77,7 @@ public class AccountNumberPreferencesTest {
     private final String minBalanceForInterestCalculation = null;
     private final String minRequiredBalance = null;
     private final String enforceMinRequiredBalance = "false";
-    private LoanTransactionHelper loanTransactionHelper;
+    private FeignLoanHelper loanHelper;
     private SavingsAccountHelper savingsAccountHelper;
     private AccountNumberPreferencesHelper accountNumberPreferencesHelper;
     private Integer clientAccountNumberPreferenceId;
@@ -104,7 +108,7 @@ public class AccountNumberPreferencesTest {
         this.responseValidationError = new ResponseSpecBuilder().expectStatusCode(400).build();
         this.responseNotFoundError = new ResponseSpecBuilder().expectStatusCode(404).build();
         this.responseForbiddenError = new ResponseSpecBuilder().expectStatusCode(403).build();
-        this.loanTransactionHelper = new LoanTransactionHelper(this.requestSpec, this.responseSpec);
+        this.loanHelper = new FeignLoanHelper(FineractFeignClientHelper.getFineractFeignClient());
         this.accountNumberPreferencesHelper = new AccountNumberPreferencesHelper(this.requestSpec, this.responseSpec);
 
     }
@@ -394,48 +398,35 @@ public class AccountNumberPreferencesTest {
 
         LOG.info("---------------------------------CREATING LOAN PRODUCT------------------------------------------");
 
-        final String loanProductJSON = new LoanProductTestBuilder().withPrincipal(loanPrincipalAmount)
-                .withNumberOfRepayments(numberOfRepayments).withinterestRatePerPeriod(interestRatePerPeriod)
-                .withInterestRateFrequencyTypeAsYear().build(null);
-
-        this.loanProductId = this.loanTransactionHelper.getLoanProductId(loanProductJSON);
+        this.loanProductId = this.loanHelper
+                .createLoanProduct(
+                        new LoanProductTestBuilder().withPrincipal(loanPrincipalAmount).withNumberOfRepayments(numberOfRepayments)
+                                .withinterestRatePerPeriod(interestRatePerPeriod).withInterestRateFrequencyTypeAsYear().buildRequest())
+                .getResourceId().intValue();
         LOG.info("Successfully created loan product  (ID: {} )", this.loanProductId);
-    }
-
-    private void addCollaterals(List<HashMap> collaterals, Integer collateralId, BigDecimal quantity) {
-        collaterals.add(collaterals(collateralId, quantity));
-    }
-
-    private HashMap<String, String> collaterals(Integer collateralId, BigDecimal quantity) {
-        HashMap<String, String> collateral = new HashMap<String, String>(2);
-        collateral.put("clientCollateralId", collateralId.toString());
-        collateral.put("quantity", quantity.toString());
-        return collateral;
     }
 
     private void createAndValidateLoanEntity(Boolean isAccountPreferenceSetUp) {
         this.responseSpec = new ResponseSpecBuilder().expectStatusCode(200).build();
 
         LOG.info("---------------------------------NEW LOAN APPLICATION------------------------------------------");
-        List<HashMap> collaterals = new ArrayList<>();
         final Integer collateralId = CollateralManagementHelper.createCollateralProduct(this.requestSpec, this.responseSpec);
         Assertions.assertNotNull(collateralId);
         final Integer clientCollateralId = CollateralManagementHelper.createClientCollateral(this.requestSpec, this.responseSpec,
                 this.clientId.toString(), collateralId);
         Assertions.assertNotNull(clientCollateralId);
-        addCollaterals(collaterals, clientCollateralId, BigDecimal.valueOf(1));
-        final String loanApplicationJSON = new LoanApplicationTestBuilder().withPrincipal(loanPrincipalAmount)
-                .withLoanTermFrequency(numberOfRepayments).withLoanTermFrequencyAsMonths().withNumberOfRepayments(numberOfRepayments)
-                .withRepaymentEveryAfter("1").withRepaymentFrequencyTypeAsMonths().withAmortizationTypeAsEqualInstallments()
-                .withInterestCalculationPeriodTypeAsDays().withInterestRatePerPeriod(interestRatePerPeriod).withLoanTermFrequencyAsMonths()
-                .withSubmittedOnDate(dateString).withExpectedDisbursementDate(dateString).withPrincipalGrace("2").withInterestGrace("2")
-                .withCollaterals(collaterals).build(this.clientId.toString(), this.loanProductId.toString(), null);
+        final PostLoansRequest loanApplication = LoanRequestBuilders
+                .legacyIndividualApplication(this.clientId.longValue(), this.loanProductId.longValue(), loanPrincipalAmount,
+                        Integer.parseInt(numberOfRepayments), new BigDecimal(interestRatePerPeriod), dateString)
+                .interestType(LoanTestData.InterestType.FLAT)
+                .interestCalculationPeriodType(LoanTestData.InterestCalculationPeriodType.DAILY).graceOnPrincipalPayment(2)
+                .graceOnInterestPayment(2).collateral(List.of(new PostLoansRequestCollateralData()
+                        .clientCollateralId(clientCollateralId.longValue()).quantity(BigDecimal.valueOf(1))));
 
-        LOG.info("Loan Application :{}", loanApplicationJSON);
+        LOG.info("Loan Application :{}", loanApplication);
 
-        this.loanId = this.loanTransactionHelper.getLoanId(loanApplicationJSON);
-        String loanAccountNo = (String) this.loanTransactionHelper.getLoanDetail(this.requestSpec, this.responseSpec, this.loanId,
-                "accountNo");
+        this.loanId = this.loanHelper.applyForLoan(loanApplication).getLoanId().intValue();
+        String loanAccountNo = this.loanHelper.getLoanDetails(this.loanId.longValue()).getAccountNo();
 
         if (isAccountPreferenceSetUp) {
             String loanPrefixName = (String) this.accountNumberPreferencesHelper
@@ -444,8 +435,7 @@ public class AccountNumberPreferencesTest {
                 String loanOfficeName = (String) ClientHelper.getClient(requestSpec, responseSpec, this.clientId.toString(), "officeName");
                 this.validateAccountNumberLengthAndStartsWithPrefix(loanAccountNo, loanOfficeName);
             } else if (loanPrefixName.equals(this.loanShortName)) {
-                String loanShortName = (String) this.loanTransactionHelper.getLoanProductDetail(this.requestSpec, this.responseSpec,
-                        this.loanProductId, "shortName");
+                String loanShortName = this.loanHelper.retrieveLoanProduct(this.loanProductId.longValue()).getShortName();
                 this.validateAccountNumberLengthAndStartsWithPrefix(loanAccountNo, loanShortName);
             }
             LOG.info("SUCCESSFULLY CREATED LOAN APPLICATION BASED ON ACCOUNT PREFERENCES (ID: {} )", this.loanId);

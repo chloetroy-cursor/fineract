@@ -111,6 +111,15 @@ public final class LoanRequestBuilders {
                 .dateFormat(LoanTestData.DATETIME_PATTERN);
     }
 
+    /** Approves for the full applied amount; the JSON approve builder this replaced always sent this note. */
+    public static PostLoansLoanIdRequest approveLoan(String approvedOnDate) {
+        return new PostLoansLoanIdRequest()//
+                .approvedOnDate(approvedOnDate)//
+                .note("Approval NOTE")//
+                .locale(LoanTestData.LOCALE)//
+                .dateFormat(LoanTestData.DATETIME_PATTERN);
+    }
+
     public static PostLoansLoanIdRequest approveLoan(Double approvedAmount, String approvedOnDate, String expectedDisbursementDate) {
         return approveLoan(approvedAmount, approvedOnDate)//
                 .expectedDisbursementDate(expectedDisbursementDate);

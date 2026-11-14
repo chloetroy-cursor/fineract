@@ -58,7 +58,7 @@ public class LoanTestLifecycleExtension implements AfterEachCallback, BeforeEach
     private void closeOpenLoans() {
         LocalDate cleanupDate = determineCleanupDate();
         BusinessDateHelper.runAt(DateTimeFormatter.ofPattern(DATE_FORMAT).format(cleanupDate), () -> {
-            this.loanTransactionHelper = new LoanTransactionHelper(null, null);
+            this.loanTransactionHelper = new LoanTransactionHelper();
 
             List<Long> loanIds = LoanTransactionHelper.getLoanIdsByStatusId(300);
             ParallelExecutionHelper.runInParallel(loanIds, loanId -> closeActiveLoan(loanId, cleanupDate));
