@@ -938,7 +938,7 @@ public class AccountingScenarioIntegrationTest extends FeignLoanTestBase {
         Assertions.assertNotNull(journalEntriesTransactionIdResponse);
     }
 
-    /** The cash-based share product the RestAssured {@code ShareProductHelper} built by default. */
+    /** {@code ShareProductRequestBuilders.defaultShareProduct()} with cash-based accounting. */
     private Long createSharesProduct(final Account assetAccount, final Account incomeAccount, final Account equityAccount,
             final Account liabilityAccount) {
         LOG.info("------------------------------CREATING NEW SHARE PRODUCT ---------------------------------------");
